@@ -8,14 +8,16 @@ import Settings from './views/Settings.vue'
 import Camp from './views/Camp.vue'
 import Explore from './views/Explore.vue'
 import Summary from './views/Summary.vue'
+import Login from './views/Login.vue'
 
 const routes: RouteRecordRaw[] = [
   { path: '/', component: Game, meta: { title: '暗黑地牢肉鸽 - 战斗' } },
   { path: '/camp', component: Camp, meta: { title: '营地' } },
-  { path: '/explore', component: Explore, meta: { title: '探索' } },
+  { path: '/explore', component: Explore, meta: { title: '闯关' } },
   { path: '/summary', component: Summary, meta: { title: '结算' } },
   { path: '/skills', component: Skills, meta: { title: '技能树' } },
-  { path: '/settings', component: Settings, meta: { title: '设置' } }
+  { path: '/settings', component: Settings, meta: { title: '设置' } },
+  { path: '/login', component: Login, meta: { title: '登录' } }
 ]
 
 const router = createRouter({
