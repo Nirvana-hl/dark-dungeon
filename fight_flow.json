@@ -1,0 +1,461 @@
+{
+  "name": "Dark Dungeon - Combat Turn Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "combat/turn",
+        "methods": [
+          "POST"
+        ],
+        "responseMode": "lastNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "WebhookTrigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const required = [\"playerId\",\"characterId\",\"runId\",\"enemyId\",\"actionType\"]; const body = items[0].json; const missing = required.filter(k => body[k] === undefined || body[k] === null);\nif (missing.length) { throw new Error(\"Missing fields: \" + missing.join(\", \")); }\n// Normalize action payload\nbody.actionPayload = body.actionPayload || {}; return [{ json: body }];"
+      },
+      "id": "ValidateInput",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.SUPABASE_URL}}/rest/v1/characters?id=eq.{{ $json.characterId }}&select=*",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "none",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "FetchCharacter",
+      "name": "Fetch Character",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        760,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.SUPABASE_URL}}/rest/v1/enemies?id=eq.{{ $json.enemyId }}&select=*",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "none",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "FetchEnemy",
+      "name": "Fetch Enemy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Merge fetched data and compute one turn resolution\nconst input = $json; const char = items[0].json[0] || null; const enemy = $items(\"FetchEnemy\", 0, 0).json[0] || null; if (!char || !enemy) { throw new Error(\"Character or Enemy not found\"); }\n// Basic checks (mana, cooldown, etc.)\nconst action = input.actionType;\nconst payload = input.actionPayload || {};\nconst result = { playerId: input.playerId, runId: input.runId, characterId: input.characterId, enemyId: input.enemyId, actionType: action };\n// Simple damage model (placeholder):\n// damage = atk * (1 + critChance*critMultiplier) - enemy.defense; clamp >= 0\nconst rng = Math.random();\nconst atk = (char.attack || 10) + (payload.attackBonus || 0);\nconst critChance = Math.min(Math.max((char.critChance || 0.1) + (payload.critChanceBonus || 0), 0), 1);\nconst critMultiplier = (char.critMultiplier || 1.5);\nconst isCrit = rng < critChance;\nlet damage = Math.max(Math.floor(atk * (isCrit ? critMultiplier : 1)) - Math.floor(enemy.defense || 0), 0);\n// Skill modifier\nif (action === \"skill\" && payload.skillPower) { damage = Math.max(Math.floor(damage * payload.skillPower), 0); }\n// Item usage effect\nlet heal = 0; if (action === \"item\" && payload.healAmount) { heal = Math.max(parseInt(payload.healAmount, 10) || 0, 0); }\n// Apply HP changes\nconst enemyHpAfter = Math.max((enemy.hp || 100) - damage, 0);\nconst charHpAfter = Math.min((char.hp || 100) + heal, (char.hpMax || 100));\n// Build updates\nresult.damage = damage; result.isCrit = isCrit; result.heal = heal; result.characterBefore = { hp: char.hp, mana: char.mana }; result.enemyBefore = { hp: enemy.hp }; result.characterAfter = { hp: charHpAfter, mana: char.mana }; result.enemyAfter = { hp: enemyHpAfter };\n// Outcome\nresult.outcome = enemyHpAfter <= 0 ? \"enemy_defeated\" : \"ongoing\";\n// Timestamp\nresult.timestamp = new Date().toISOString();\nreturn [{ json: result }];"
+      },
+      "id": "ComputeResolution",
+      "name": "Compute Resolution",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.SUPABASE_URL}}/rest/v1/player_actions",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "none",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "queryParametersUi": {
+          "parameter": []
+        },
+        "sendBody": true,
+        "jsonParameters": true,
+        "bodyParametersUi": {
+          "parameter": []
+        },
+        "body": "={ { player_id: $json.playerId, run_id: $json.runId, character_id: $json.characterId, enemy_id: $json.enemyId, action_type: $json.actionType, damage: $json.damage, is_crit: $json.isCrit, heal: $json.heal, outcome: $json.outcome, timestamp: $json.timestamp } }"
+      },
+      "id": "LogAction",
+      "name": "Log Action",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/characters?id=eq.{{$json.characterId}}",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "none",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonParameters": true,
+        "body": "={ { hp: $json.characterAfter.hp } }"
+      },
+      "id": "UpdateCharacter",
+      "name": "Update Character",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/enemies?id=eq.{{$json.enemyId}}",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "none",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonParameters": true,
+        "body": "={ { hp: $json.enemyAfter.hp } }"
+      },
+      "id": "UpdateEnemy",
+      "name": "Update Enemy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.outcome}}",
+              "operation": "equal",
+              "value2": "enemy_defeated"
+            }
+          ]
+        }
+      },
+      "id": "IfEnemyDefeated",
+      "name": "If Enemy Defeated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/runs?id=eq.{{$json.runId}}",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "none",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonParameters": true,
+        "body": "={ { enemies_defeated:  ( ($json.enemies_defeated || 0) + 1 ), last_action_at: $json.timestamp } }"
+      },
+      "id": "UpdateRunSummary",
+      "name": "Update Run Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1840,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseData": "={ { damage: $json.damage, isCrit: $json.isCrit, heal: $json.heal, characterHp: $json.characterAfter.hp, enemyHp: $json.enemyAfter.hp, outcome: $json.outcome, timestamp: $json.timestamp } }",
+        "options": {
+          "responseFormat": "json"
+        }
+      },
+      "id": "Respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "FetchCharacter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FetchEnemy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FetchCharacter": {
+      "main": [
+        [
+          {
+            "node": "Compute Resolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FetchEnemy": {
+      "main": [
+        [
+          {
+            "node": "Compute Resolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Resolution": {
+      "main": [
+        [
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "UpdateCharacter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "UpdateEnemy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Enemy Defeated",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Enemy Defeated": {
+      "main": [
+        [
+          {
+            "node": "Update Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Run Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Action": {
+      "main": [
+        [
+          {
+            "node": "UpdateCharacter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UpdateCharacter": {
+      "main": [
+        [
+          {
+            "node": "UpdateEnemy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "version": 2
+}
