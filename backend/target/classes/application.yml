@@ -1,0 +1,53 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: dark-dungeon-backend
+  
+  # H2 数据库配置（开发环境）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost/dark_dungeon?useUnicode=true&characterEncoding=utf8
+    username: root
+    password: 123456
+
+  
+  # H2 控制台（开发时使用）
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+  
+  # JPA 配置（MyBatis Plus 也会用到）
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+# MyBatis Plus 配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.dungeon.entity
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# JWT 配置
+jwt:
+  secret: dark-dungeon-secret-key-2024-please-change-in-production
+  expiration: 86400000 # 24小时（毫秒）
+
+# 跨域配置（前端地址）
+cors:
+  allowed-origins: http://localhost:5180
