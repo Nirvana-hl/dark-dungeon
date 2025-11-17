@@ -266,6 +266,14 @@ npm run build
 - 营地设施、任务与商城在数据库层面已规划，后续需要在前端 `Camp.vue` 与 Pinia store 中补充状态管理与交互逻辑。
 - 2025-11-17：评审 v1.1 数据库设计，识别模板/实例表重复、字段定义不统一等问题，并输出精简版表一览方案，后续调整数据建模与文档结构。
 
+## ♻️ 今日任务复盘（2025-11-17）
+- **产出**：
+  1. 新增并持续维护 `database/schema_v1_1.sql`（PostgreSQL 版）与 `database/schema_v1_1_mysql.sql`（MySQL 8.0 版），均包含 20+ 张核心营地/战斗/经济相关表结构和示例数据，可在 `psql` 或 Navicat 中直接执行。
+  2. 根据 v1.1.1 需求，重构技能系统：每个职业拥有独立技能树（`skills.player_character_code`），并以 `user_player_character_skills` 记录解锁进度；示例数据同步更新。
+  3. 通过固定 UUID 的方式，简化示例数据的串联与排查。
+- **问题**：当前 Spring Boot 模块仍引用旧版 H2 schema，尚未与 v1.1 表结构对齐；后续需要补充 MyBatis Plus 实体与 Mapper，以及数据迁移脚本。
+- **改进**：下一轮迭代计划将 SQL 拆分为 schema/data 两份脚本，并编写自动化校验（如 `psql -f` / `mysql -f` + smoke test）确保 README 中的建库流程一键可跑。
+
 ---
 
 **最后更新**: 2024年 | **维护者**: 项目团队
