@@ -5,24 +5,31 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
 /**
- * 敌方卡牌实体
+ * 敌人卡组关联实体
+ * 对应数据库表：enemy_cards
  */
 @Data
 @TableName("enemy_cards")
 public class EnemyCard {
-    @TableId(type = IdType.AUTO)
-    private Long id;
-    private Integer stage; // 关卡数
-    private String difficulty; // 普通/困难/噩梦
-    private String name;
-    private String type;
-    private Integer attack;
-    private Integer health;
-    private String effect;
-    private Integer uniquePlay; // 是否唯一出牌
-    private LocalDateTime createdAt;
+    /**
+     * 关联ID（UUID格式）
+     */
+    @TableId(type = IdType.ASSIGN_ID)
+    private String id;
+    
+    /**
+     * 敌人ID
+     */
+    private String enemyId;
+    
+    /**
+     * 卡牌ID
+     */
+    private String cardId;
+    
+    /**
+     * 权重（用于随机抽取）
+     */
+    private Integer weight;
 }
-

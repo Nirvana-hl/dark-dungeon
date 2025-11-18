@@ -29,7 +29,7 @@ spring:
       ddl-auto: none
     show-sql: false
 
-# MyBatis Plus 配置
+  # MyBatis Plus 配置
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -38,7 +38,7 @@ mybatis-plus:
   type-aliases-package: com.dungeon.entity
   global-config:
     db-config:
-      id-type: auto
+      id-type: assign_id  # 使用UUID作为主键生成策略
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
