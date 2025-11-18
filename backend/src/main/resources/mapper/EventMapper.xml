@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dungeon.mapper.EventMapper">
+    
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.dungeon.entity.Event">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="name" property="name" jdbcType="VARCHAR"/>
+        <result column="location_type" property="locationType" jdbcType="VARCHAR"/>
+        <result column="trigger_condition" property="triggerCondition" jdbcType="VARCHAR"/>
+        <result column="trigger_chance" property="triggerChance" jdbcType="DECIMAL"/>
+        <result column="description" property="description" jdbcType="VARCHAR"/>
+        <result column="effect_payload" property="effectPayload" jdbcType="VARCHAR"/>
+        <result column="choices" property="choices" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, name, location_type, trigger_condition, trigger_chance, 
+        description, effect_payload, choices
+    </sql>
+
+    <!-- 根据事件类型查询 -->
+    <select id="selectByLocationType" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM events
+        WHERE location_type = #{locationType}
+    </select>
+
+    <!-- 根据关卡编号查询可触发的地牢事件 -->
+    <!-- 注意：此方法在Service层会进一步过滤触发条件，这里只查询地牢类型的事件 -->
+    <select id="selectAvailableDungeonEvents" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM events
+        WHERE location_type = 'dungeon'
+    </select>
+
+</mapper>
+

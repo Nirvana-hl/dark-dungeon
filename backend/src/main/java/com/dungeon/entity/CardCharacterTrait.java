@@ -13,15 +13,15 @@ import lombok.Data;
 @TableName("card_character_traits")
 public class CardCharacterTrait {
     /**
-     * 特性ID（UUID格式）
+     * 特性ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 卡牌角色模板ID
      */
-    private String cardCharacterId;
+    private Long cardCharacterId;
     
     /**
      * 特性名称

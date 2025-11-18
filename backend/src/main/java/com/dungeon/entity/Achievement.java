@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("achievements")
 public class Achievement {
     /**
-     * 成就ID（UUID格式）
+     * 成就ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 成就名称

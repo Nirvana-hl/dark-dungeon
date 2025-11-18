@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("shop_offers")
 public class ShopOffer {
     /**
-     * 商城商品ID（UUID格式）
+     * 商城商品ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 商品类型：card-卡牌, item-道具, bundle-礼包
@@ -26,7 +26,7 @@ public class ShopOffer {
     /**
      * 指向cards.id或items.id
      */
-    private String targetId;
+    private Long targetId;
     
     /**
      * 价格

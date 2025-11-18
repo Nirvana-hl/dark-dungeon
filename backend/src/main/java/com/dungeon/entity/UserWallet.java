@@ -15,15 +15,15 @@ import java.time.LocalDateTime;
 @TableName("user_wallets")
 public class UserWallet {
     /**
-     * 钱包ID（UUID格式）
+     * 钱包ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 货币类型：gold-金币, soulstone-魂晶等

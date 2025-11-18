@@ -18,13 +18,13 @@ public interface UserCardMapper extends BaseMapper<UserCard> {
      * @param userId 用户ID
      * @return 手牌列表
      */
-    List<UserCard> selectByUserId(@Param("userId") String userId);
+    List<UserCard> selectByUserId(@Param("userId") Long userId);
     
     /**
      * 查询已装备的卡牌
      * @param userId 用户ID
      * @return 已装备的卡牌列表
      */
-    List<UserCard> selectEquippedByUserId(@Param("userId") String userId);
+    List<UserCard> selectEquippedByUserId(@Param("userId") Long userId);
 }
 

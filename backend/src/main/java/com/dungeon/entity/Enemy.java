@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("enemies")
 public class Enemy {
     /**
-     * 敌人ID（UUID格式）
+     * 敌人ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 敌人名称

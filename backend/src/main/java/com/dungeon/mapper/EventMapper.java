@@ -19,5 +19,14 @@ public interface EventMapper extends BaseMapper<Event> {
      * @return 事件列表
      */
     List<Event> selectByLocationType(@Param("locationType") String locationType);
+    
+    /**
+     * 根据关卡编号查询可触发的地牢事件
+     * @param stageNumber 关卡编号
+     * @param chapterNumber 章节编号
+     * @return 事件列表
+     */
+    List<Event> selectAvailableDungeonEvents(@Param("stageNumber") Integer stageNumber, 
+                                             @Param("chapterNumber") Integer chapterNumber);
 }
 

@@ -15,15 +15,15 @@ import java.time.LocalDateTime;
 @TableName("player_actions")
 public class PlayerAction {
     /**
-     * 操作记录ID（UUID格式）
+     * 操作记录ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 操作类型

@@ -18,6 +18,6 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
      * @param userId 用户ID
      * @return 背包列表
      */
-    List<Inventory> selectByUserId(@Param("userId") String userId);
+    List<Inventory> selectByUserId(@Param("userId") Long userId);
 }
 

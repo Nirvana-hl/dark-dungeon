@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("dungeons")
 public class Dungeon {
     /**
-     * 地牢ID（UUID格式）
+     * 地牢ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 地牢名称
@@ -32,6 +32,11 @@ public class Dungeon {
      * 推荐卡牌（JSON格式）
      */
     private String recommendedCards;
+    
+    /**
+     * 地牢主题（如：森林、洞穴、废墟等）
+     */
+    private String theme;
     
     /**
      * 地牢描述

@@ -1,5 +1,7 @@
 package com.dungeon.config;
 
+import com.dungeon.security.JwtAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -8,6 +10,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Spring Security 配置
@@ -15,6 +18,9 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    @Autowired
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -28,11 +34,16 @@ public class SecurityConfig {
             .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             .and()
             .authorizeRequests()
-                .antMatchers("/auth/**", "/h2-console/**", "/test/**").permitAll() // 允许匿名访问
+                .antMatchers("/", "/health", "/auth/**", "/h2-console/**", "/test/**",
+                            "/player-characters/**", "/stages/**",
+                            "/card-characters/**", "/cards/**").permitAll() // 允许匿名访问
                 .anyRequest().authenticated(); // 其他请求需要认证
         
         // 允许 H2 控制台使用 frame
         http.headers().frameOptions().sameOrigin();
+
+        // 添加 JWT 认证过滤器
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
     }

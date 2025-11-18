@@ -13,20 +13,20 @@ import lombok.Data;
 @TableName("enemy_cards")
 public class EnemyCard {
     /**
-     * 关联ID（UUID格式）
+     * 关联ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 敌人ID
      */
-    private String enemyId;
+    private Long enemyId;
     
     /**
      * 卡牌ID
      */
-    private String cardId;
+    private Long cardId;
     
     /**
      * 权重（用于随机抽取）

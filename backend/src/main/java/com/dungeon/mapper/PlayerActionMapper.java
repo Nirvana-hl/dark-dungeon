@@ -18,7 +18,7 @@ public interface PlayerActionMapper extends BaseMapper<PlayerAction> {
      * @param userId 用户ID
      * @return 操作记录列表
      */
-    List<PlayerAction> selectByUserId(@Param("userId") String userId);
+    List<PlayerAction> selectByUserId(@Param("userId") Long userId);
     
     /**
      * 根据场景来源查询操作记录
@@ -26,6 +26,6 @@ public interface PlayerActionMapper extends BaseMapper<PlayerAction> {
      * @param sourceScene 场景来源：camp-营地, dungeon-地牢, battle-战斗
      * @return 操作记录列表
      */
-    List<PlayerAction> selectBySourceScene(@Param("userId") String userId, @Param("sourceScene") String sourceScene);
+    List<PlayerAction> selectBySourceScene(@Param("userId") Long userId, @Param("sourceScene") String sourceScene);
 }
 

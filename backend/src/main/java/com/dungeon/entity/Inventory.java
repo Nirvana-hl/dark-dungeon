@@ -15,20 +15,20 @@ import java.time.LocalDateTime;
 @TableName("inventory")
 public class Inventory {
     /**
-     * 背包记录ID（UUID格式）
+     * 背包记录ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 道具模板ID
      */
-    private String itemId;
+    private Long itemId;
     
     /**
      * 持有数量

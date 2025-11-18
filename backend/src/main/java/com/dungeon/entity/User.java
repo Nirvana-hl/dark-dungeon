@@ -15,10 +15,10 @@ import java.time.LocalDateTime;
 @TableName("users")
 public class User {
     /**
-     * 用户ID（UUID格式）
+     * 用户ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 账户名称/显示名称

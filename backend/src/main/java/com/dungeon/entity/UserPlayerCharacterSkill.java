@@ -15,20 +15,20 @@ import java.time.LocalDateTime;
 @TableName("user_player_character_skills")
 public class UserPlayerCharacterSkill {
     /**
-     * 实例ID（UUID格式）
+     * 实例ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 玩家角色实例ID
      */
-    private String userPlayerCharacterId;
+    private Long userPlayerCharacterId;
     
     /**
      * 技能模板ID
      */
-    private String skillId;
+    private Long skillId;
     
     /**
      * 解锁时间

@@ -22,7 +22,7 @@ public interface CardMapper extends BaseMapper<Card> {
     
     /**
      * 根据稀有度查询
-     * @param rarity 稀有度
+     * @param rarity 稀有度：common-普通, rare-稀有, epic-史诗, legendary-传说
      * @return 卡牌列表
      */
     List<Card> selectByRarity(@Param("rarity") String rarity);

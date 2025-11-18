@@ -13,20 +13,20 @@ import lombok.Data;
 @TableName("user_card_characters")
 public class UserCardCharacter {
     /**
-     * 卡牌角色实例ID（UUID格式）
+     * 卡牌角色实例ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 卡牌角色模板ID
      */
-    private String cardCharacterId;
+    private Long cardCharacterId;
     
     /**
      * 当前血量（关卡结束重置）

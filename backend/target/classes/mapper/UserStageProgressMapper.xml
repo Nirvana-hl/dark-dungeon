@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dungeon.mapper.UserStageProgressMapper">
+    
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.dungeon.entity.UserStageProgress">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="stage_number" property="stageNumber" jdbcType="INTEGER"/>
+        <result column="chapter_number" property="chapterNumber" jdbcType="INTEGER"/>
+        <result column="is_passed" property="isPassed" jdbcType="TINYINT"/>
+        <result column="is_unlocked" property="isUnlocked" jdbcType="TINYINT"/>
+        <result column="best_result" property="bestResult" jdbcType="VARCHAR"/>
+        <result column="passed_at" property="passedAt" jdbcType="TIMESTAMP"/>
+        <result column="attempt_count" property="attemptCount" jdbcType="INTEGER"/>
+        <result column="best_score" property="bestScore" jdbcType="INTEGER"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, user_id, stage_number, chapter_number, is_passed, is_unlocked, 
+        best_result, passed_at, attempt_count, best_score
+    </sql>
+
+    <!-- 根据用户ID查询所有关卡进度 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM user_stage_progress
+        WHERE user_id = #{userId}
+        ORDER BY stage_number ASC
+    </select>
+
+    <!-- 根据用户ID和关卡编号查询进度 -->
+    <select id="selectByUserIdAndStageNumber" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM user_stage_progress
+        WHERE user_id = #{userId}
+        AND stage_number = #{stageNumber}
+    </select>
+
+    <!-- 根据用户ID和章节编号查询进度 -->
+    <select id="selectByUserIdAndChapterNumber" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM user_stage_progress
+        WHERE user_id = #{userId}
+        AND chapter_number = #{chapterNumber}
+        ORDER BY stage_number ASC
+    </select>
+
+    <!-- 查询用户已通过的关卡数量 -->
+    <select id="countPassedStages" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM user_stage_progress
+        WHERE user_id = #{userId}
+        AND is_passed = 1
+    </select>
+
+    <!-- 查询用户已解锁的关卡数量 -->
+    <select id="countUnlockedStages" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM user_stage_progress
+        WHERE user_id = #{userId}
+        AND is_unlocked = 1
+    </select>
+
+    <!-- 查询用户当前最高关卡编号 -->
+    <select id="selectMaxStageNumber" resultType="java.lang.Integer">
+        SELECT MAX(stage_number)
+        FROM user_stage_progress
+        WHERE user_id = #{userId}
+        AND is_unlocked = 1
+    </select>
+
+</mapper>
+

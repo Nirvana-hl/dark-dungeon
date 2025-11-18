@@ -2,17 +2,18 @@ package com.dungeon.dto;
 
 import lombok.Data;
 
-import javax.validation.constraints.NotBlank;
-
 /**
  * 登录请求 DTO
  */
 @Data
 public class LoginRequest {
-    @NotBlank(message = "邮箱不能为空")
+    /**
+     * 可以使用邮箱或账号名称登录（至少提供一个）
+     */
     private String email;
+    private String accountName;
     
-    @NotBlank(message = "密码不能为空")
+    @javax.validation.constraints.NotBlank(message = "密码不能为空")
     private String password;
 }
 

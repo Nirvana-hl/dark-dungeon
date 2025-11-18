@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("player_characters")
 public class PlayerCharacter {
     /**
-     * 玩家角色模板ID（UUID格式）
+     * 玩家角色模板ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 策划用短码

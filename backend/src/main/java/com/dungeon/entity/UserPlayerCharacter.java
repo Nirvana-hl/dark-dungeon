@@ -13,20 +13,20 @@ import lombok.Data;
 @TableName("user_player_characters")
 public class UserPlayerCharacter {
     /**
-     * 玩家角色实例ID（UUID格式）
+     * 玩家角色实例ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 玩家角色模板ID
      */
-    private String playerCharacterId;
+    private Long playerCharacterId;
     
     /**
      * 最大血量（随等级提升）

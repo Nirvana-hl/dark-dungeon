@@ -23,9 +23,9 @@ public class JwtUtil {
     private JwtConfig jwtConfig;
 
     /**
-     * 生成 Token
+     * 生成 Token（支持String类型的userId）
      */
-    public String generateToken(Long userId, String username) {
+    public String generateToken(String userId, String username) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
@@ -42,6 +42,13 @@ public class JwtUtil {
     }
 
     /**
+     * 生成 Token（兼容Long类型，自动转换为String）
+     */
+    public String generateToken(Long userId, String username) {
+        return generateToken(userId != null ? userId.toString() : null, username);
+    }
+
+    /**
      * 从 Token 中获取 Claims
      */
     public Claims getClaimsFromToken(String token) {
@@ -54,11 +61,38 @@ public class JwtUtil {
     }
 
     /**
-     * 从 Token 中获取用户ID
+     * 从 Token 中获取用户ID（返回String类型）
      */
-    public Long getUserIdFromToken(String token) {
+    public String getUserIdFromToken(String token) {
         Claims claims = getClaimsFromToken(token);
-        return claims.get("userId", Long.class);
+        Object userId = claims.get("userId");
+        if (userId == null) {
+            return null;
+        }
+        // 兼容Long和String类型
+        return userId.toString();
+    }
+
+    /**
+     * 从 Token 中获取用户ID（返回Long类型，兼容旧代码）
+     */
+    public Long getUserIdFromTokenAsLong(String token) {
+        Claims claims = getClaimsFromToken(token);
+        Object userId = claims.get("userId");
+        if (userId == null) {
+            return null;
+        }
+        if (userId instanceof Long) {
+            return (Long) userId;
+        }
+        if (userId instanceof String) {
+            try {
+                return Long.parseLong((String) userId);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /**

@@ -15,10 +15,10 @@ import java.time.LocalDate;
 @TableName("game_metrics")
 public class GameMetric {
     /**
-     * 指标ID（UUID格式）
+     * 指标ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 指标类型

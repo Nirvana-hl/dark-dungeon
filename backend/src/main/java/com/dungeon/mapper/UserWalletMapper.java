@@ -18,7 +18,7 @@ public interface UserWalletMapper extends BaseMapper<UserWallet> {
      * @param userId 用户ID
      * @return 钱包列表
      */
-    List<UserWallet> selectByUserId(@Param("userId") String userId);
+    List<UserWallet> selectByUserId(@Param("userId") Long userId);
     
     /**
      * 根据用户ID和货币类型查询钱包
@@ -26,6 +26,6 @@ public interface UserWalletMapper extends BaseMapper<UserWallet> {
      * @param currencyType 货币类型
      * @return 钱包对象
      */
-    UserWallet selectByUserIdAndCurrencyType(@Param("userId") String userId, @Param("currencyType") String currencyType);
+    UserWallet selectByUserIdAndCurrencyType(@Param("userId") Long userId, @Param("currencyType") String currencyType);
 }
 

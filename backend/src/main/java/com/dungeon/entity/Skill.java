@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("skills")
 public class Skill {
     /**
-     * 技能模板ID（UUID格式）
+     * 技能模板ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 策划短码

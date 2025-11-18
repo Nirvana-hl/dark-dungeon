@@ -18,13 +18,13 @@ public interface UserCardCharacterMapper extends BaseMapper<UserCardCharacter> {
      * @param userId 用户ID
      * @return 卡牌角色实例列表
      */
-    List<UserCardCharacter> selectByUserId(@Param("userId") String userId);
+    List<UserCardCharacter> selectByUserId(@Param("userId") Long userId);
     
     /**
      * 查询已上阵的卡牌角色
      * @param userId 用户ID
      * @return 已上阵的卡牌角色列表
      */
-    List<UserCardCharacter> selectDeployedByUserId(@Param("userId") String userId);
+    List<UserCardCharacter> selectDeployedByUserId(@Param("userId") Long userId);
 }
 

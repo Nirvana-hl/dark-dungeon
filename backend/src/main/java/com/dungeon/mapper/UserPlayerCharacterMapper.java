@@ -18,6 +18,6 @@ public interface UserPlayerCharacterMapper extends BaseMapper<UserPlayerCharacte
      * @param userId 用户ID
      * @return 角色实例列表
      */
-    List<UserPlayerCharacter> selectByUserId(@Param("userId") String userId);
+    List<UserPlayerCharacter> selectByUserId(@Param("userId") Long userId);
 }
 

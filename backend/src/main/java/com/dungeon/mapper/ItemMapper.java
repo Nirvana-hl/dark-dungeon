@@ -15,7 +15,7 @@ public interface ItemMapper extends BaseMapper<Item> {
     
     /**
      * 根据道具类型查询
-     * @param itemType 道具类型
+     * @param itemType 道具类型：consumable-消耗品, material-材料, blueprint-蓝图, currency_bundle-货币包, cosmetic-装饰
      * @return 道具列表
      */
     List<Item> selectByItemType(@Param("itemType") String itemType);

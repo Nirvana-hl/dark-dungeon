@@ -15,10 +15,10 @@ import java.math.BigDecimal;
 @TableName("stress_debuff_configs")
 public class StressDebuffConfig {
     /**
-     * debuff配置ID（UUID格式）
+     * debuff配置ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 触发压力层级（1-4）

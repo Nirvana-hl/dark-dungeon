@@ -15,20 +15,20 @@ import java.time.LocalDateTime;
 @TableName("user_cards")
 public class UserCard {
     /**
-     * 用户卡牌ID（UUID格式）
+     * 用户卡牌ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 卡牌模板ID
      */
-    private String cardId;
+    private Long cardId;
     
     /**
      * 持有数量（角色卡一般为1）
@@ -43,12 +43,12 @@ public class UserCard {
     /**
      * 牌组方案标识（用于多套构筑）
      */
-    private String loadoutId;
+    private Long loadoutId;
     
     /**
      * 装备归属的角色卡实例ID（法术为空）
      */
-    private String equippedToUserCardCharacterId;
+    private Long equippedToUserCardCharacterId;
     
     /**
      * 获得时间

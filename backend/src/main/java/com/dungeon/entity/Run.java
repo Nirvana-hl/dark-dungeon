@@ -15,25 +15,35 @@ import java.time.LocalDateTime;
 @TableName("runs")
 public class Run {
     /**
-     * 探索记录ID（UUID格式）
+     * 探索记录ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 用户ID
      */
-    private String userId;
+    private Long userId;
     
     /**
      * 玩家角色实例ID
      */
-    private String userPlayerCharacterId;
+    private Long userPlayerCharacterId;
     
     /**
      * 地牢ID
      */
-    private String dungeonId;
+    private Long dungeonId;
+    
+    /**
+     * 当前关卡编号
+     */
+    private Integer stageNumber;
+    
+    /**
+     * 当前章节编号
+     */
+    private Integer chapterNumber;
     
     /**
      * 难度
@@ -44,6 +54,11 @@ public class Run {
      * 准备快照（JSON格式：包含手牌、道具、货币余量）
      */
     private String preparationSnapshot;
+    
+    /**
+     * 关卡内进度（JSON格式：探索进度、已触发事件、已击败敌人）
+     */
+    private String currentStageProgress;
     
     /**
      * 探索结果：victory-胜利, defeat-失败, abandon-放弃

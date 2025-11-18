@@ -13,10 +13,10 @@ import lombok.Data;
 @TableName("items")
 public class Item {
     /**
-     * 道具ID（UUID格式）
+     * 道具ID（自增主键）
      */
-    @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private Long id;
     
     /**
      * 策划短码
