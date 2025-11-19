@@ -1,6 +1,6 @@
 package com.dungeon.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dungeon.dto.UserCardCharacterDTO;
 import com.dungeon.entity.CardCharacter;
 import com.dungeon.entity.UserCardCharacter;
@@ -26,20 +26,22 @@ public class UserCardCharacterService {
     private CardCharacterMapper cardCharacterMapper;
 
     public List<UserCardCharacterDTO> getUserCardCharacters(Long userId) {
-        return userCardCharacterMapper.selectByUserId(userId).stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        LambdaQueryWrapper<UserCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCardCharacter::getUserId, userId);
+        return toDTOList(userCardCharacterMapper.selectList(wrapper));
     }
 
     public List<UserCardCharacterDTO> getDeployedCardCharacters(Long userId) {
-        return userCardCharacterMapper.selectDeployedByUserId(userId).stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        LambdaQueryWrapper<UserCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCardCharacter::getUserId, userId)
+                .eq(UserCardCharacter::getIsDeployed, true);
+        return toDTOList(userCardCharacterMapper.selectList(wrapper));
     }
 
     public UserCardCharacterDTO getUserCardCharacterById(Long id, Long userId) {
-        QueryWrapper<UserCardCharacter> wrapper = new QueryWrapper<>();
-        wrapper.eq("id", id).eq("user_id", userId);
+        LambdaQueryWrapper<UserCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCardCharacter::getId, id)
+                .eq(UserCardCharacter::getUserId, userId);
         UserCardCharacter entity = userCardCharacterMapper.selectOne(wrapper);
         if (entity == null) {
             return null;
@@ -65,8 +67,9 @@ public class UserCardCharacterService {
     }
 
     public UserCardCharacterDTO updateUserCardCharacter(Long id, Long userId, UserCardCharacterDTO dto) {
-        QueryWrapper<UserCardCharacter> wrapper = new QueryWrapper<>();
-        wrapper.eq("id", id).eq("user_id", userId);
+        LambdaQueryWrapper<UserCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCardCharacter::getId, id)
+                .eq(UserCardCharacter::getUserId, userId);
         UserCardCharacter entity = userCardCharacterMapper.selectOne(wrapper);
         if (entity == null) {
             return null;
@@ -93,8 +96,9 @@ public class UserCardCharacterService {
     }
 
     public void deleteUserCardCharacter(Long id, Long userId) {
-        QueryWrapper<UserCardCharacter> wrapper = new QueryWrapper<>();
-        wrapper.eq("id", id).eq("user_id", userId);
+        LambdaQueryWrapper<UserCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCardCharacter::getId, id)
+                .eq(UserCardCharacter::getUserId, userId);
         userCardCharacterMapper.delete(wrapper);
     }
 
@@ -102,6 +106,12 @@ public class UserCardCharacterService {
         UserCardCharacterDTO dto = new UserCardCharacterDTO();
         BeanUtils.copyProperties(entity, dto);
         return dto;
+    }
+
+    private List<UserCardCharacterDTO> toDTOList(List<UserCardCharacter> entities) {
+        return entities.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 }
 

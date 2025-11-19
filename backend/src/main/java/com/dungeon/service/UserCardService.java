@@ -1,6 +1,6 @@
 package com.dungeon.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dungeon.dto.UserCardDTO;
 import com.dungeon.entity.UserCard;
 import com.dungeon.mapper.UserCardMapper;
@@ -22,20 +22,22 @@ public class UserCardService {
     private UserCardMapper userCardMapper;
 
     public List<UserCardDTO> getUserCards(Long userId) {
-        return userCardMapper.selectByUserId(userId).stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCard::getUserId, userId);
+        return toDTOList(userCardMapper.selectList(wrapper));
     }
 
     public List<UserCardDTO> getEquippedUserCards(Long userId) {
-        return userCardMapper.selectEquippedByUserId(userId).stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCard::getUserId, userId)
+                .isNotNull(UserCard::getEquippedToUserCardCharacterId);
+        return toDTOList(userCardMapper.selectList(wrapper));
     }
 
     public UserCardDTO getUserCard(Long id, Long userId) {
-        QueryWrapper<UserCard> wrapper = new QueryWrapper<>();
-        wrapper.eq("id", id).eq("user_id", userId);
+        LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCard::getId, id)
+                .eq(UserCard::getUserId, userId);
         UserCard entity = userCardMapper.selectOne(wrapper);
         if (entity == null) {
             return null;
@@ -60,8 +62,9 @@ public class UserCardService {
     }
 
     public UserCardDTO updateUserCard(Long id, Long userId, UserCardDTO dto) {
-        QueryWrapper<UserCard> wrapper = new QueryWrapper<>();
-        wrapper.eq("id", id).eq("user_id", userId);
+        LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCard::getId, id)
+                .eq(UserCard::getUserId, userId);
         UserCard entity = userCardMapper.selectOne(wrapper);
         if (entity == null) {
             return null;
@@ -89,8 +92,9 @@ public class UserCardService {
     }
 
     public void deleteUserCard(Long id, Long userId) {
-        QueryWrapper<UserCard> wrapper = new QueryWrapper<>();
-        wrapper.eq("id", id).eq("user_id", userId);
+        LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCard::getId, id)
+                .eq(UserCard::getUserId, userId);
         userCardMapper.delete(wrapper);
     }
 
@@ -98,6 +102,12 @@ public class UserCardService {
         UserCardDTO dto = new UserCardDTO();
         BeanUtils.copyProperties(entity, dto);
         return dto;
+    }
+
+    private List<UserCardDTO> toDTOList(List<UserCard> entities) {
+        return entities.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 }
 

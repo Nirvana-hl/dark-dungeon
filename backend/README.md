@@ -205,6 +205,30 @@ GET /api/game/character-traits
 Authorization: Bearer {token}
 ```
 
+### 营地接口
+
+#### 营地仪表盘
+```
+GET /api/camp/dashboard
+Authorization: Bearer {token}
+```
+
+响应示例：
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "userPlayerCharacter": { "...": "..." },
+    "userCardCharacters": [{ "...": "..." }],
+    "userCards": [{ "...": "..." }],
+    "inventory": [{ "...": "..." }],
+    "wallets": [{ "currencyType": "gold", "balance": 1200 }],
+    "shopOffers": [{ "offerType": "card", "price": 300 }]
+  }
+}
+```
+
 ## 数据库配置
 
 ### 开发环境（H2）

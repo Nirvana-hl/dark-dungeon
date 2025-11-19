@@ -276,6 +276,15 @@ npm run build
 - **问题**：当前 Spring Boot 模块仍引用旧版 H2 schema，尚未与 v1.1 表结构对齐；后续需要补充 MyBatis Plus 实体与 Mapper，以及数据迁移脚本。
 - **改进**：下一轮迭代计划将 SQL 拆分为 schema/data 两份脚本，并编写自动化校验（如 `psql -f` / `mysql -f` + smoke test）确保 README 中的建库流程一键可跑。
 
+## ♻️ 今日任务复盘（2025-11-19）
+- **产出**：
+  1. 修复 `/cards` 接口 500 报错：移除未实现的 `CardMapper#selectByCardType|selectByRarity` 映射，统一改为在 `CardService` 内部使用 `LambdaQueryWrapper` 进行筛选，避免 MyBatis 找不到 bound statement。
+  2. 同步修复 `/card-characters` 接口：去除 `CardCharacterMapper` 中缺失 SQL 的自定义方法，并在 `CardCharacterService` 引入 `LambdaQueryWrapper`，保持职业/阵营筛选功能可用。
+  3. 解决 `card_characters.class` 字段命名不一致问题：通过在实体上添加 `@TableField("class")` 显式映射，避免 MySQL 抛出 “Unknown column class_type”。
+  4. 优化卡牌与卡牌角色筛选的空参处理逻辑，参数为空时自动回退为全量查询，减少调用端判空成本。
+- **问题**：项目缺少卡牌相关 Mapper XML，自定义 SQL 若需落地必须新增文件或使用注解；需要一份清单记录当前 Mapper 及其 SQL 完成度。
+- **改进**：补充卡牌接口的集成测试样例，并在 `API接口文档.md` 中新增卡牌筛选说明，确保迁移到 MyBatis Plus 的模块有验收标准。
+
 ---
 
 **最后更新**: 2024年 | **维护者**: 项目团队

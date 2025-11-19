@@ -1,5 +1,6 @@
 package com.dungeon.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dungeon.dto.CardDTO;
 import com.dungeon.entity.Card;
 import com.dungeon.mapper.CardMapper;
@@ -20,26 +21,25 @@ public class CardService {
     private CardMapper cardMapper;
 
     public List<CardDTO> getAllCards() {
-        List<Card> list = cardMapper.selectList(null);
-        return list.stream().map(this::toDTO).collect(Collectors.toList());
+        return toDTOList(cardMapper.selectList(null));
     }
 
     public List<CardDTO> getByType(String cardType) {
-        if (cardType == null) {
+        if (cardType == null || cardType.trim().isEmpty()) {
             return getAllCards();
         }
-        return cardMapper.selectByCardType(cardType).stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        LambdaQueryWrapper<Card> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Card::getCardType, cardType);
+        return toDTOList(cardMapper.selectList(wrapper));
     }
 
     public List<CardDTO> getByRarity(String rarity) {
-        if (rarity == null) {
+        if (rarity == null || rarity.trim().isEmpty()) {
             return getAllCards();
         }
-        return cardMapper.selectByRarity(rarity).stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        LambdaQueryWrapper<Card> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Card::getRarity, rarity);
+        return toDTOList(cardMapper.selectList(wrapper));
     }
 
     public CardDTO getById(Long id) {
@@ -75,6 +75,12 @@ public class CardService {
         CardDTO dto = new CardDTO();
         BeanUtils.copyProperties(card, dto);
         return dto;
+    }
+
+    private List<CardDTO> toDTOList(List<Card> cards) {
+        return cards.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 }
 
