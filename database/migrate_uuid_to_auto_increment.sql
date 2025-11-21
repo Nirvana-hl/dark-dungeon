@@ -170,12 +170,21 @@ CREATE TABLE skills (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 -- 用户技能实例
+-- 设计说明：技能解锁关联到"用户+职业模板"，而不是"角色实例"
+-- 这样即使删除重建角色实例，技能解锁也不会丢失
 CREATE TABLE user_player_character_skills (
     id                     BIGINT    NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_player_character_id BIGINT  NOT NULL,
-    skill_id               BIGINT    NOT NULL,
-    unlocked_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
+    user_id                BIGINT    NOT NULL COMMENT '用户ID',
+    player_character_id     BIGINT    NOT NULL COMMENT '职业模板ID（关联player_characters.id）',
+    skill_id               BIGINT    NOT NULL COMMENT '技能模板ID（关联skills.id）',
+    unlocked_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '解锁时间',
+    UNIQUE KEY uk_user_character_skill (user_id, player_character_id, skill_id) COMMENT '用户+职业+技能唯一约束，防止重复解锁',
+    INDEX idx_user_character (user_id, player_character_id) COMMENT '用于查询用户某个职业的所有技能',
+    INDEX idx_skill (skill_id) COMMENT '用于查询技能被哪些用户解锁',
+    CONSTRAINT fk_ups_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ups_character FOREIGN KEY (player_character_id) REFERENCES player_characters(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ups_skill FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1 COMMENT='用户职业技能解锁记录表';
 
 -- 卡牌模板（法术/装备）
 CREATE TABLE cards (

@@ -15,6 +15,11 @@ public class UserCardCharacterDTO {
     private Boolean isDeployed;
     private Integer deployedRound;
     private Integer currentStarLevel;
+    
+    /**
+     * 拥有数量（用于升星）
+     */
+    private Integer quantity;
 }
 
 

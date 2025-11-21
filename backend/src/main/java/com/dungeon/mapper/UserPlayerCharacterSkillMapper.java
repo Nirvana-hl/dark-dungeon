@@ -14,10 +14,13 @@ import java.util.List;
 public interface UserPlayerCharacterSkillMapper extends BaseMapper<UserPlayerCharacterSkill> {
     
     /**
-     * 根据玩家角色实例ID查询已解锁技能
-     * @param userPlayerCharacterId 玩家角色实例ID
+     * 根据用户ID和职业模板ID查询已解锁技能
+     * @param userId 用户ID
+     * @param playerCharacterId 职业模板ID
      * @return 已解锁技能列表
      */
-    List<UserPlayerCharacterSkill> selectByUserPlayerCharacterId(@Param("userPlayerCharacterId") String userPlayerCharacterId);
+    List<UserPlayerCharacterSkill> selectByUserIdAndPlayerCharacterId(
+            @Param("userId") Long userId, 
+            @Param("playerCharacterId") Long playerCharacterId);
 }
 

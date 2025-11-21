@@ -62,6 +62,7 @@ public class UserCardCharacterService {
         entity.setIsDeployed(false);
         entity.setDeployedRound(0);
         entity.setCurrentStarLevel(template.getBaseStarLevel() != null ? template.getBaseStarLevel() : 1);
+        entity.setQuantity(1); // 默认数量为1
         userCardCharacterMapper.insert(entity);
         return toDTO(entity);
     }
@@ -89,6 +90,9 @@ public class UserCardCharacterService {
         }
         if (dto.getCurrentStarLevel() != null) {
             entity.setCurrentStarLevel(dto.getCurrentStarLevel());
+        }
+        if (dto.getQuantity() != null) {
+            entity.setQuantity(dto.getQuantity());
         }
 
         userCardCharacterMapper.updateById(entity);

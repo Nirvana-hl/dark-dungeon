@@ -52,5 +52,11 @@ public class UserCardCharacter {
      * 当前星级
      */
     private Integer currentStarLevel;
+    
+    /**
+     * 拥有数量（用于升星）
+     * 购买同一种角色时，数量会增加而不是创建新实例
+     */
+    private Integer quantity;
 }
 

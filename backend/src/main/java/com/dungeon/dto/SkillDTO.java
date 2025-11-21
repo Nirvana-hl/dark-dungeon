@@ -1,27 +1,27 @@
-package com.dungeon.entity;
+package com.dungeon.dto;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 职业技能模板实体
- * 对应数据库表：skills
+ * 技能模板DTO
+ * 用于返回技能树信息
  */
 @Data
-@TableName("skills")
-public class Skill {
+public class SkillDTO {
     /**
-     * 技能模板ID（自增主键）
+     * 技能模板ID
      */
-    @TableId(type = IdType.AUTO)
     private Long id;
     
     /**
      * 策划短码
      */
     private String code;
+    
+    /**
+     * 对应的职业短码
+     */
+    private String playerCharacterCode;
     
     /**
      * 技能名称
@@ -52,5 +52,15 @@ public class Skill {
      * 前置技能依赖（JSON格式：["skill_code1", "skill_code2"]）
      */
     private String unlockPath;
+    
+    /**
+     * 是否已解锁（用于技能树展示）
+     */
+    private Boolean isUnlocked;
+    
+    /**
+     * 是否可以解锁（用于技能树展示，检查等级和前置技能）
+     */
+    private Boolean canUnlock;
 }
 
