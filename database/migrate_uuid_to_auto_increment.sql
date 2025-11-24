@@ -18,7 +18,6 @@ SET @@foreign_key_checks = 0;
 -- 1. 删除所有表（会清空数据）
 -- ============================================================
 
-DROP TABLE IF EXISTS game_metrics;
 DROP TABLE IF EXISTS achievements;
 DROP TABLE IF EXISTS player_actions;
 DROP TABLE IF EXISTS events;
@@ -267,15 +266,22 @@ CREATE TABLE dungeons (
 
 -- 探索记录
 CREATE TABLE runs (
-    id                  BIGINT    NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id             BIGINT    NOT NULL,
-    dungeon_id          BIGINT    NOT NULL,
-    preparation_snapshot JSON     NOT NULL,
-    result              VARCHAR(20),
-    started_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ended_at            TIMESTAMP,
-    CONSTRAINT fk_runs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_runs_dungeon FOREIGN KEY (dungeon_id) REFERENCES dungeons(id)
+    id                       BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id                  BIGINT      NOT NULL,
+    user_player_character_id BIGINT      NOT NULL,
+    dungeon_id               BIGINT      NOT NULL,
+    stage_number             INT         NOT NULL,
+    chapter_number           INT         NOT NULL,
+    difficulty               VARCHAR(20) NOT NULL,
+    preparation_snapshot     JSON        NOT NULL,
+    current_stage_progress   JSON        NOT NULL,
+    result                   VARCHAR(20),
+    started_at               TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at                 TIMESTAMP,
+    reward_snapshot          JSON,
+    KEY idx_runs_user (user_id),
+    KEY idx_runs_character (user_player_character_id),
+    KEY idx_runs_dungeon (dungeon_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 -- 敌人模板
@@ -326,16 +332,6 @@ CREATE TABLE achievements (
     description  TEXT,
     requirements JSON        NOT NULL,
     UNIQUE KEY uk_achievements_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
-
--- 游戏指标
-CREATE TABLE game_metrics (
-    id                BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    metric_type       VARCHAR(48) NOT NULL,
-    date              DATE        NOT NULL,
-    value             BIGINT      NOT NULL,
-    dimension_payload JSON        NOT NULL,
-    UNIQUE KEY uk_metrics_unique (metric_type, date, dimension_payload(191))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 SET @@foreign_key_checks = 1;

@@ -79,7 +79,7 @@ ai-full-stack---dark-dungeon/
 
 ### 待实现功能
 - ⏳ 技能系统
-- ⏳ 成就系统
+- ✅ 成就系统（已实现后端接口）
 - ⏳ AI 助手集成
 - ⏳ 实时多人对战（如需要）
 
@@ -142,6 +142,44 @@ npm run build
 - ✅ Spring Security + JWT
 - ✅ H2 数据库（开发环境，可切换 MySQL/PostgreSQL）
 
+## 🏕️ 营地仪表盘 API
+
+- **接口**：`GET /api/camp/dashboard`
+- **认证**：请求头携带 `Authorization: Bearer {token}`
+- **返回字段**：
+  - `userPlayerCharacter`：玩家主角最新状态
+  - `userCardCharacters`：拥有的角色卡实例
+  - `userCards`：法术/装备卡列表
+  - `inventory`：背包道具
+  - `wallets`：多种货币余额
+  - `shopOffers`：营地商城商品，按 `displayOrder` 排序
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "userPlayerCharacter": { "...": "..." },
+    "userCardCharacters": [{ "...": "..." }],
+    "userCards": [{ "...": "..." }],
+    "inventory": [{ "...": "..." }],
+    "wallets": [{ "currencyType": "gold", "balance": 1200 }],
+    "shopOffers": [{ "offerType": "card", "price": 300 }]
+  }
+}
+```
+
+## ⚔️ 地牢探索 API
+
+- `GET /dungeons`：获取所有地牢模板（名称、主题、推荐卡组）
+- `POST /dungeons/runs/start`：开启探索，创建 `runs` 记录并初始化关卡进度
+- `GET /dungeons/runs/current`：查询当前进行中的探索
+- `POST /dungeons/runs/{runId}/explore`：探索房间，可能触发随机事件或遭遇敌人
+- `POST /dungeons/runs/{runId}/battle`：结算战斗，生成战报并更新角色状态
+- `POST /dungeons/runs/{runId}/end`：结束探索（胜利/失败/放弃），自动更新 `user_stage_progress`
+
+所有接口都要求在请求头携带 `Authorization: Bearer {token}`，后端会根据 Token 判定用户身份并记录探索日志。
+
 ## 📊 数据库设计
 
 ### 核心数据表（基于需求文档）
@@ -180,6 +218,8 @@ npm run build
 2. ✅ **角色管理模块** - 创建、删除、升星
 3. ✅ **钱包系统模块** - 金币获取、消费、增加
 4. ✅ **游戏战斗模块** - 卡牌加载、角色特性、敌方卡牌
+5. ✅ **成就系统模块** - 成就查询、分类筛选、搜索功能
+6. ✅ **地牢探索与战斗** - 地牢列表、探索流程、战斗模拟、结算奖励
 
 ### 详细文档
 
@@ -253,7 +293,7 @@ npm run build
 ### 中期目标（3-6个月）
 - [ ] 完善 AI 助手功能
 - [ ] 实现技能系统
-- [ ] 添加成就系统
+- [x] 添加成就系统（后端接口已完成）
 - [ ] 优化游戏平衡性
 
 ### 长期目标（6-12个月）
@@ -282,6 +322,10 @@ npm run build
   2. 同步修复 `/card-characters` 接口：去除 `CardCharacterMapper` 中缺失 SQL 的自定义方法，并在 `CardCharacterService` 引入 `LambdaQueryWrapper`，保持职业/阵营筛选功能可用。
   3. 解决 `card_characters.class` 字段命名不一致问题：通过在实体上添加 `@TableField("class")` 显式映射，避免 MySQL 抛出 “Unknown column class_type”。
   4. 优化卡牌与卡牌角色筛选的空参处理逻辑，参数为空时自动回退为全量查询，减少调用端判空成本。
+  5. 更新卡牌角色模板支持“只改动一部分字段”的 PATCH 行为：在 Service 层引入忽略 null/空字符串 的属性复制，避免用户只传部分字段就触发数据库 NOT NULL 或 JSON 校验约束。
+  6. 修复 `/user-cards` 接口 500：移除 `UserCardMapper` 中缺失 SQL 的自定义查询，改由 `UserCardService` 使用 `LambdaQueryWrapper` 构建查询，保证用户手牌/已装备查询与鉴权一致。
+  7. 修复 `/user-card-characters` 接口 500：统一 `UserCardCharacterMapper` 与 Service 的查询实现，消除缺失 SQL 的调用点，并对“已上阵/按用户筛选”逻辑使用 LambdaQueryWrapper 实现。
+  8. 新增 `CampController` + `CampService`，一次聚合主角、卡牌、背包、钱包与商城数据，提供前端营地仪表盘的唯一数据源。
 - **问题**：项目缺少卡牌相关 Mapper XML，自定义 SQL 若需落地必须新增文件或使用注解；需要一份清单记录当前 Mapper 及其 SQL 完成度。
 - **改进**：补充卡牌接口的集成测试样例，并在 `API接口文档.md` 中新增卡牌筛选说明，确保迁移到 MyBatis Plus 的模块有验收标准。
 

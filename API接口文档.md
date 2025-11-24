@@ -651,23 +651,321 @@ Content-Type: application/json
 
 ---
 
-## 📊 统计模块
+## 📊 成就与统计模块
 
 ### 获取成就列表
 ```
 GET /achievements
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "获取成就列表成功",
+  "data": [
+    {
+      "id": 1,
+      "name": "初出茅庐",
+      "category": "progression",
+      "description": "完成第1关",
+      "requirements": "{\"stage_number\": 1, \"is_passed\": true}",
+      "isCompleted": false,
+      "progress": 0
+    }
+  ]
+}
+```
+
+### 根据分类获取成就列表
+```
+GET /achievements/category/{category}
+```
+
+**路径参数**：
+- `category`: 分类（progression-进度, mastery-精通, collection-收集, social-社交）
+
+**响应**：同获取成就列表
+
+### 根据ID获取成就详情
+```
+GET /achievements/{id}
+```
+
+**路径参数**：
+- `id`: 成就ID
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "获取成就详情成功",
+  "data": {
+    "id": 1,
+    "name": "初出茅庐",
+    "category": "progression",
+    "description": "完成第1关",
+    "requirements": "{\"stage_number\": 1, \"is_passed\": true}",
+    "isCompleted": false,
+    "progress": 0
+  }
+}
+```
+
+### 搜索成就
+```
+GET /achievements/search?name={name}
+```
+
+**查询参数**：
+- `name`: 成就名称（支持模糊查询）
+
+**响应**：同获取成就列表
+
+### 获取用户成就列表（带完成状态）
+```
+GET /achievements/user
 Authorization: Bearer {token}
 ```
 
-### 获取游戏统计
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "获取用户成就列表成功",
+  "data": [
+    {
+      "id": 1,
+      "name": "初出茅庐",
+      "category": "progression",
+      "description": "完成第1关",
+      "requirements": "{\"stage_number\": 1, \"is_passed\": true}",
+      "isCompleted": true,
+      "progress": 100
+    }
+  ]
+}
 ```
-GET /game-metrics
+
+### 根据分类获取用户成就列表
+```
+GET /achievements/user/category/{category}
 Authorization: Bearer {token}
+```
+
+**路径参数**：
+- `category`: 分类（progression-进度, mastery-精通, collection-收集, social-社交）
+
+**响应**：同获取用户成就列表
+
+### 获取用户成就统计
+```
+GET /achievements/user/stats
+Authorization: Bearer {token}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "获取成就统计成功",
+  "data": {
+    "totalCount": 50,
+    "completedCount": 12,
+    "completionRate": 24.0
+  }
+}
 ```
 
 ---
 
+## ⚔️ 地牢探索模块
+
+### 获取地牢列表
+```
+GET /dungeons
+Authorization: Bearer {token}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": [
+    {
+      "id": 1,
+      "name": "暗影洞穴",
+      "difficulty": "normal",
+      "theme": "cave",
+      "recommendedCards": "[1,2,3]",
+      "description": "充满陷阱和黑暗魔物的洞穴"
+    }
+  ]
+}
+```
+
+### 开启探索
+```
+POST /dungeons/runs/start
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "stageNumber": 3,
+  "userPlayerCharacterId": 12,
+  "cardCharacterIds": [101, 102],
+  "cardIds": [201, 202, 203],
+  "consumableItemIds": [301],
+  "notes": "携带治疗药水"
+}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "探索已开启",
+  "data": {
+    "id": 88,
+    "stageNumber": 3,
+    "stageName": "迷雾密林",
+    "difficulty": "normal",
+    "progress": {
+      "status": "exploring",
+      "currentRoom": "Entrance",
+      "exploredRooms": 0,
+      "defeatedEnemies": 0
+    }
+  }
+}
+```
+
+### 查询当前探索
+```
+GET /dungeons/runs/current
+Authorization: Bearer {token}
+```
+
+若无探索，`data` 为 `null`，`message` 为“暂无进行中的探索”。
+
+### 探索房间/触发事件
+```
+POST /dungeons/runs/{runId}/explore
+Authorization: Bearer {token}
+Content-Type: application/json (可选)
+```
+
+**请求体验例**：
+```json
+{
+  "action": "explore",
+  "choice": "left_path"
+}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "触发事件：流浪商人",
+  "data": {
+    "run": { "...": "..." },
+    "eventSummary": "流浪商人：可低价购买药剂 (效果: {\"reward\":{\"gold\":-50}})",
+    "battlePending": false
+  }
+}
+```
+
+当遭遇敌人时，`battlePending=true`，前端需要调用战斗接口。
+
+### 结算战斗
+```
+POST /dungeons/runs/{runId}/battle
+Authorization: Bearer {token}
+Content-Type: application/json (可选)
+```
+
+**请求体**：
+```json
+{
+  "strategy": "aggressive"
+}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "message": "战斗已结算，结果：victory",
+  "data": {
+    "run": { "...": "..." },
+    "battleResult": {
+      "outcome": "victory",
+      "enemyName": "亡灵骑士",
+      "heroRemainingHp": 35,
+      "enemyRemainingHp": 0,
+      "battleLog": [
+        "第1回合：玩家造成 18 点伤害。敌人剩余 62 HP。",
+        "第1回合：敌人造成 12 点伤害。玩家剩余 48 HP。",
+        "..."
+      ]
+    },
+    "battlePending": false
+  }
+}
+```
+
+若玩家失败，接口会自动标记本次探索为 `defeat` 并更新 `user_stage_progress`。
+
+### 结束探索
+```
+POST /dungeons/runs/{runId}/end
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "result": "victory",
+  "notes": "击败首领后直接退出",
+  "rewardChoice": {
+    "gold": 350,
+    "experience": 120
+  }
+}
+```
+
+若 result=“victory”，后端会调用 `user_stage_progress.passStage` 并写入奖励快照；其他结果则记为尝试/失败。
+
+
 ## 🔄 接口更新日志
+
+### 2025-01-XX
+- ✅ 新增成就模块接口（AchievementController）
+  - GET /achievements - 获取所有成就列表
+  - GET /achievements/category/{category} - 根据分类获取成就
+  - GET /achievements/{id} - 获取成就详情
+  - GET /achievements/search - 搜索成就
+  - GET /achievements/user - 获取当前登录用户的成就列表（带完成状态）
+  - GET /achievements/user/category/{category} - 根据分类获取当前用户成就
+  - GET /achievements/user/stats - 获取当前用户成就统计
+- ✅ 新增用户成就关联表（user_achievements）
+  - 支持记录用户成就完成状态、进度、完成时间、奖励领取状态
+  - 遵循项目"模板/实例分离"设计原则
+- ❌ 移除统计模块接口（GameMetricsController）
+  - 后端不再提供 /game-metrics 相关API
+- ✅ 新增地牢探索接口（DungeonController）
+  - GET /dungeons - 地牢列表
+  - POST /dungeons/runs/start - 开启探索
+  - GET /dungeons/runs/current - 当前探索状态
+  - POST /dungeons/runs/{runId}/explore - 探索/触发事件
+  - POST /dungeons/runs/{runId}/battle - 结算战斗
+  - POST /dungeons/runs/{runId}/end - 结束探索并结算奖励
 
 ### 2025-01-XX
 - 初始版本，定义基础接口规范

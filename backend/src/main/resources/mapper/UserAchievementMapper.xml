@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dungeon.mapper.UserAchievementMapper">
+    
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.dungeon.entity.UserAchievement">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="achievement_id" property="achievementId" jdbcType="BIGINT"/>
+        <result column="is_completed" property="isCompleted" jdbcType="TINYINT"/>
+        <result column="progress" property="progress" jdbcType="INTEGER"/>
+        <result column="completed_at" property="completedAt" jdbcType="TIMESTAMP"/>
+        <result column="reward_claimed" property="rewardClaimed" jdbcType="TINYINT"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+    
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, user_id, achievement_id, is_completed, progress, completed_at, reward_claimed, created_at, updated_at
+    </sql>
+    
+    <!-- 根据用户ID查询用户成就列表 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM user_achievements
+        WHERE user_id = #{userId}
+        ORDER BY is_completed DESC, completed_at DESC, created_at DESC
+    </select>
+    
+    <!-- 根据用户ID和完成状态查询 -->
+    <select id="selectByUserIdAndCompleted" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM user_achievements
+        WHERE user_id = #{userId} AND is_completed = #{isCompleted}
+        ORDER BY completed_at DESC, created_at DESC
+    </select>
+    
+    <!-- 根据用户ID和成就ID查询 -->
+    <select id="selectByUserIdAndAchievementId" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM user_achievements
+        WHERE user_id = #{userId} AND achievement_id = #{achievementId}
+        LIMIT 1
+    </select>
+    
+    <!-- 根据用户ID和分类查询 -->
+    <select id="selectByUserIdAndCategory" resultMap="BaseResultMap">
+        SELECT 
+        ua.id, ua.user_id, ua.achievement_id, ua.is_completed, ua.progress, 
+        ua.completed_at, ua.reward_claimed, ua.created_at, ua.updated_at
+        FROM user_achievements ua
+        INNER JOIN achievements a ON ua.achievement_id = a.id
+        WHERE ua.user_id = #{userId} AND a.category = #{category}
+        ORDER BY ua.is_completed DESC, ua.completed_at DESC, ua.created_at DESC
+    </select>
+    
+</mapper>
+
