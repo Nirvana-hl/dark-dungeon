@@ -90,6 +90,23 @@ public class StageController {
     }
     
     /**
+     * 获取关卡地图配置
+     * GET /stages/{stageNumber}/map
+     */
+    @GetMapping("/{stageNumber}/map")
+    public Result<com.dungeon.dto.StageMapDTO> getStageMap(@PathVariable Integer stageNumber) {
+        try {
+            com.dungeon.dto.StageMapDTO map = stageService.getStageMap(stageNumber);
+            if (map == null) {
+                return Result.error(404, "关卡不存在");
+            }
+            return Result.success(map);
+        } catch (Exception e) {
+            return Result.error("获取关卡地图失败: " + e.getMessage());
+        }
+    }
+    
+    /**
      * 转换为DTO
      */
     private StageDTO toDTO(Stage stage) {

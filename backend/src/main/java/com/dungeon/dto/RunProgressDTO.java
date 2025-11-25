@@ -11,6 +11,8 @@ import java.util.List;
 public class RunProgressDTO {
     private String status;
     private String currentRoom;
+    private Integer currentRoomId;        // 当前房间ID（基于地图）
+    private List<Integer> visitedRooms;   // 已访问的房间ID列表
     private int exploredRooms;
     private int defeatedEnemies;
     private List<String> eventLog;

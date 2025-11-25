@@ -1,7 +1,9 @@
 package com.dungeon.service;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dungeon.dto.*;
 import com.dungeon.dto.UserPlayerCharacterDTO;
@@ -136,42 +138,133 @@ public class DungeonService {
             throw new RuntimeException("仍有未处理的战斗，请先解决战斗");
         }
 
-        state.setExploredRooms(state.getExploredRooms() + 1);
-        state.setCurrentRoom("Room-" + state.getExploredRooms());
-
         String action = request != null && StringUtils.hasText(request.getAction())
                 ? request.getAction() : "explore";
 
         String message;
         String eventSummary = null;
+        Integer targetRoomId = request != null ? request.getTargetRoomId() : null;
 
-        if ("event".equalsIgnoreCase(action)) {
-            Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
-            if (event != null) {
-                eventSummary = buildEventSummary(event);
-                state.getEventLog().add(eventSummary);
-                message = "触发事件：" + event.getName();
+        // 解析地图配置
+        Map<String, Object> mapConfig = parseMapConfig(stage.getExplorationMap());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rooms = (List<Map<String, Object>>) mapConfig.get("rooms");
+        @SuppressWarnings("unchecked")
+        List<List<Integer>> paths = (List<List<Integer>>) mapConfig.get("paths");
+
+        // 如果指定了目标房间ID，进行移动探索
+        if (targetRoomId != null && "move".equalsIgnoreCase(action)) {
+            // 验证路径是否可达
+            Integer currentRoomId = state.getCurrentRoomId();
+            if (currentRoomId == null) {
+                // 如果没有当前房间，找到起始房间
+                currentRoomId = findStartRoom(rooms);
+                state.setCurrentRoomId(currentRoomId);
+            }
+
+            if (!isPathReachable(paths, currentRoomId, targetRoomId)) {
+                throw new RuntimeException("无法到达目标房间，路径不存在");
+            }
+
+            // 移动到目标房间
+            state.setCurrentRoomId(targetRoomId);
+            state.setExploredRooms(state.getExploredRooms() + 1);
+            
+            // 添加到已访问列表
+            if (!state.getVisitedRooms().contains(targetRoomId)) {
+                state.getVisitedRooms().add(targetRoomId);
+            }
+
+            // 获取目标房间信息
+            Map<String, Object> targetRoom = findRoomById(rooms, targetRoomId);
+            if (targetRoom != null) {
+                String roomType = (String) targetRoom.get("type");
+                String roomName = (String) targetRoom.get("name");
+                state.setCurrentRoom(roomName != null ? roomName : "Room-" + targetRoomId);
+
+                // 根据房间类型决定触发内容
+                if ("start".equalsIgnoreCase(roomType)) {
+                    message = "到达入口：" + roomName;
+                } else if ("end".equalsIgnoreCase(roomType)) {
+                    // 到达出口，完成探索
+                    state.setStatus("completed");
+                    message = "到达出口：" + roomName + "，探索完成！";
+                } else if ("boss".equalsIgnoreCase(roomType)) {
+                    // Boss房间，必定触发Boss战斗
+                    Enemy enemy = pickEnemyForStage(stage);
+                    if (enemy != null) {
+                        state.prepareBattle(enemy);
+                        message = "遭遇Boss：" + enemy.getName();
+                    } else {
+                        message = "Boss房间，但未找到Boss敌人";
+                    }
+                } else if ("event".equalsIgnoreCase(roomType)) {
+                    // 事件房间，必定触发事件
+                    Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
+                    if (event != null) {
+                        eventSummary = buildEventSummary(event);
+                        state.getEventLog().add(eventSummary);
+                        message = "触发事件：" + event.getName();
+                    } else {
+                        message = "事件房间，但未触发事件";
+                    }
+                } else {
+                    // normal房间，随机触发事件或敌人
+                    if (RANDOM.nextBoolean()) {
+                        Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
+                        if (event != null) {
+                            eventSummary = buildEventSummary(event);
+                            state.getEventLog().add(eventSummary);
+                            message = "触发事件：" + event.getName();
+                        } else {
+                            message = "空房间，未发现异常";
+                        }
+                    } else {
+                        Enemy enemy = pickEnemyForStage(stage);
+                        if (enemy != null) {
+                            state.prepareBattle(enemy);
+                            message = "遭遇敌人：" + enemy.getName();
+                        } else {
+                            message = "暂未发现敌人";
+                        }
+                    }
+                }
             } else {
-                message = "未触发事件，继续探索";
+                message = "移动到房间 " + targetRoomId;
             }
         } else {
-            // 随机决定事件或战斗
-            if (RANDOM.nextBoolean()) {
+            // 兼容旧版线性探索逻辑
+            state.setExploredRooms(state.getExploredRooms() + 1);
+            state.setCurrentRoom("Room-" + state.getExploredRooms());
+
+            if ("event".equalsIgnoreCase(action)) {
                 Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
                 if (event != null) {
                     eventSummary = buildEventSummary(event);
                     state.getEventLog().add(eventSummary);
                     message = "触发事件：" + event.getName();
                 } else {
-                    message = "空房间，未发现异常";
+                    message = "未触发事件，继续探索";
                 }
             } else {
-                Enemy enemy = pickEnemyForStage(stage);
-                if (enemy != null) {
-                    state.prepareBattle(enemy);
-                    message = "遭遇敌人：" + enemy.getName();
+                // 随机决定事件或战斗
+                if (RANDOM.nextBoolean()) {
+                    Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
+                    if (event != null) {
+                        eventSummary = buildEventSummary(event);
+                        state.getEventLog().add(eventSummary);
+                        message = "触发事件：" + event.getName();
+                    } else {
+                        message = "空房间，未发现异常";
+                    }
                 } else {
-                    message = "暂未发现敌人";
+                    Enemy enemy = pickEnemyForStage(stage);
+                    if (enemy != null) {
+                        state.prepareBattle(enemy);
+                        message = "遭遇敌人：" + enemy.getName();
+                    } else {
+                        message = "暂未发现敌人";
+                    }
                 }
             }
         }
@@ -351,7 +444,10 @@ public class DungeonService {
 
         String enemyDifficulty = stage.getIsBossStage() != null && stage.getIsBossStage() ? "boss"
                 : normalizeEnemyDifficulty(stage.getDifficulty());
-        List<Enemy> candidates = enemyMapper.selectByDifficulty(enemyDifficulty);
+        // 使用 MyBatis Plus 的 LambdaQueryWrapper 查询敌人
+        LambdaQueryWrapper<Enemy> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Enemy::getDifficulty, enemyDifficulty);
+        List<Enemy> candidates = enemyMapper.selectList(wrapper);
         if (CollectionUtils.isEmpty(candidates)) {
             candidates = enemyMapper.selectList(new QueryWrapper<>());
         }
@@ -456,6 +552,8 @@ public class DungeonService {
         RunProgressDTO dto = new RunProgressDTO();
         dto.setStatus(state.getStatus());
         dto.setCurrentRoom(state.getCurrentRoom());
+        dto.setCurrentRoomId(state.getCurrentRoomId());
+        dto.setVisitedRooms(state.getVisitedRooms() != null ? new ArrayList<>(state.getVisitedRooms()) : new ArrayList<>());
         dto.setExploredRooms(state.getExploredRooms());
         dto.setDefeatedEnemies(state.getDefeatedEnemies());
         dto.setEventLog(new ArrayList<>(state.getEventLog()));
@@ -478,6 +576,8 @@ public class DungeonService {
     private static class RunProgressState {
         private String status;
         private String currentRoom;
+        private Integer currentRoomId;        // 当前房间ID（基于地图）
+        private List<Integer> visitedRooms;   // 已访问的房间ID列表
         private int exploredRooms;
         private int defeatedEnemies;
         private List<String> eventLog;
@@ -496,6 +596,32 @@ public class DungeonService {
             state.eventLog = new ArrayList<>();
             state.battleLog = new ArrayList<>();
             state.awaitingBattle = false;
+            state.visitedRooms = new ArrayList<>();
+            
+            // 如果有地图配置，找到起始房间
+            if (stage != null && StringUtils.hasText(stage.getExplorationMap())) {
+                try {
+                    JSONObject mapJson = JSON.parseObject(stage.getExplorationMap());
+                    if (mapJson.containsKey("rooms")) {
+                        JSONArray roomsArray = mapJson.getJSONArray("rooms");
+                        for (int i = 0; i < roomsArray.size(); i++) {
+                            JSONObject roomJson = roomsArray.getJSONObject(i);
+                            if ("start".equalsIgnoreCase(roomJson.getString("type"))) {
+                                state.currentRoomId = roomJson.getInteger("id");
+                                String roomName = roomJson.getString("name");
+                                if (StringUtils.hasText(roomName)) {
+                                    state.currentRoom = roomName;
+                                }
+                                state.visitedRooms.add(state.currentRoomId);
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // 解析失败，使用默认值
+                }
+            }
+            
             return state;
         }
 
@@ -593,6 +719,176 @@ public class DungeonService {
         public void setPendingEnemyDifficulty(String pendingEnemyDifficulty) {
             this.pendingEnemyDifficulty = pendingEnemyDifficulty;
         }
+
+        public Integer getCurrentRoomId() {
+            return currentRoomId;
+        }
+
+        public void setCurrentRoomId(Integer currentRoomId) {
+            this.currentRoomId = currentRoomId;
+        }
+
+        public List<Integer> getVisitedRooms() {
+            if (visitedRooms == null) {
+                visitedRooms = new ArrayList<>();
+            }
+            return visitedRooms;
+        }
+
+        public void setVisitedRooms(List<Integer> visitedRooms) {
+            this.visitedRooms = visitedRooms;
+        }
+    }
+    
+    /**
+     * 解析地图配置JSON
+     */
+    private Map<String, Object> parseMapConfig(String explorationMapJson) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("rooms", new ArrayList<>());
+        result.put("paths", new ArrayList<>());
+        
+        if (!StringUtils.hasText(explorationMapJson)) {
+            return result;
+        }
+        
+        try {
+            JSONObject mapJson = JSON.parseObject(explorationMapJson);
+            
+            // 解析房间列表
+            List<Map<String, Object>> rooms = new ArrayList<>();
+            if (mapJson.containsKey("rooms")) {
+                JSONArray roomsArray = mapJson.getJSONArray("rooms");
+                for (int i = 0; i < roomsArray.size(); i++) {
+                    JSONObject roomJson = roomsArray.getJSONObject(i);
+                    Map<String, Object> room = new HashMap<>();
+                    room.put("id", roomJson.getInteger("id"));
+                    room.put("type", roomJson.getString("type"));
+                    room.put("name", roomJson.getString("name"));
+                    room.put("x", roomJson.getInteger("x"));
+                    room.put("y", roomJson.getInteger("y"));
+                    room.put("description", roomJson.getString("description"));
+                    rooms.add(room);
+                }
+            }
+            result.put("rooms", rooms);
+            
+            // 解析路径列表
+            List<List<Integer>> paths = new ArrayList<>();
+            if (mapJson.containsKey("paths")) {
+                Object pathsObj = mapJson.get("paths");
+                if (pathsObj instanceof JSONArray) {
+                    JSONArray pathsArray = (JSONArray) pathsObj;
+                    for (int i = 0; i < pathsArray.size(); i++) {
+                        Object pathObj = pathsArray.get(i);
+                        List<Integer> path = new ArrayList<>();
+                        
+                        if (pathObj instanceof JSONArray) {
+                            // 格式：[from, to]
+                            JSONArray pathArray = (JSONArray) pathObj;
+                            if (pathArray.size() >= 2) {
+                                path.add(pathArray.getInteger(0));
+                                path.add(pathArray.getInteger(1));
+                            }
+                        } else if (pathObj instanceof JSONObject) {
+                            // 格式：{"from": 1, "to": 2}
+                            JSONObject pathJson = (JSONObject) pathObj;
+                            path.add(pathJson.getInteger("from"));
+                            path.add(pathJson.getInteger("to"));
+                        }
+                        
+                        if (path.size() == 2) {
+                            paths.add(path);
+                        }
+                    }
+                }
+            }
+            result.put("paths", paths);
+        } catch (Exception e) {
+            // 解析失败，返回空配置
+        }
+        
+        return result;
+    }
+    
+    /**
+     * 从房间列表中找到起始房间ID
+     */
+    private Integer findStartRoom(List<Map<String, Object>> rooms) {
+        if (rooms == null || rooms.isEmpty()) {
+            return null;
+        }
+        for (Map<String, Object> room : rooms) {
+            if ("start".equalsIgnoreCase((String) room.get("type"))) {
+                return (Integer) room.get("id");
+            }
+        }
+        // 如果没有找到start类型，返回第一个房间
+        return (Integer) rooms.get(0).get("id");
+    }
+    
+    /**
+     * 检查从fromRoomId到toRoomId是否有路径可达
+     * 使用简单的BFS算法
+     */
+    private boolean isPathReachable(List<List<Integer>> paths, Integer fromRoomId, Integer toRoomId) {
+        if (fromRoomId == null || toRoomId == null) {
+            return false;
+        }
+        if (fromRoomId.equals(toRoomId)) {
+            return true;
+        }
+        
+        // 构建邻接表
+        Map<Integer, List<Integer>> adjacencyList = new HashMap<>();
+        for (List<Integer> path : paths) {
+            if (path.size() >= 2) {
+                Integer from = path.get(0);
+                Integer to = path.get(1);
+                adjacencyList.computeIfAbsent(from, k -> new ArrayList<>()).add(to);
+                // 路径是双向的
+                adjacencyList.computeIfAbsent(to, k -> new ArrayList<>()).add(from);
+            }
+        }
+        
+        // BFS搜索
+        Queue<Integer> queue = new LinkedList<>();
+        Set<Integer> visited = new HashSet<>();
+        queue.offer(fromRoomId);
+        visited.add(fromRoomId);
+        
+        while (!queue.isEmpty()) {
+            Integer current = queue.poll();
+            List<Integer> neighbors = adjacencyList.get(current);
+            if (neighbors != null) {
+                for (Integer neighbor : neighbors) {
+                    if (neighbor.equals(toRoomId)) {
+                        return true;
+                    }
+                    if (!visited.contains(neighbor)) {
+                        visited.add(neighbor);
+                        queue.offer(neighbor);
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 根据房间ID查找房间信息
+     */
+    private Map<String, Object> findRoomById(List<Map<String, Object>> rooms, Integer roomId) {
+        if (rooms == null || roomId == null) {
+            return null;
+        }
+        for (Map<String, Object> room : rooms) {
+            if (roomId.equals(room.get("id"))) {
+                return room;
+            }
+        }
+        return null;
     }
 }
 
