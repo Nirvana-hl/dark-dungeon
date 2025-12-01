@@ -3,8 +3,6 @@ package com.dungeon.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dungeon.dto.*;
 import com.dungeon.dto.UserPlayerCharacterDTO;
 import com.dungeon.entity.Dungeon;
@@ -21,7 +19,6 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -45,6 +42,9 @@ public class DungeonService {
 
     @Autowired
     private EnemyMapper enemyMapper;
+
+    @Autowired
+    private EnemyService enemyService;
 
     @Autowired
     private EventService eventService;
@@ -191,9 +191,9 @@ public class DungeonService {
                     message = "到达出口：" + roomName + "，探索完成！";
                 } else if ("boss".equalsIgnoreCase(roomType)) {
                     // Boss房间，必定触发Boss战斗
-                    Enemy enemy = pickEnemyForStage(stage);
+                    Enemy enemy = selectStageEnemy(stage);
                     if (enemy != null) {
-                        state.prepareBattle(enemy);
+                        state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
                         message = "遭遇Boss：" + enemy.getName();
                     } else {
                         message = "Boss房间，但未找到Boss敌人";
@@ -220,9 +220,9 @@ public class DungeonService {
                             message = "空房间，未发现异常";
                         }
                     } else {
-                        Enemy enemy = pickEnemyForStage(stage);
+                        Enemy enemy = selectStageEnemy(stage);
                         if (enemy != null) {
-                            state.prepareBattle(enemy);
+                            state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
                             message = "遭遇敌人：" + enemy.getName();
                         } else {
                             message = "暂未发现敌人";
@@ -258,9 +258,9 @@ public class DungeonService {
                         message = "空房间，未发现异常";
                     }
                 } else {
-                    Enemy enemy = pickEnemyForStage(stage);
+                    Enemy enemy = selectStageEnemy(stage);
                     if (enemy != null) {
-                        state.prepareBattle(enemy);
+                        state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
                         message = "遭遇敌人：" + enemy.getName();
                     } else {
                         message = "暂未发现敌人";
@@ -277,6 +277,12 @@ public class DungeonService {
         response.setMessage(message);
         response.setEventSummary(eventSummary);
         response.setBattlePending(state.isAwaitingBattle());
+        if (state.isAwaitingBattle()) {
+            response.setPendingEnemyId(state.getPendingEnemyId());
+            response.setPendingEnemyName(state.getPendingEnemyName());
+            response.setPendingEnemyDifficulty(state.getPendingEnemyDifficulty());
+            response.setPendingEnemyCards(new ArrayList<>(state.getPendingEnemyCards()));
+        }
         return response;
     }
 
@@ -334,6 +340,12 @@ public class DungeonService {
         response.setMessage("战斗已结算，结果：" + battleResult.getOutcome());
         response.setBattleResult(battleResult);
         response.setBattlePending(state.isAwaitingBattle());
+        if (state.isAwaitingBattle()) {
+            response.setPendingEnemyId(state.getPendingEnemyId());
+            response.setPendingEnemyName(state.getPendingEnemyName());
+            response.setPendingEnemyDifficulty(state.getPendingEnemyDifficulty());
+            response.setPendingEnemyCards(new ArrayList<>(state.getPendingEnemyCards()));
+        }
         return response;
     }
 
@@ -413,63 +425,21 @@ public class DungeonService {
         }
     }
 
-    private Enemy pickEnemyForStage(Stage stage) {
+    private Enemy selectStageEnemy(Stage stage) {
         if (stage == null) {
             return null;
         }
-        // 先尝试根据 enemy_pool 指定 ID
-        if (StringUtils.hasText(stage.getEnemyPool())) {
-            try {
-                List<Long> enemyIds = new ArrayList<>();
-                JSON.parseArray(stage.getEnemyPool()).forEach(obj -> {
-                    if (obj instanceof Number) {
-                        enemyIds.add(((Number) obj).longValue());
-                    } else {
-                        JSONObject json = (JSONObject) obj;
-                        if (json.containsKey("enemyId")) {
-                            enemyIds.add(json.getLong("enemyId"));
-                        }
-                    }
-                });
-                if (!enemyIds.isEmpty()) {
-                    Long pickId = enemyIds.get(RANDOM.nextInt(enemyIds.size()));
-                    Enemy enemy = enemyMapper.selectById(pickId);
-                    if (enemy != null) {
-                        return enemy;
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        String enemyDifficulty = stage.getIsBossStage() != null && stage.getIsBossStage() ? "boss"
-                : normalizeEnemyDifficulty(stage.getDifficulty());
-        // 使用 MyBatis Plus 的 LambdaQueryWrapper 查询敌人
-        LambdaQueryWrapper<Enemy> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Enemy::getDifficulty, enemyDifficulty);
-        List<Enemy> candidates = enemyMapper.selectList(wrapper);
-        if (CollectionUtils.isEmpty(candidates)) {
-            candidates = enemyMapper.selectList(new QueryWrapper<>());
-        }
-        if (CollectionUtils.isEmpty(candidates)) {
-            return null;
-        }
-        return candidates.get(RANDOM.nextInt(candidates.size()));
+        return enemyService.selectEnemyForStage(stage, resolveStageDifficulty(stage));
     }
 
-    private String normalizeEnemyDifficulty(String difficulty) {
-        if (!StringUtils.hasText(difficulty)) {
+    private String resolveStageDifficulty(Stage stage) {
+        if (stage == null) {
             return "normal";
         }
-        switch (difficulty.toLowerCase()) {
-            case "easy":
-                return "easy";
-            case "hard":
-            case "expert":
-                return "hard";
-            default:
-                return "normal";
+        if (Boolean.TRUE.equals(stage.getIsBossStage())) {
+            return "boss";
         }
+        return StringUtils.hasText(stage.getDifficulty()) ? stage.getDifficulty() : "normal";
     }
 
     private String buildEventSummary(Event event) {
@@ -558,8 +528,10 @@ public class DungeonService {
         dto.setDefeatedEnemies(state.getDefeatedEnemies());
         dto.setEventLog(new ArrayList<>(state.getEventLog()));
         dto.setBattleLog(new ArrayList<>(state.getBattleLog()));
+        dto.setPendingEnemyId(state.getPendingEnemyId());
         dto.setPendingEnemyName(state.getPendingEnemyName());
         dto.setPendingEnemyDifficulty(state.getPendingEnemyDifficulty());
+        dto.setPendingEnemyCards(new ArrayList<>(state.getPendingEnemyCards()));
         return dto;
     }
 
@@ -586,6 +558,7 @@ public class DungeonService {
         private Long pendingEnemyId;
         private String pendingEnemyName;
         private String pendingEnemyDifficulty;
+        private List<Map<String, Object>> pendingEnemyCards;
 
         static RunProgressState initial(Stage stage) {
             RunProgressState state = new RunProgressState();
@@ -597,6 +570,7 @@ public class DungeonService {
             state.battleLog = new ArrayList<>();
             state.awaitingBattle = false;
             state.visitedRooms = new ArrayList<>();
+            state.pendingEnemyCards = new ArrayList<>();
             
             // 如果有地图配置，找到起始房间
             if (stage != null && StringUtils.hasText(stage.getExplorationMap())) {
@@ -625,12 +599,19 @@ public class DungeonService {
             return state;
         }
 
-        void prepareBattle(Enemy enemy) {
+        void prepareBattle(Enemy enemy, List<Map<String, Object>> enemyCards) {
             this.awaitingBattle = true;
             this.pendingEnemyId = enemy.getId();
             this.pendingEnemyName = enemy.getName();
             this.pendingEnemyDifficulty = enemy.getDifficulty();
             this.status = "awaiting_battle";
+            if (enemyCards != null) {
+                this.pendingEnemyCards = new ArrayList<>(enemyCards);
+            } else if (this.pendingEnemyCards == null) {
+                this.pendingEnemyCards = new ArrayList<>();
+            } else {
+                this.pendingEnemyCards.clear();
+            }
         }
 
         void resetBattle() {
@@ -638,6 +619,9 @@ public class DungeonService {
             this.pendingEnemyId = null;
             this.pendingEnemyName = null;
             this.pendingEnemyDifficulty = null;
+            if (this.pendingEnemyCards != null) {
+                this.pendingEnemyCards.clear();
+            }
         }
 
         public String getStatus() {
@@ -718,6 +702,17 @@ public class DungeonService {
 
         public void setPendingEnemyDifficulty(String pendingEnemyDifficulty) {
             this.pendingEnemyDifficulty = pendingEnemyDifficulty;
+        }
+
+        public List<Map<String, Object>> getPendingEnemyCards() {
+            if (pendingEnemyCards == null) {
+                pendingEnemyCards = new ArrayList<>();
+            }
+            return pendingEnemyCards;
+        }
+
+        public void setPendingEnemyCards(List<Map<String, Object>> pendingEnemyCards) {
+            this.pendingEnemyCards = pendingEnemyCards;
         }
 
         public Integer getCurrentRoomId() {

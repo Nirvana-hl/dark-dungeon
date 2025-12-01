@@ -332,6 +332,14 @@ npm run build
 - **问题**：项目缺少卡牌相关 Mapper XML，自定义 SQL 若需落地必须新增文件或使用注解；需要一份清单记录当前 Mapper 及其 SQL 完成度。
 - **改进**：补充卡牌接口的集成测试样例，并在 `API接口文档.md` 中新增卡牌筛选说明，确保迁移到 MyBatis Plus 的模块有验收标准。
 
+## ♻️ 今日任务复盘（2025-12-01）
+- **产出**：
+  1. 梳理 `/game/enemy-cards` 接口的调用链路（`Stage` → `Enemy` → `EnemyCard` → `Card`），明确它理应依据 `stages.enemy_pool` 中的敌人 ID 再去 `enemy_cards` 拉取卡组。
+  2. 定位 `stages.enemy_pool` 现有示例采用 `{"enemies":[...]}` 结构，与 `EnemyService#selectEnemyForStage` 预期的数组/对象列表不一致，导致解析失败并回退到“按难度随机”策略。
+  3. 重构 `DungeonService` 遭遇逻辑：沿用 `EnemyService` 的敌人池解析，遭遇敌人后立刻拉取其卡组并写入 `RunProgressState.pendingEnemyCards`，`RunActionResponse` 也同步返回 `pendingEnemyCards/pendingEnemyId`。
+- **问题**：关卡并没有真正驱动敌人选择，接口表现为“按难度+关卡编号查询”，与产品预期（关卡指定敌人池）不符。
+- **改进**：统一 `enemy_pool` 的 JSON 结构（如 `[1,2]` 或 `[{ "enemyId": 1, "weight": 3 }]`），或扩展解析逻辑兼容 `{"enemies":[...]}`，并补充校验脚本，确保 enemyId 能顺利映射到 `enemy_cards` 获取卡牌。
+
 ---
 
 **最后更新**: 2024年 | **维护者**: 项目团队

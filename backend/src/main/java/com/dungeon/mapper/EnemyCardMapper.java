@@ -3,21 +3,14 @@ package com.dungeon.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.dungeon.entity.EnemyCard;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-
-import java.util.List;
 
 /**
  * 敌人卡组关联 Mapper
+ * 使用 MyBatis Plus 的 BaseMapper，通过 LambdaQueryWrapper 进行条件查询
  */
 @Mapper
 public interface EnemyCardMapper extends BaseMapper<EnemyCard> {
-    
-    /**
-     * 根据敌人ID查询卡组
-     * @param enemyId 敌人ID
-     * @return 卡组列表
-     */
-    List<EnemyCard> selectByEnemyId(@Param("enemyId") String enemyId);
+    // 已移除 selectByEnemyId 方法，改用 MyBatis Plus 的 LambdaQueryWrapper
+    // 在 Service 层使用：enemyCardMapper.selectList(new LambdaQueryWrapper<EnemyCard>().eq(EnemyCard::getEnemyId, enemyId))
 }
 
