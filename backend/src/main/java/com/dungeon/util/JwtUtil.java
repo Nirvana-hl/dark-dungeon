@@ -101,8 +101,23 @@ public class JwtUtil {
     public boolean validateToken(String token) {
         try {
             Claims claims = getClaimsFromToken(token);
-            return !claims.getExpiration().before(new Date());
+            Date expiration = claims.getExpiration();
+            boolean isValid = expiration != null && !expiration.before(new Date());
+            if (!isValid) {
+                System.out.println("[JwtUtil] Token 已过期: expiration=" + expiration);
+            }
+            return isValid;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            System.out.println("[JwtUtil] Token 已过期: " + e.getMessage());
+            return false;
+        } catch (io.jsonwebtoken.MalformedJwtException e) {
+            System.out.println("[JwtUtil] Token 格式错误: " + e.getMessage());
+            return false;
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            System.out.println("[JwtUtil] Token 签名验证失败: " + e.getMessage());
+            return false;
         } catch (Exception e) {
+            System.out.println("[JwtUtil] Token 验证异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             return false;
         }
     }

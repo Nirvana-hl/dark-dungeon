@@ -1,29 +1,35 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
+import axios, { AxiosInstance, AxiosResponse } from 'axios'
 
-/**
- * API 基础配置
- */
-const API_BASE_URL = 'http://localhost:8080/api'
+// API 配置
+// 注意：后端 Controller 没有 /api 前缀，所以这里不使用 /api
+const API_BASE_URL = 'http://localhost:8080'
 
-/**
- * 创建 axios 实例
- */
+// 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 })
 
-/**
- * 请求拦截器 - 添加 Token
- */
+// 请求拦截器 - 添加 JWT token
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+      console.log('[API] 请求已添加认证token:', {
+        url: config.url,
+        method: config.method?.toUpperCase(),
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 20) + '...'
+      })
+    } else {
+      console.warn('[API] 请求未包含认证token:', {
+        url: config.url,
+        method: config.method?.toUpperCase()
+      })
     }
     return config
   },
@@ -32,202 +38,350 @@ apiClient.interceptors.request.use(
   }
 )
 
-/**
- * 响应拦截器 - 处理错误
- */
+// 响应拦截器 - 处理通用错误
 apiClient.interceptors.response.use(
-  (response) => {
-    return response.data
+  (response: AxiosResponse) => {
+    console.log('[API] 响应成功:', response.config.url, response.status)
+    return response
   },
   (error) => {
-    if (error.response?.status === 401) {
-      // Token 过期或无效，清除本地存储
-      localStorage.removeItem('token')
-      localStorage.removeItem('userId')
-      // 可以跳转到登录页
-      window.location.href = '/login'
+    const errorInfo = {
+      url: error.config?.url,
+      method: error.config?.method?.toUpperCase(),
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.response?.data?.message || error.message,
+      data: error.response?.data,
+      code: error.code
     }
+    console.error('[API] 响应错误详情:', errorInfo)
+    
+    // 网络错误
+    if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+      console.error('[API] 网络连接失败 - 后端服务可能未启动或无法访问')
+      error.userMessage = '无法连接到服务器，请检查后端服务是否正常运行'
+    }
+    // 超时错误
+    else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      console.error('[API] 请求超时')
+      error.userMessage = '请求超时，请稍后重试'
+    }
+    // 401 认证错误
+    else if (error.response?.status === 401) {
+      console.warn('[API] 认证失败，清除token并跳转登录页')
+      error.userMessage = '登录已过期，请重新登录'
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      // 延迟跳转，让用户看到错误信息
+      setTimeout(() => {
+      window.location.href = '/login'
+      }, 2000)
+    }
+    // 403 权限错误
+    else if (error.response?.status === 403) {
+      const token = localStorage.getItem('token')
+      console.error('[API] 403 权限错误详情:', {
+        url: error.config?.url,
+        hasToken: !!token,
+        tokenLength: token?.length,
+        responseData: error.response?.data
+      })
+      error.userMessage = '没有权限访问此资源，请检查是否已登录或token是否有效'
+    }
+    // 404 未找到
+    else if (error.response?.status === 404) {
+      error.userMessage = `接口不存在: ${error.config?.url}`
+    }
+    // 500 服务器错误
+    else if (error.response?.status >= 500) {
+      error.userMessage = '服务器内部错误，请稍后重试'
+    }
+    // 其他错误
+    else {
+      error.userMessage = error.response?.data?.message || error.message || '请求失败'
+    }
+    
     return Promise.reject(error)
   }
 )
 
-/**
- * API 响应类型
- */
+// 通用 API 响应接口
 export interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
 }
 
-/**
- * 认证相关 API
- */
-export const authApi = {
-  /**
-   * 用户注册
-   */
-  register: (username: string, email: string, password: string) => {
-    return apiClient.post<ApiResponse<AuthResponse>>('/auth/register', {
-      username,
-      email,
-      password
-    })
-  },
-
-  /**
-   * 用户登录
-   */
-  login: (email: string, password: string) => {
-    return apiClient.post<ApiResponse<AuthResponse>>('/auth/login', {
-      email,
-      password
-    })
-  }
+// 分页响应接口
+export interface PageResponse<T = any> {
+  records: T[]
+  total: number
+  size: number
+  current: number
+  pages: number
 }
 
-/**
- * 认证响应类型
- */
-export interface AuthResponse {
-  token: string
-  userId: number
-  username: string
-  email: string
-}
-
-/**
- * 角色相关 API
- */
-export const characterApi = {
-  /**
-   * 获取所有角色
-   */
-  getCharacters: () => {
-    return apiClient.get<ApiResponse<CharacterDTO[]>>('/characters')
-  },
-
-  /**
-   * 创建角色
-   */
-  createCharacter: (data: Partial<CharacterDTO>) => {
-    return apiClient.post<ApiResponse<CharacterDTO>>('/characters', data)
-  },
-
-  /**
-   * 删除角色
-   */
-  deleteCharacter: (id: number) => {
-    return apiClient.delete<ApiResponse<void>>(`/characters/${id}`)
-  },
-
-  /**
-   * 角色升星
-   */
-  starUp: (id: number) => {
-    return apiClient.post<ApiResponse<CharacterDTO>>(`/characters/${id}/star-up`)
-  }
-}
-
-/**
- * 角色 DTO
- */
-export interface CharacterDTO {
-  id?: number
-  name: string
-  classType: '战士' | '法师' | '游侠'
-  stars: number
-  hp: number
-  mp: number
-}
-
-/**
- * 钱包相关 API
- */
-export const walletApi = {
-  /**
-   * 获取金币
-   */
-  getGold: () => {
-    return apiClient.get<ApiResponse<number>>('/wallet/gold')
-  },
-
-  /**
-   * 消费金币
-   */
-  spend: (amount: number) => {
-    return apiClient.post<ApiResponse<boolean>>('/wallet/spend', { amount })
-  },
-
-  /**
-   * 增加金币
-   */
-  add: (amount: number) => {
-    return apiClient.post<ApiResponse<number>>('/wallet/add', { amount })
-  }
-}
-
-/**
- * 游戏相关 API
- */
+// 游戏相关 API 方法
 export const gameApi = {
-  /**
-   * 获取用户卡牌
-   */
-  getUserCards: () => {
-    return apiClient.get<ApiResponse<UserCard[]>>('/game/cards')
+  // 获取角色特性
+  async getCharacterTraits() {
+    return await apiClient.get('/character/traits')
   },
-
-  /**
-   * 获取敌方卡牌
-   */
-  getEnemyCards: (stage: number, difficulty: string) => {
-    return apiClient.get<ApiResponse<EnemyCard[]>>('/game/enemy-cards', {
-      params: { stage, difficulty }
-    })
+  
+  // 获取用户卡牌
+  async getUserCards() {
+    return await apiClient.get('/card/user-cards')
   },
-
-  /**
-   * 获取角色特性
-   */
-  getCharacterTraits: () => {
-    return apiClient.get<ApiResponse<Record<string, CharacterTrait>>>('/game/character-traits')
+  
+  // 获取敌方卡牌
+  async getEnemyCards(stageNum: number, difficulty: string) {
+    return await apiClient.get(`/card/enemy-cards?stage=${stageNum}&difficulty=${difficulty}`)
   }
 }
 
-/**
- * 用户卡牌类型
- */
-export interface UserCard {
-  name: string
-  type: string
-  quantity: number
-  attack?: number
-  health?: number
-  effect?: string
+// 营地相关 API 方法
+export const campApi = {
+  // 获取营地数据（聚合接口）
+  async getCampData() {
+    return await apiClient.get('/camp/dashboard')
+  },
+  
+  // 获取玩家角色信息
+  async getPlayerCharacter() {
+    return await apiClient.get('/camp/player-character')
+  },
+  
+  // 获取可用的卡牌角色
+  async getAvailableCardCharacters() {
+    return await apiClient.get('/camp/card-characters')
+  },
+  
+  // 部署/撤下卡牌角色
+  async deployCardCharacter(userCardCharacterId: string, deploy: boolean) {
+    return await apiClient.post('/camp/deploy-card-character', {
+      userCardCharacterId,
+      deploy
+    })
+  },
+  
+  // 获取背包物品
+  async getInventory() {
+    return await apiClient.get('/camp/inventory')
+  },
+  
+  // 使用物品
+  async useItem(inventoryId: string) {
+    return await apiClient.post('/camp/use-item', { inventoryId })
+  },
+  
+  // 获取商店商品
+  async getShopOffers() {
+    return await apiClient.get('/camp/shop-offers')
+  },
+  
+  // 获取指定商店类型的商品（最多8个）
+  async getShopOffersByType(shopType: 'item' | 'card_character') {
+    return await apiClient.get(`/camp/shop-offers/${shopType}`)
+  },
+  
+  // 刷新指定商店类型的商品
+  async refreshShop(shopType: 'item' | 'card_character') {
+    return await apiClient.post(`/camp/refresh-shop/${shopType}`)
+  },
+  
+  // 购买商品
+  async purchaseItem(offerId: string, quantity: number = 1) {
+    // 后端期望的字段名是 shopOfferId
+    return await apiClient.post('/camp/purchase', { 
+      shopOfferId: Number(offerId), // 转换为数字类型
+      quantity: quantity 
+    })
+  },
+  
+  // 获取任务事件
+  async getEvents() {
+    return await apiClient.get('/camp/events')
+  },
+  
+  // 完成任务事件
+  async completeEvent(eventId: string) {
+    return await apiClient.post('/camp/complete-event', { eventId })
+  },
+  
+  // 获取AI建议
+  async getAISuggestions() {
+    return await apiClient.get('/camp/ai-suggestions')
+  },
+  
+  // 刷新AI建议
+  async refreshAISuggestions() {
+    return await apiClient.post('/camp/refresh-ai-suggestions')
+  }
 }
 
-/**
- * 敌方卡牌类型
- */
-export interface EnemyCard {
-  name: string
-  type: string
-  attack?: number
-  health?: number
-  effect?: string
-  unique_play?: boolean
+// 技能相关 API 方法
+export const skillApi = {
+  // 获取职业技能树
+  async getSkillTree(playerCharacterCode: string) {
+    return await apiClient.get(`/skills/${playerCharacterCode}`)
+  },
+  
+  // 获取已解锁技能
+  async getUnlockedSkills() {
+    return await apiClient.get('/user-skills')
+  },
+  
+  // 解锁技能
+  async unlockSkill(skillId: string) {
+    return await apiClient.post('/user-skills/unlock', { skillId })
+  }
 }
 
-/**
- * 角色特性类型
- */
-export interface CharacterTrait {
-  trait_key: string
-  base_power: number
-  power_per_star: number
-  description: string
+// 压力系统相关 API
+export const stressApi = {
+  // 获取当前压力状态
+  async getStressStatus() {
+    return await apiClient.get('/stress/status')
+  },
+  
+  // 获取压力debuff配置
+  async getStressDebuffs() {
+    return await apiClient.get('/stress/debuffs')
+  },
+  
+  // 缓解压力（营地设施）
+  async relieveStress(facilityType: 'tavern' | 'chapel' | 'sanctum') {
+    return await apiClient.post('/stress/relieve', { facilityType })
+  }
+}
+
+// 成就相关 API
+export const achievementApi = {
+  // 获取成就列表
+  async getAchievements() {
+    return await apiClient.get('/achievement/list')
+  },
+  
+  // 获取成就进度
+  async getAchievementProgress() {
+    return await apiClient.get('/achievement/progress')
+  },
+  
+  // 解锁成就
+  async unlockAchievement(achievementId: string) {
+    return await apiClient.post('/achievement/unlock', { achievementId })
+  }
+}
+
+// 统计相关 API
+export const statisticsApi = {
+  // 获取核心指标
+  async getCoreMetrics(period: string = '30days') {
+    return await apiClient.get(`/statistics/core-metrics?period=${period}`)
+  },
+  
+  // 获取战斗统计
+  async getCombatStats(period: string = '30days') {
+    return await apiClient.get(`/statistics/combat-stats?period=${period}`)
+  },
+  
+  // 获取资源统计
+  async getResourceStats(period: string = '30days') {
+    return await apiClient.get(`/statistics/resource-stats?period=${period}`)
+  },
+  
+  // 获取成就统计
+  async getAchievementStats() {
+    return await apiClient.get('/statistics/achievement-stats')
+  },
+  
+  // 获取最近活动
+  async getRecentActivity(limit: number = 10) {
+    return await apiClient.get(`/statistics/recent-activity?limit=${limit}`)
+  }
 }
 
 export default apiClient
 
+// API 端点常量
+export const API_ENDPOINTS = {
+  // 认证相关
+  AUTH: {
+    LOGIN: '/auth/login',
+    REGISTER: '/auth/register',
+    REFRESH: '/auth/refresh',
+    LOGOUT: '/auth/logout',
+  },
+  // 用户相关
+  USER: {
+    INFO: '/user/info',
+    UPDATE: '/user/update',
+  },
+  // 角色相关
+  CHARACTER: {
+    PLAYER: '/character/player',
+    PLAYER_INSTANCE: '/character/player/instance',
+    CARD: '/character/card',
+    CARD_INSTANCE: '/character/card/instance',
+    CARD_TRAITS: '/character/card/traits',
+  },
+  // 技能相关
+  SKILL: {
+    LIST: '/skill/list',
+    UNLOCK: '/skill/unlock',
+    USER_SKILLS: '/skill/user-skills',
+  },
+  // 钱包相关
+  WALLET: {
+    INFO: '/wallet/info',
+    ADD: '/wallet/add',
+    CONSUME: '/wallet/consume',
+  },
+  // 卡牌相关
+  CARD: {
+    LIST: '/card/list',
+    USER_CARDS: '/card/user-cards',
+    EQUIP: '/card/equip',
+    UNEQUIP: '/card/unequip',
+    UPGRADE: '/card/upgrade',
+  },
+  // 道具相关
+  ITEM: {
+    LIST: '/item/list',
+    INVENTORY: '/item/inventory',
+    USE: '/item/use',
+  },
+  // 商城相关
+  SHOP: {
+    OFFERS: '/shop/offers',
+    BUY: '/shop/buy',
+  },
+  // 地牢相关
+  DUNGEON: {
+    LIST: '/dungeon/list',
+    START: '/dungeon/start',
+    END: '/dungeon/end',
+  },
+  // 游戏相关
+  GAME: {
+    STATUS: '/game/status',
+    SAVE: '/game/save',
+    LOAD: '/game/load',
+  },
+  // 成就相关
+  ACHIEVEMENT: {
+    LIST: '/achievement/list',
+    PROGRESS: '/achievement/progress',
+    UNLOCK: '/achievement/unlock',
+  },
+  // 统计相关
+  STATISTICS: {
+    CORE_METRICS: '/statistics/core-metrics',
+    COMBAT_STATS: '/statistics/combat-stats',
+    RESOURCE_STATS: '/statistics/resource-stats',
+    ACHIEVEMENT_STATS: '/statistics/achievement-stats',
+    RECENT_ACTIVITY: '/statistics/recent-activity',
+  },
+} as const
+
+export type ApiEndpointKeys = keyof typeof API_ENDPOINTS

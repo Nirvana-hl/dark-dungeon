@@ -28,7 +28,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
@@ -74,6 +76,123 @@ public class ShopService {
         return offers.stream()
                 .map(this::toShopOfferDetailDTO)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 获取指定商店类型的商品列表（最多8个）
+     * @param shopType 商店类型：item-道具商店, card_character-卡牌商店
+     * @return 商品列表（最多8个）
+     */
+    public List<ShopOfferDetailDTO> getShopOffersByType(String shopType) {
+        QueryWrapper<ShopOffer> wrapper = new QueryWrapper<>();
+        wrapper.eq("offer_type", shopType)
+               .orderByAsc("display_order")
+               .last("LIMIT 8");
+        List<ShopOffer> offers = shopOfferMapper.selectList(wrapper);
+
+        // 如果商品不足8个，用空位填充
+        List<ShopOfferDetailDTO> result = offers.stream()
+                .map(this::toShopOfferDetailDTO)
+                .collect(Collectors.toList());
+        
+        // 确保返回8个位置（不足的用null填充，前端会显示为空位）
+        while (result.size() < 8) {
+            result.add(null);
+        }
+        
+        return result;
+    }
+
+    /**
+     * 刷新指定商店类型的商品（随机生成8个商品）
+     * @param shopType 商店类型：item-道具商店, card_character-卡牌商店
+     * @return 刷新后的商品列表（8个）
+     */
+    @Transactional
+    public List<ShopOfferDetailDTO> refreshShop(String shopType) {
+        // 删除该商店类型的所有现有商品
+        QueryWrapper<ShopOffer> deleteWrapper = new QueryWrapper<>();
+        deleteWrapper.eq("offer_type", shopType);
+        shopOfferMapper.delete(deleteWrapper);
+
+        // 根据商店类型获取所有可用的商品/角色（只选择有shopPrice且shopPrice > 0的）
+        List<Long> availableIds;
+        if ("item".equals(shopType)) {
+            // 只获取有shopPrice且shopPrice > 0的道具
+            QueryWrapper<Item> itemWrapper = new QueryWrapper<>();
+            itemWrapper.isNotNull("shop_price")
+                    .gt("shop_price", 0);
+            List<Item> items = itemMapper.selectList(itemWrapper);
+            availableIds = items.stream()
+                    .map(Item::getId)
+                    .collect(Collectors.toList());
+        } else if ("card_character".equals(shopType)) {
+            // 只获取有shopPrice且shopPrice > 0的卡牌角色
+            QueryWrapper<CardCharacter> characterWrapper = new QueryWrapper<>();
+            characterWrapper.isNotNull("shop_price")
+                    .gt("shop_price", 0);
+            List<CardCharacter> characters = cardCharacterMapper.selectList(characterWrapper);
+            availableIds = characters.stream()
+                    .map(CardCharacter::getId)
+                    .collect(Collectors.toList());
+        } else {
+            throw new RuntimeException("不支持的商店类型: " + shopType);
+        }
+
+        if (availableIds.isEmpty()) {
+            throw new RuntimeException("没有可用的商品");
+        }
+
+        // 随机选择8个（如果可用商品少于8个，则全部选择）
+        // 注意：这里只是随机选择商品，价格完全来自数据库
+        Collections.shuffle(availableIds, new Random());
+        int count = Math.min(8, availableIds.size());
+        List<Long> selectedIds = availableIds.subList(0, count);
+
+        // 创建新的商店商品（所有价格都来自数据库，不随机生成）
+        int displayOrder = 1;
+        for (int i = 0; i < selectedIds.size(); i++) {
+            Long targetId = selectedIds.get(i);
+            ShopOffer offer = new ShopOffer();
+            offer.setOfferType(shopType);
+            offer.setTargetId(targetId);
+            
+            // 根据商品类型设置价格（严格使用数据库中的shopPrice）
+            if ("item".equals(shopType)) {
+                Item item = itemMapper.selectById(targetId);
+                // 道具必须使用数据库中的shopPrice，如果没有价格则跳过该道具
+                if (item == null) {
+                    continue; // 跳过无效的道具
+                }
+                if (item.getShopPrice() == null || item.getShopPrice() <= 0) {
+                    // 如果没有设置shopPrice，跳过该道具，不添加到商店
+                    continue;
+                }
+                // 使用数据库中的shopPrice
+                long basePrice = item.getShopPrice().longValue();
+                offer.setPrice(basePrice);
+            } else if ("card_character".equals(shopType)) {
+                CardCharacter character = cardCharacterMapper.selectById(targetId);
+                // 卡牌角色必须使用数据库中的shopPrice，如果没有价格则跳过该角色
+                if (character == null) {
+                    continue; // 跳过无效的角色
+                }
+                if (character.getShopPrice() == null || character.getShopPrice() <= 0) {
+                    // 如果没有设置shopPrice，跳过该角色，不添加到商店
+                    continue;
+                }
+                // 使用数据库中的shopPrice
+                long basePrice = character.getShopPrice().longValue();
+                offer.setPrice(basePrice);
+            }
+            
+            offer.setDisplayOrder(displayOrder++);
+            offer.setRefreshRule("{}");
+            shopOfferMapper.insert(offer);
+        }
+
+        // 返回刷新后的商品列表
+        return getShopOffersByType(shopType);
     }
 
     /**

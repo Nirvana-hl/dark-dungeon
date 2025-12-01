@@ -78,32 +78,51 @@ public class ItemService {
     @Transactional
     public String useItem(Long userId, UseItemRequest request) {
         // 验证请求参数
-        if (request == null || request.getItemId() == null) {
-            throw new RuntimeException("道具ID不能为空");
+        if (request == null) {
+            throw new RuntimeException("请求参数不能为空");
         }
 
         Integer quantity = request.getQuantity() != null && request.getQuantity() > 0 
                 ? request.getQuantity() : 1;
 
-        // 查询道具模板
-        Item item = itemMapper.selectById(request.getItemId());
-        if (item == null) {
-            throw new RuntimeException("道具不存在");
+        Inventory inventory;
+        Item item;
+
+        // 支持通过 inventoryId 或 itemId 使用物品
+        if (request.getInventoryId() != null) {
+            // 通过背包记录ID查找
+            inventory = inventoryMapper.selectById(request.getInventoryId());
+            if (inventory == null) {
+                throw new RuntimeException("背包记录不存在");
+            }
+            // 验证背包记录属于当前用户
+            if (!inventory.getUserId().equals(userId)) {
+                throw new RuntimeException("无权使用该道具");
+            }
+            // 查询道具模板
+            item = itemMapper.selectById(inventory.getItemId());
+        } else if (request.getItemId() != null) {
+            // 通过道具模板ID查找（原有逻辑）
+            item = itemMapper.selectById(request.getItemId());
+            if (item == null) {
+                throw new RuntimeException("道具不存在");
+            }
+            // 查询用户背包
+            QueryWrapper<Inventory> wrapper = new QueryWrapper<>();
+            wrapper.eq("user_id", userId)
+                   .eq("item_id", request.getItemId());
+            inventory = inventoryMapper.selectOne(wrapper);
+        } else {
+            throw new RuntimeException("道具ID或背包记录ID不能为空");
+        }
+
+        if (inventory == null || inventory.getQuantity() < quantity) {
+            throw new RuntimeException("道具数量不足");
         }
 
         // 检查道具类型（只有消耗品可以使用）
         if (!"consumable".equals(item.getItemType())) {
             throw new RuntimeException("该道具不能使用");
-        }
-
-        // 查询用户背包
-        QueryWrapper<Inventory> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", userId)
-               .eq("item_id", request.getItemId());
-        Inventory inventory = inventoryMapper.selectOne(wrapper);
-
-        if (inventory == null || inventory.getQuantity() < quantity) {
-            throw new RuntimeException("道具数量不足");
         }
 
         // 获取用户角色实例（用于应用效果）

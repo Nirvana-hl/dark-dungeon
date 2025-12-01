@@ -106,6 +106,36 @@ public class UserCardCharacterService {
         userCardCharacterMapper.delete(wrapper);
     }
 
+    /**
+     * 部署/撤下卡牌角色
+     * @param userId 用户ID
+     * @param userCardCharacterId 卡牌角色ID
+     * @param deploy 是否部署
+     * @return 更新后的卡牌角色
+     */
+    public UserCardCharacterDTO deployCardCharacter(Long userId, Long userCardCharacterId, Boolean deploy) {
+        LambdaQueryWrapper<UserCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCardCharacter::getId, userCardCharacterId)
+                .eq(UserCardCharacter::getUserId, userId);
+        UserCardCharacter entity = userCardCharacterMapper.selectOne(wrapper);
+        
+        if (entity == null) {
+            throw new RuntimeException("卡牌角色不存在或不属于当前用户");
+        }
+        
+        entity.setIsDeployed(deploy);
+        if (deploy) {
+            // 部署时记录轮次（如果需要）
+            entity.setDeployedRound(0);
+        } else {
+            // 撤下时重置轮次
+            entity.setDeployedRound(0);
+        }
+        
+        userCardCharacterMapper.updateById(entity);
+        return toDTO(entity);
+    }
+
     private UserCardCharacterDTO toDTO(UserCardCharacter entity) {
         UserCardCharacterDTO dto = new UserCardCharacterDTO();
         BeanUtils.copyProperties(entity, dto);
