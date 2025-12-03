@@ -7,6 +7,7 @@ import com.dungeon.dto.RegisterRequest;
 import com.dungeon.entity.User;
 import com.dungeon.service.UserService;
 import com.dungeon.util.JwtUtil;
+import javax.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
@@ -99,6 +100,29 @@ public class AuthController {
             return Result.success("登录成功", response);
         } catch (Exception e) {
             return Result.error("登录失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 用户登出
+     * 注意：JWT是无状态的，登出主要是前端清除token
+     * 这里提供一个接口用于记录登出日志（可选）
+     */
+    @PostMapping("/logout")
+    public Result<String> logout(HttpServletRequest request) {
+        try {
+            // JWT是无状态的，登出主要是前端清除token
+            // 这里可以记录登出日志（如果需要）
+            String token = request.getHeader("Authorization");
+            if (token != null && token.startsWith("Bearer ")) {
+                token = token.substring(7);
+                // 可以在这里记录登出日志或加入黑名单（如果需要）
+                System.out.println("[AuthController] 用户登出");
+            }
+            return Result.success("登出成功", null);
+        } catch (Exception e) {
+            // 即使出错也返回成功，因为登出主要是前端清除token
+            return Result.success("登出成功", null);
         }
     }
 

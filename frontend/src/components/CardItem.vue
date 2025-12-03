@@ -7,8 +7,12 @@ const props = defineProps<{
   canAfford?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'play', id: string): void
+  (e: 'start-equip-drag', card: Card): void
+  (e: 'end-equip-drag'): void
+  // 装备点击时，仅查看详情，不直接打出
+  (e: 'show-equipment', card: Card): void
 }>()
 
 const isHovered = ref(false)
@@ -64,6 +68,13 @@ const effectDescription = computed(() => {
 
 function handleClick() {
   if (!isPlayable.value) return
+
+  // 装备卡：点击只查看详情，不直接打出
+  if (props.card.type === 'equipment') {
+    emit('show-equipment', props.card)
+    return
+  }
+
   isPlaying.value = true
   setTimeout(() => {
     isPlaying.value = false
@@ -73,6 +84,24 @@ function handleClick() {
     currentCooldown.value = cooldown.value
     // 这里应该由游戏状态管理来处理冷却，这里只是UI展示
   }
+  // 通知父组件打出这张牌
+  emit('play', props.card.id)
+}
+
+function handleDragStart(e: DragEvent) {
+  if (props.card.type !== 'equipment') return
+  try {
+    e.dataTransfer?.setData('text/plain', String(props.card.id))
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move'
+    }
+  } catch {}
+  emit('start-equip-drag', props.card)
+}
+
+function handleDragEnd() {
+  if (props.card.type !== 'equipment') return
+  emit('end-equip-drag')
 }
 </script>
 
@@ -89,7 +118,10 @@ function handleClick() {
         'playing': isPlaying
       }
     ]"
+    :draggable="card.type === 'equipment'"
     @click="handleClick"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >

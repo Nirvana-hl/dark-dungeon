@@ -29,6 +29,11 @@ public class UserCardDTO {
     private Integer manaCost;
     private Integer attack;
     private Integer hp;
+    /**
+     * 属性变动（从 cards.statModifiers 透传），JSON格式：
+     * 例如：{"attack":1,"hp":3,"defense":2}
+     */
+    private String statModifiers;
 }
 
 

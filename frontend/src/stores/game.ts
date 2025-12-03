@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { gameApi } from '@/lib/api'
+import { gameApi, userCardApi, userCardCharacterApi } from '@/lib/api'
 import { useAuthStore } from './auth'
 import type { ApiResponse } from '@/lib/api'
 import type { AxiosResponse } from 'axios'
@@ -15,6 +15,10 @@ export interface Card {
   attack?: number
   health?: number
   effect?: 'fireball3' | 'teamBuffAtk1'
+  // 装备的属性加成（来自 cards.stat_modifiers）
+  bonusAttack?: number
+  bonusHp?: number
+  bonusDefense?: number
 }
 
 export interface Minion {
@@ -24,6 +28,8 @@ export interface Minion {
   health: number
   shield?: number
   stars?: number
+  // 已装备的卡牌名称列表，用于在战斗界面展示圆形标记
+  equipmentNames?: string[]
 }
 
 function uid() {
@@ -46,6 +52,7 @@ export const useGameStore = defineStore('game', () => {
   const deck = ref<Card[]>([])
   const hand = ref<Card[]>([])
   const initialDeck = ref<Card[]>([])
+  const deckExhausted = ref(false)
   const board = ref<Minion[]>([])
   const enemyBoard = ref<Minion[]>([]) // 敌方“角色/随从”，需先击败其中角色后才能打敌方HP
 
@@ -151,46 +158,143 @@ export const useGameStore = defineStore('game', () => {
 
   // 用户卡牌接口
   interface UserCardResponse {
-    name: string
-    type: 'character' | 'spell' | 'equipment'
+    id?: string | number
+    name?: string
+    cardName?: string
+    type?: CardType
+    cardType?: CardType
     quantity?: number
     attack?: number
     health?: number
+    manaCost?: number
+    cardCode?: string
     effect?: 'fireball3' | 'teamBuffAtk1'
+    statModifiers?: string
   }
 
-  // 从数据库加载玩家手牌
-  async function loadUserDeckFromDB() {
+  interface UserCardCharacterResponse {
+    id?: string | number
+    characterName?: string
+    characterClassType?: string
+    baseAttack?: number
+    baseHp?: number
+    currentHp?: number
+    currentArmor?: number
+    currentStarLevel?: number
+    isDeployed?: boolean
+  }
+
+  function normalizeCardTypeValue(type?: string): CardType {
+    switch ((type || '').toLowerCase()) {
+      case 'character':
+        return 'character'
+      case 'equipment':
+        return 'equipment'
+      default:
+        return 'spell'
+    }
+  }
+
+  function inferEffectFromCard(card: UserCardResponse, cardType: CardType): Card['effect'] {
+    if (card.effect) return card.effect
+    const identifier = (card.cardCode || card.cardName || card.name || '').toLowerCase()
+    if (cardType === 'spell' && (identifier.includes('fireball') || identifier.includes('火球'))) {
+      return 'fireball3'
+    }
+    if (cardType === 'equipment' && (identifier.includes('banner') || identifier.includes('战旗'))) {
+      return 'teamBuffAtk1'
+    }
+    return undefined
+  }
+
+  function parseStatModifiers(statModifiers?: string): { atk: number; hp: number; def: number } {
+    if (!statModifiers) return { atk: 0, hp: 0, def: 0 }
+    try {
+      const parsed = JSON.parse(statModifiers)
+      const atk = Number(parsed.attack ?? 0) || 0
+      const hp = Number(parsed.hp ?? 0) || 0
+      const def = Number(parsed.defense ?? 0) || 0
+      return { atk, hp, def }
+    } catch {
+      return { atk: 0, hp: 0, def: 0 }
+    }
+  }
+
+  function mapDeployedCharactersToCards(chars: UserCardCharacterResponse[]): Card[] {
+    return chars
+      .filter(char => char.isDeployed !== false) // deployed 接口默认只返回已上阵，但防御一下
+      .map((char) => {
+        const attack = Math.max(1, Number(char.baseAttack ?? 1))
+        const health = Math.max(1, Number(char.currentHp ?? char.baseHp ?? 1))
+        return {
+          id: uid2(),
+          name: char.characterName || '营地角色',
+          cost: 2,
+          type: 'character' as CardType,
+          attack,
+          health
+        }
+      })
+  }
+
+  // 从数据库加载玩家手牌（包含营地上阵角色 + 选中卡组）
+  async function loadUserDeckFromDB(loadoutId = 1) {
     const authStore = useAuthStore()
     if (!authStore.isAuthenticated) {
       log('未登录，无法加载玩家手牌')
       return
     }
     try {
-      const response: AxiosResponse<ApiResponse<UserCardResponse[]>> = await gameApi.getUserCards()
-      if (response.data.code === 200 && response.data.data) {
-        const cards: Card[] = response.data.data.flatMap((r: UserCardResponse) => {
-          const qty = Math.max(1, Number(r.quantity ?? 1))
-          return Array.from({ length: qty }, () => ({
+      const [deckResponse, deployedResponse] = await Promise.all([
+        userCardApi.getDeckCards(loadoutId),
+        userCardCharacterApi.getDeployedCardCharacters()
+      ])
+
+      const deckCardsRaw: UserCardResponse[] = Array.isArray(deckResponse.data?.data) ? deckResponse.data.data : []
+      const deployedCharsRaw: UserCardCharacterResponse[] = Array.isArray(deployedResponse.data?.data)
+        ? deployedResponse.data.data
+        : []
+
+      // 战斗牌库中，每种卡牌只保留一张，不再按 quantity 复制多份
+      const deckCards: Card[] = deckCardsRaw.map((card) => {
+        const cardType = normalizeCardTypeValue(card.cardType || card.type)
+        const manaCost = Math.max(1, Number(card.manaCost ?? (cardType === 'spell' ? 2 : 3)))
+        const attack = typeof card.attack === 'number' ? card.attack : undefined
+        const health = typeof card.health === 'number' ? card.health : undefined
+        const name = card.cardName || card.name || '未命名卡牌'
+        const effect = inferEffectFromCard(card, cardType)
+        const { atk, hp, def } = parseStatModifiers(card.statModifiers)
+
+        return {
             id: uid2(),
-            name: r.name,
-            cost: r.type === 'spell' ? 2 : r.type === 'equipment' ? 3 : 2,
-            type: r.type as CardType,
-            attack: r.attack ?? undefined,
-            health: r.health ?? undefined,
-            effect: r.effect as 'fireball3' | 'teamBuffAtk1' | undefined
-          }))
-        })
-        deck.value = cards
-        initialDeck.value = cards.slice()
-        if (cards.length === 0) {
-          log('提示：数据库未找到玩家手牌（user_cards），请先在营地同步手牌后再开始战斗')
+          name,
+          cost: manaCost,
+          type: cardType,
+          attack,
+          health,
+           // 以 stat_modifiers 作为主来源，统一传递到战斗逻辑
+          bonusAttack: atk,
+          bonusHp: hp,
+          bonusDefense: def,
+          effect
         }
+      })
+
+      const characterCards = mapDeployedCharactersToCards(deployedCharsRaw)
+      const combined = [...characterCards, ...deckCards]
+
+      deck.value = combined
+      initialDeck.value = combined.slice()
+
+      if (combined.length === 0) {
+        log('提示：当前未配置上阵卡牌，请返回营地在卡组管理中选择卡牌后再开始战斗')
+      } else {
+        log(`已从营地上阵卡组加载 ${combined.length} 张卡牌（角色 ${characterCards.length}，技能 ${deckCards.length}）`)
+      }
+
         shuffle(deck.value)
         hand.value = []
         board.value = []
-        log('已从数据库加载玩家手牌')
-      }
     } catch (e: any) {
       log('加载玩家手牌失败：' + e?.message)
     }
@@ -268,6 +372,7 @@ export const useGameStore = defineStore('game', () => {
       enemyBoard.value = [{ id: uid(), name: '上古恶龙', attack: 8, health: 100, shield: 0 }]
     }
     logs.value = []
+    deckExhausted.value = false
     if (deck.value.length > 0) {
       shuffle(deck.value)
       // 战斗开始抽两张
@@ -280,22 +385,19 @@ export const useGameStore = defineStore('game', () => {
 
   function draw(n = 2) {
     for (let i = 0; i < n; i++) {
+      if (deck.value.length === 0) {
+        if (!deckExhausted.value) {
+          deckExhausted.value = true
+          log('牌库已耗尽，本场战斗不会再补充卡牌。')
+        }
+        break
+      }
       const c = deck.value.shift()
-      if (c) {
-        if (hand.value.length < 10) hand.value.push(c)
-        else {
-          // 手牌满，丢弃
-        }
+      if (!c) break
+      if (hand.value.length < 10) {
+        hand.value.push(c)
       } else {
-        // 牌库可重复抽取：当牌库耗尽时，从初始牌库快照随机补抽（有放回，不再疲劳）
-        if (initialDeck.value.length > 0) {
-          const idx = Math.floor(Math.random() * initialDeck.value.length)
-          const base = initialDeck.value[idx]
-          const clone: Card = { ...base, id: uid() }
-          if (hand.value.length < 10) hand.value.push(clone)
-        } else {
-          // 无初始快照时，保持空抽
-        }
+        log('提示：手牌已满，本次抽到的卡牌被丢弃。')
       }
     }
   }
@@ -392,9 +494,61 @@ export const useGameStore = defineStore('game', () => {
       if (card.effect === 'teamBuffAtk1') {
         board.value = ref(board.value.map(m => ({ ...m, attack: m.attack + 1 }))).value
         log('装备：战旗生效，友方随从攻击 +1')
+        // 旧版逻辑：直接群体加攻；兼容保留
       }
+      // 默认仍按老逻辑“打出后进入弃牌”，如果想用拖拽装备，请使用 equipCardToMinion
       hand.value.splice(idx, 1)
     }
+  }
+
+  /**
+   * 将手牌中的装备卡拖拽到某个随从上进行“装备”
+   * - 从手牌移除该装备
+   * - 给目标随从记录一条 equipmentNames，用于前端显示圆形标记
+   * - 根据卡牌效果对该随从进行属性加成（目前仅支持 teamBuffAtk1：该随从攻击+1）
+   */
+  function equipCardToMinion(cardId: string, minionId: string) {
+    const idx = hand.value.findIndex(c => c.id === cardId)
+    if (idx < 0) return
+    const card = hand.value[idx]
+    if (card.type !== 'equipment') return
+
+    const mIdx = board.value.findIndex(m => m.id === minionId)
+    if (mIdx < 0) return
+
+    const target = board.value[mIdx]
+    // 初始化装备列表
+    if (!target.equipmentNames) {
+      target.equipmentNames = []
+    }
+    target.equipmentNames.push(card.name)
+
+    // 根据装备的 stat_modifiers 给单个随从加成：
+    // - attack  → 角色攻击力
+    // - hp      → 角色生命值
+    // - defense → 角色护盾（防御力）
+    const atkBonus = Number(card.bonusAttack ?? 0) || 0
+    const hpBonus = Number(card.bonusHp ?? 0) || 0
+    const shieldBonus = Number(card.bonusDefense ?? 0) || 0
+
+    if (atkBonus) {
+      target.attack += atkBonus
+    }
+    if (hpBonus) {
+      target.health += hpBonus
+    }
+    if (shieldBonus) {
+      target.shield = (target.shield ?? 0) + shieldBonus
+    }
+
+    if (atkBonus || hpBonus || shieldBonus) {
+      log(`装备：${card.name} 装备到 ${target.name}，面板变化 ATK +${atkBonus} / HP +${hpBonus} / 盾 +${shieldBonus}`)
+    } else {
+      log(`装备：${card.name} 装备到 ${target.name}`)
+    }
+
+    // 从手牌中移除该装备
+    hand.value.splice(idx, 1)
   }
 
   function endTurn() {
@@ -514,7 +668,8 @@ export const useGameStore = defineStore('game', () => {
     // state
     heroHP, enemyHP, mana, manaMax, deck, hand, board, enemyBoard, turn, canPlay, logs, enemyDifficulty, battleOver, winner,
     // actions
-    reset, draw, startPlayerTurn, playCard, endTurn, log, configureEncounter, loadUserDeckFromDB, loadEnemyDeck,
+    reset, draw, startPlayerTurn, playCard, endTurn, log, configureEncounter, loadUserDeckFromDB, loadEnemyDeck, equipCardToMinion,
+    deckExhausted,
 
     // 营地衔接：将营地的角色与道具转换为战斗牌库
     setDeckFromCamp(campChars: Array<{ name: string; attack: number; health: number }>, campItems: Array<{ name?: string; effect: 'fireball3' | 'teamBuffAtk1'; cost?: number }>) {

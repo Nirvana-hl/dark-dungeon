@@ -1,5 +1,11 @@
 <template>
   <div class="explore-container">
+    <!-- 返回首页按钮 -->
+    <RouterLink to="/" class="back-to-home">
+      <i class="fas fa-home"></i>
+      返回首页
+    </RouterLink>
+    
     <!-- 顶部标题栏 -->
     <header class="explore-header">
       <div class="header-content">
@@ -222,7 +228,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useWalletStore } from '@/stores/wallet'
 import { useCharactersStore } from '@/stores/characters'
 import { useGameStore } from '@/stores/game'
@@ -540,6 +546,38 @@ onUnmounted(() => stopBattleLog())
   min-height: 100vh;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
   color: #ffffff;
+  position: relative;
+}
+
+/* 返回首页按钮 */
+.back-to-home {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 25px;
+  color: white;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.back-to-home:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.back-to-home i {
+  font-size: 1rem;
 }
 
 /* 顶部标题栏 */

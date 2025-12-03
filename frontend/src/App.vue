@@ -37,23 +37,7 @@ async function signOut() {
 
     <!-- 已登录或在登录页面时，显示正常内容 -->
     <template v-else>
-      <!-- 全局导航（仅登录后显示，战斗界面除外） -->
-      <nav v-if="auth.isAuthenticated && !isBattlePage" 
-           class="status-bar py-3 px-6 flex items-center gap-3 flex-wrap bg-slate-800/90 border-b border-slate-700">
-        <RouterLink to="/" class="action-button px-3 py-2">🏠 首页</RouterLink>
-        <RouterLink to="/camp" class="action-button px-3 py-2">🏕️ 营地</RouterLink>
-        <RouterLink to="/explore" class="action-button px-3 py-2">⚡ 闯关</RouterLink>
-        <RouterLink to="/skills" class="action-button px-3 py-2">🌟 技能</RouterLink>
-        <RouterLink to="/achievements" class="action-button px-3 py-2">🏆 成就</RouterLink>
-
-        <RouterLink to="/settings" class="action-button px-3 py-2">⚙️ 设置</RouterLink>
-
-        <span class="flex-1"></span>
-        <span class="text-sm text-gray-300">✅ {{ auth.user?.accountName || '已登录' }}</span>
-        <button class="action-button px-3 py-2" @click="signOut">登出</button>
-      </nav>
-      
-      <!-- 路由视图内容 -->
+      <!-- 路由视图内容（导航栏已移到各页面内部） -->
       <RouterView />
     </template>
   </div>

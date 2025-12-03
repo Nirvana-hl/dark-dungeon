@@ -39,6 +39,22 @@ public class UserCardService {
         return toDTOList(userCardMapper.selectList(wrapper));
     }
 
+    /**
+     * 根据卡组ID获取卡组中的卡牌
+     * @param userId 用户ID
+     * @param loadoutId 卡组ID（如果为null，则返回所有有loadoutId的卡牌）
+     * @return 卡组中的卡牌列表
+     */
+    public List<UserCardDTO> getDeckCards(Long userId, Long loadoutId) {
+        LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserCard::getUserId, userId)
+                .isNotNull(UserCard::getLoadoutId);
+        if (loadoutId != null) {
+            wrapper.eq(UserCard::getLoadoutId, loadoutId);
+        }
+        return toDTOList(userCardMapper.selectList(wrapper));
+    }
+
     public UserCardDTO getUserCard(Long id, Long userId) {
         LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserCard::getId, id)
@@ -80,9 +96,11 @@ public class UserCardService {
         if (dto.getLevel() != null) {
             entity.setLevel(dto.getLevel());
         }
-        if (dto.getLoadoutId() != null) {
-            entity.setLoadoutId(dto.getLoadoutId());
-        }
+        // loadoutId 可以设置为 null（移出卡组）或具体值（加入卡组）
+        // 使用 Optional 或者直接判断，如果 DTO 中包含 loadoutId 字段（即使是 null），也要更新
+        // 这里简化处理：如果 DTO 中有 loadoutId 字段，就更新（包括 null）
+        // 由于前端会明确传递 loadoutId，我们可以直接设置
+        entity.setLoadoutId(dto.getLoadoutId());
         if (dto.getEquippedToUserCardCharacterId() != null) {
             entity.setEquippedToUserCardCharacterId(dto.getEquippedToUserCardCharacterId());
         }
@@ -117,6 +135,7 @@ public class UserCardService {
                 dto.setCardType(card.getCardType());
                 dto.setCardRarity(card.getRarity());
                 dto.setCardCode(card.getCode());
+                dto.setStatModifiers(card.getStatModifiers());
                 // Card实体中没有manaCost、attack、hp字段，这些信息可能在statModifiers中
                 // 如果需要，可以从statModifiers JSON中解析
                 dto.setManaCost(card.getActionPointCost()); // 使用actionPointCost作为manaCost

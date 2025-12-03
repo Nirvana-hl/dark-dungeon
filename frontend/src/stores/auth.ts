@@ -104,12 +104,23 @@ export const useAuthStore = defineStore('auth', () => {
     errorMsg.value = null
     
     try {
-      // 调用后端登出接口
+      // 调用后端登出接口（如果token存在）
       if (token.value) {
-        await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT)
+        try {
+          await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT)
+          console.log('[Auth] 登出接口调用成功')
+        } catch (error: any) {
+          // 登出接口失败不影响登出流程（主要是前端清除token）
+          // 404错误说明接口可能不存在，但这是正常的，因为JWT是无状态的
+          if (error?.response?.status === 404) {
+            console.warn('[Auth] 登出接口不存在（404），继续执行登出流程')
+          } else {
+            console.warn('[Auth] 登出接口调用失败，继续执行登出流程:', error?.message)
+          }
+        }
       }
     } catch (error) {
-      console.error('Logout error:', error)
+      console.warn('[Auth] 登出过程出错，继续清除本地认证信息:', error)
     } finally {
       // 无论后端调用成功与否，都清除本地认证信息
       clearAuth()

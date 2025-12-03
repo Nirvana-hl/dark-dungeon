@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, watch, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import StatusBar from '@/components/StatusBar.vue'
 import BattleField from '@/components/BattleField.vue'
 import CardItem from '@/components/CardItem.vue'
 import { useGameStore } from '@/stores/game'
+import type { Card } from '@/stores/game'
 import { storeToRefs } from 'pinia'
 
 const route = useRoute()
@@ -14,13 +14,43 @@ const level = computed(() => Number(route.query.level ?? 0))
 const chapter = computed(() => (level.value ? Math.floor((level.value - 1) / 5) + 1 : 0))
 
 const game = useGameStore()
-const { hand, canPlay, winner, mana, manaMax } = storeToRefs(game)
+const { hand, canPlay, winner, mana, manaMax, deckExhausted, deck } = storeToRefs(game)
 
 const isEndingTurn = ref(false)
 const showExitConfirm = ref(false)
+const draggingEquipCard = ref<Card | null>(null)
+const selectedEquipCard = ref<Card | null>(null)
+const remainingDeck = computed(() => deck.value.length)
 
 function onPlay(id: string) {
   game.playCard(id)
+}
+
+function startEquipDrag(card: Card) {
+  // 仅记录装备卡的拖拽状态
+  if (card.type !== 'equipment') return
+  draggingEquipCard.value = card
+  // 开始拖拽时关闭详情面板，避免遮挡
+  selectedEquipCard.value = null
+}
+
+function endEquipDrag() {
+  draggingEquipCard.value = null
+}
+
+function handleEquipToMinion(payload: { minionId: string }) {
+  if (!draggingEquipCard.value) return
+  game.equipCardToMinion(draggingEquipCard.value.id, payload.minionId)
+  draggingEquipCard.value = null
+}
+
+function showEquipDetails(card: Card) {
+  if (card.type !== 'equipment') return
+  selectedEquipCard.value = card
+}
+
+function closeEquipDetails() {
+  selectedEquipCard.value = null
 }
 
 // 退出战斗
@@ -79,7 +109,6 @@ watch(winner, (w) => {
 
 <template>
   <div class="battle-container">
-    <StatusBar />
     
     <!-- 顶部信息栏 -->
     <div v-if="level" class="battle-header">
@@ -94,9 +123,17 @@ watch(winner, (w) => {
       </div>
       
       <div class="header-center">
-        <div class="mana-display">
-          <span class="mana-icon">💎</span>
-          <span class="mana-text">{{ mana }}/{{ manaMax }}</span>
+        <div class="info-chip">
+          <span class="chip-label">法力</span>
+          <span class="chip-value">{{ mana }}/{{ manaMax }}</span>
+        </div>
+        <div class="info-chip">
+          <span class="chip-label">手牌</span>
+          <span class="chip-value">{{ hand.length }}/10</span>
+        </div>
+        <div class="info-chip">
+          <span class="chip-label">牌库</span>
+          <span class="chip-value">{{ remainingDeck }}</span>
         </div>
       </div>
       
@@ -113,7 +150,12 @@ watch(winner, (w) => {
     </div>
 
     <!-- 战斗场地 -->
-    <BattleField />
+    <div class="battle-main">
+      <BattleField 
+        :dragging-equip-card="draggingEquipCard"
+        @equip-to-minion="handleEquipToMinion"
+      />
+    </div>
 
     <!-- 底部操作区 -->
     <div class="battle-footer">
@@ -124,7 +166,13 @@ watch(winner, (w) => {
             <span class="hand-icon">🃏</span>
             <span>手牌 ({{ hand.length }}/10)</span>
           </div>
-          <div class="hand-hint">点击卡牌打出</div>
+          <div class="hand-helpers">
+            <div class="hand-hint">点击卡牌打出</div>
+            <div v-if="deckExhausted" class="deck-empty-badge" title="本场战斗无法再抽牌">
+              <span class="badge-icon">⚠️</span>
+              <span class="badge-text">牌库已耗尽</span>
+            </div>
+          </div>
         </div>
         <div class="hand-cards">
           <CardItem 
@@ -132,11 +180,47 @@ watch(winner, (w) => {
             :key="c.id" 
             :card="c" 
             @play="onPlay"
+            @start-equip-drag="startEquipDrag"
+            @end-equip-drag="endEquipDrag"
+            @show-equipment="showEquipDetails"
             :can-afford="mana >= c.cost"
           />
           <div v-if="hand.length === 0" class="empty-hand">
             <span class="empty-icon">📭</span>
             <span class="empty-text">手牌为空</span>
+          </div>
+        </div>
+
+        <!-- 装备详情面板（点击装备卡时展示） -->
+        <div v-if="selectedEquipCard" class="equip-details">
+          <div class="equip-header">
+            <span class="equip-title">装备详情</span>
+            <button class="equip-close" @click="closeEquipDetails">✕</button>
+          </div>
+          <div class="equip-body">
+            <div class="equip-name">{{ selectedEquipCard.name }}</div>
+            <div class="equip-type">类型：装备 · 费用 {{ selectedEquipCard.cost }}</div>
+            <div class="equip-effects">
+              <span v-if="(selectedEquipCard as any).bonusAttack">
+                攻击 +{{ (selectedEquipCard as any).bonusAttack }}
+              </span>
+              <span v-if="(selectedEquipCard as any).bonusHp">
+                生命 +{{ (selectedEquipCard as any).bonusHp }}
+              </span>
+              <span v-if="(selectedEquipCard as any).bonusDefense">
+                防御 +{{ (selectedEquipCard as any).bonusDefense }}
+              </span>
+              <span 
+                v-if="!(selectedEquipCard as any).bonusAttack 
+                      && !(selectedEquipCard as any).bonusHp 
+                      && !(selectedEquipCard as any).bonusDefense"
+              >
+                暂无数值加成，可能为特殊效果装备
+              </span>
+            </div>
+            <div class="equip-hint">
+              提示：按住此装备拖到己方角色卡牌上，即可为该角色穿戴装备。
+            </div>
           </div>
         </div>
       </div>
@@ -182,12 +266,12 @@ watch(winner, (w) => {
 
 <style scoped>
 .battle-container {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .battle-container::before {
@@ -225,6 +309,7 @@ watch(winner, (w) => {
 
 .header-center {
   justify-content: center;
+  gap: 12px;
 }
 
 .header-right {
@@ -262,30 +347,28 @@ watch(winner, (w) => {
   color: #94a3b8;
 }
 
-.mana-display {
+.info-chip {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  gap: 2px;
+  padding: 6px 14px;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 12px;
+  min-width: 90px;
 }
 
-.mana-icon {
-  font-size: 1.25rem;
-  animation: mana-pulse 2s infinite;
+.chip-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
 }
 
-@keyframes mana-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
-
-.mana-text {
+.chip-value {
   font-size: 1rem;
   font-weight: 700;
-  color: #a78bfa;
+  color: #f4f4f5;
 }
 
 .exit-battle-btn {
@@ -319,18 +402,35 @@ watch(winner, (w) => {
   font-weight: bold;
 }
 
+.battle-main {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 24px;
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+}
+
+.battle-main :deep(.battle-field) {
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
 /* 底部操作区 */
 .battle-footer {
-  padding: 16px 24px;
-  background: rgba(15, 23, 42, 0.9);
+  padding: 12px 24px 18px;
+  background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(148, 163, 184, 0.2);
   position: relative;
   z-index: 10;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
 }
 
 .hand-section {
-  margin-bottom: 16px;
+  flex: 1;
 }
 
 .hand-header {
@@ -356,6 +456,29 @@ watch(winner, (w) => {
 .hand-hint {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+.hand-helpers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deck-empty-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.deck-empty-badge .badge-icon {
+  font-size: 0.9rem;
 }
 
 .hand-cards {
@@ -384,6 +507,73 @@ watch(winner, (w) => {
   background: rgba(148, 163, 184, 0.5);
 }
 
+.equip-details {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+  max-width: 420px;
+}
+
+.equip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.equip-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.equip-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.equip-close:hover {
+  color: #e5e7eb;
+}
+
+.equip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.equip-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.equip-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.equip-effects span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #bbf7d0;
+}
+
+.equip-hint {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
 .empty-hand {
   display: flex;
   flex-direction: column;
@@ -409,6 +599,8 @@ watch(winner, (w) => {
   display: flex;
   justify-content: center;
   gap: 12px;
+  flex-shrink: 0;
+  width: 220px;
 }
 
 .end-turn-btn {

@@ -140,6 +140,11 @@ public class UserCardCharacterService {
         UserCardCharacterDTO dto = new UserCardCharacterDTO();
         BeanUtils.copyProperties(entity, dto);
         
+        // 确保 quantity 字段有值（至少为1）
+        if (dto.getQuantity() == null || dto.getQuantity() < 1) {
+            dto.setQuantity(1);
+        }
+        
         // 加载角色模板的详细信息
         if (entity.getCardCharacterId() != null) {
             CardCharacter character = cardCharacterMapper.selectById(entity.getCardCharacterId());

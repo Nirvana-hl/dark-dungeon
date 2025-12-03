@@ -7,6 +7,14 @@ import { ref } from 'vue'
 const game = useGameStore()
 const { heroHP, enemyHP, board, enemyBoard, turn, logs, mana, manaMax } = storeToRefs(game)
 
+const props = defineProps<{
+  draggingEquipCard: import('@/stores/game').Card | null
+}>()
+
+const emit = defineEmits<{
+  (e: 'equip-to-minion', payload: { minionId: string }): void
+}>()
+
 const heroHPMax = 100
 const enemyHPMax = 100
 
@@ -165,6 +173,8 @@ function getHPColorClass(percent: number) {
             v-for="m in board" 
             :key="m.id" 
             class="character-card ally-card"
+            @dragover.prevent
+            @drop.prevent="emit('equip-to-minion', { minionId: m.id })"
           >
             <div class="character-header">
               <div class="character-name">{{ m.name }}</div>
@@ -200,6 +210,15 @@ function getHPColorClass(percent: number) {
                 <span class="stat-icon">❤️</span>
                 <span class="stat-value">{{ m.health }}</span>
               </div>
+            </div>
+            <!-- 装备圆形标记 -->
+            <div v-if="m.equipmentNames && m.equipmentNames.length" class="equipment-dots">
+              <span 
+                v-for="(eq, idx) in m.equipmentNames" 
+                :key="idx" 
+                class="equipment-dot"
+                :title="`已装备：${eq}`"
+              ></span>
             </div>
           </div>
           
@@ -446,6 +465,23 @@ function getHPColorClass(percent: number) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+}
+
+.equipment-dots {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.equipment-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid rgba(248, 250, 252, 0.9);
+  background: radial-gradient(circle at 30% 30%, #fbbf24, #92400e);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.8);
 }
 
 .character-card::before {

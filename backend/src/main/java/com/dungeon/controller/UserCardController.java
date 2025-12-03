@@ -28,14 +28,56 @@ public class UserCardController {
 
     @GetMapping
     public Result<List<UserCardDTO>> getUserCards(HttpServletRequest request) {
-        Long userId = getUserId(request);
-        return Result.success(userCardService.getUserCards(userId));
+        try {
+            Long userId = getUserId(request);
+            return Result.success(userCardService.getUserCards(userId));
+        } catch (RuntimeException e) {
+            return Result.error(400, e.getMessage());
+        } catch (Exception e) {
+            return Result.error("获取用户卡牌失败: " + e.getMessage());
+        }
     }
 
     @GetMapping("/equipped")
     public Result<List<UserCardDTO>> getEquippedCards(HttpServletRequest request) {
-        Long userId = getUserId(request);
-        return Result.success(userCardService.getEquippedUserCards(userId));
+        try {
+            Long userId = getUserId(request);
+            return Result.success(userCardService.getEquippedUserCards(userId));
+        } catch (RuntimeException e) {
+            return Result.error(400, e.getMessage());
+        } catch (Exception e) {
+            return Result.error("获取已装备卡牌失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取卡组中的卡牌
+     * GET /user-cards/deck?loadoutId={loadoutId}
+     * 如果不传loadoutId，返回所有有loadoutId的卡牌（默认卡组）
+     */
+    @GetMapping("/deck")
+    public Result<List<UserCardDTO>> getDeckCards(@RequestParam(required = false) Long loadoutId,
+                                                    HttpServletRequest request) {
+        try {
+            Long userId = getUserId(request);
+            // 如果没有指定loadoutId，默认使用1
+            if (loadoutId == null) {
+                loadoutId = 1L;
+            }
+            System.out.println(String.format("[UserCardController] 获取卡组卡牌: userId=%d, loadoutId=%d", userId, loadoutId));
+            List<UserCardDTO> deckCards = userCardService.getDeckCards(userId, loadoutId);
+            System.out.println(String.format("[UserCardController] 卡组卡牌查询完成: userId=%d, loadoutId=%d, count=%d", 
+                userId, loadoutId, deckCards.size()));
+            return Result.success(deckCards);
+        } catch (RuntimeException e) {
+            System.err.println(String.format("[UserCardController] 获取卡组卡牌失败 (RuntimeException): %s", e.getMessage()));
+            e.printStackTrace();
+            return Result.error(400, e.getMessage());
+        } catch (Exception e) {
+            System.err.println(String.format("[UserCardController] 获取卡组卡牌失败 (Exception): %s", e.getMessage()));
+            e.printStackTrace();
+            return Result.error("获取卡组卡牌失败: " + e.getMessage());
+        }
     }
 
     @GetMapping("/{id}")

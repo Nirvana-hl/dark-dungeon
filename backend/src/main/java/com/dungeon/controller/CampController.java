@@ -61,7 +61,7 @@ public class CampController {
      * GET /camp/shop-offers/{shopType}
      * 注意：这个路由必须在 /shop-offers 之前定义，以确保路径变量能正确匹配
      * 
-     * @param shopType 商店类型：item-道具商店, card_character-卡牌商店
+     * @param shopType 商店类型：item-道具商店, card-法术/装备卡牌商店, card_character-卡牌角色商店
      * @return 商品列表（最多8个）
      */
     @GetMapping("/shop-offers/{shopType}")
@@ -71,8 +71,8 @@ public class CampController {
                 return Result.error(400, "商店类型不能为空");
             }
             shopType = shopType.trim();
-            if (!"item".equals(shopType) && !"card_character".equals(shopType)) {
-                return Result.error(400, "不支持的商店类型: " + shopType + "，支持的类型: item, card_character");
+            if (!"item".equals(shopType) && !"card_character".equals(shopType) && !"card".equals(shopType)) {
+                return Result.error(400, "不支持的商店类型: " + shopType + "，支持的类型: item, card, card_character");
             }
             List<ShopOfferDetailDTO> offers = shopService.getShopOffersByType(shopType);
             return Result.success(offers);
@@ -102,7 +102,7 @@ public class CampController {
      * 刷新指定商店类型的商品
      * POST /camp/refresh-shop/{shopType}
      * 
-     * @param shopType 商店类型：item-道具商店, card_character-卡牌商店
+     * @param shopType 商店类型：item-道具商店, card-法术/装备卡牌商店, card_character-卡牌角色商店
      * @return 刷新后的商品列表（8个）
      */
     @PostMapping("/refresh-shop/{shopType}")
@@ -114,7 +114,7 @@ public class CampController {
                 return Result.error(400, "商店类型不能为空");
             }
             shopType = shopType.trim();
-            if (!"item".equals(shopType) && !"card_character".equals(shopType)) {
+            if (!"item".equals(shopType) && !"card_character".equals(shopType) && !"card".equals(shopType)) {
                 return Result.error(400, "不支持的商店类型: " + shopType);
             }
             List<ShopOfferDetailDTO> offers = shopService.refreshShop(shopType);
@@ -139,17 +139,31 @@ public class CampController {
                                         HttpServletRequest request) {
         try {
             Long userId = getUserId(request);
+            System.out.println(String.format("[CampController] ========== 收到购买请求 =========="));
+            System.out.println(String.format("[CampController] userId=%d, purchaseRequest=%s", userId, purchaseRequest));
             
             // 验证请求参数
             if (purchaseRequest == null || purchaseRequest.getShopOfferId() == null) {
+                System.out.println(String.format("[CampController] ✗ 参数验证失败: purchaseRequest=%s", purchaseRequest));
                 return Result.error(400, "商品ID不能为空");
             }
 
+            System.out.println(String.format("[CampController] 调用 ShopService.purchaseItem: userId=%d, shopOfferId=%d, quantity=%d", 
+                userId, purchaseRequest.getShopOfferId(), purchaseRequest.getQuantity()));
+            
             String message = shopService.purchaseItem(userId, purchaseRequest);
+            
+            System.out.println(String.format("[CampController] ✓ 购买成功: userId=%d, message=%s", userId, message));
             return Result.success(message, null);
         } catch (RuntimeException e) {
+            System.err.println(String.format("[CampController] ✗ 购买失败 (RuntimeException): userId=%d, error=%s", 
+                getUserId(request), e.getMessage()));
+            e.printStackTrace();
             return Result.error(400, e.getMessage());
         } catch (Exception e) {
+            System.err.println(String.format("[CampController] ✗ 购买失败 (Exception): userId=%d, error=%s", 
+                getUserId(request), e.getMessage()));
+            e.printStackTrace();
             return Result.error("购买失败: " + e.getMessage());
         }
     }
