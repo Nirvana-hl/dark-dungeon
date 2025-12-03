@@ -3,6 +3,7 @@ package com.dungeon.dto;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 地牢探索进度 DTO
@@ -17,7 +18,9 @@ public class RunProgressDTO {
     private int defeatedEnemies;
     private List<String> eventLog;
     private List<String> battleLog;
+    private Long pendingEnemyId;
     private String pendingEnemyName;
     private String pendingEnemyDifficulty;
+    private List<Map<String, Object>> pendingEnemyCards;
 }
 
