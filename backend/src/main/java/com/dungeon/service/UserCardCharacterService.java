@@ -139,6 +139,25 @@ public class UserCardCharacterService {
     private UserCardCharacterDTO toDTO(UserCardCharacter entity) {
         UserCardCharacterDTO dto = new UserCardCharacterDTO();
         BeanUtils.copyProperties(entity, dto);
+        
+        // 加载角色模板的详细信息
+        if (entity.getCardCharacterId() != null) {
+            CardCharacter character = cardCharacterMapper.selectById(entity.getCardCharacterId());
+            if (character != null) {
+                // 将角色信息添加到DTO中
+                dto.setCharacterName(character.getName());
+                // CardCharacter实体使用lore作为description
+                dto.setCharacterDescription(character.getLore() != null ? character.getLore() : "");
+                dto.setCharacterRarity(character.getRarity());
+                dto.setCharacterClassType(character.getClassType());
+                dto.setCharacterCode(character.getCode());
+                dto.setBaseHp(character.getBaseHp());
+                dto.setBaseAttack(character.getBaseAttack());
+                // CardCharacter实体没有baseArmor字段，使用0
+                dto.setBaseArmor(0);
+            }
+        }
+        
         return dto;
     }
 

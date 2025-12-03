@@ -1,6 +1,7 @@
 package com.dungeon.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -22,7 +23,9 @@ public class StressDebuffConfig {
     
     /**
      * 触发压力层级（1-4）
+     * 数据库字段可能是 stress_level（下划线）或 stressLevel（驼峰）
      */
+    @TableField(value = "stress_level", exist = true)
     private Integer stressLevel;
     
     /**

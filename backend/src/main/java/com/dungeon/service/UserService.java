@@ -2,9 +2,14 @@ package com.dungeon.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dungeon.entity.User;
+import com.dungeon.entity.UserWallet;
 import com.dungeon.mapper.UserMapper;
+import com.dungeon.mapper.UserWalletMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 /**
  * 用户服务
@@ -14,6 +19,9 @@ public class UserService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private UserWalletMapper userWalletMapper;
 
     /**
      * 根据ID查询用户
@@ -42,8 +50,11 @@ public class UserService {
     
     /**
      * 创建新用户（已加密密码）
+     * 同时初始化用户钱包，给予1000初始金币
      */
+    @Transactional
     public User createUser(String accountName, String email, String encodedPassword) {
+        // 创建用户
         User user = new User();
         user.setAccountName(accountName);
         user.setEmail(email);
@@ -52,7 +63,52 @@ public class UserService {
         user.setPlayerExp(0L);
         user.setStatus("active");
         userMapper.insert(user);
+        
+        // 初始化用户钱包，给予1000初始金币
+        initializeUserWallet(user.getId(), "gold", 1000L);
+        
+        System.out.println("[UserService] 新用户注册成功: userId=" + user.getId() + 
+                         ", accountName=" + accountName + 
+                         ", 已初始化1000金币");
+        
         return user;
+    }
+    
+    /**
+     * 初始化用户钱包
+     * @param userId 用户ID
+     * @param currencyType 货币类型（gold-金币等）
+     * @param initialBalance 初始余额
+     */
+    private void initializeUserWallet(Long userId, String currencyType, Long initialBalance) {
+        // 检查是否已存在钱包
+        QueryWrapper<UserWallet> wrapper = new QueryWrapper<>();
+        wrapper.eq("user_id", userId)
+               .eq("currency_type", currencyType);
+        UserWallet existingWallet = userWalletMapper.selectOne(wrapper);
+        
+        if (existingWallet == null) {
+            // 创建新钱包
+            UserWallet wallet = new UserWallet();
+            wallet.setUserId(userId);
+            wallet.setCurrencyType(currencyType);
+            wallet.setBalance(initialBalance);
+            wallet.setUpdatedAt(LocalDateTime.now());
+            userWalletMapper.insert(wallet);
+            System.out.println("[UserService] 初始化钱包: userId=" + userId + 
+                             ", currencyType=" + currencyType + 
+                             ", balance=" + initialBalance);
+        } else {
+            // 如果钱包已存在，更新余额（避免重复初始化）
+            if (existingWallet.getBalance() == null || existingWallet.getBalance() == 0) {
+                existingWallet.setBalance(initialBalance);
+                existingWallet.setUpdatedAt(LocalDateTime.now());
+                userWalletMapper.updateById(existingWallet);
+                System.out.println("[UserService] 更新钱包余额: userId=" + userId + 
+                                 ", currencyType=" + currencyType + 
+                                 ", balance=" + initialBalance);
+            }
+        }
     }
     
     /**

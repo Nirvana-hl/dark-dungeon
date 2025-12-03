@@ -207,11 +207,25 @@ public class ItemService {
     }
 
     /**
-     * 背包实体转DTO
+     * 背包实体转DTO（包含道具详细信息）
      */
     private InventoryItemDTO toInventoryItemDTO(Inventory inventory) {
         InventoryItemDTO dto = new InventoryItemDTO();
         BeanUtils.copyProperties(inventory, dto);
+        
+        // 加载道具模板的详细信息
+        if (inventory.getItemId() != null) {
+            Item item = itemMapper.selectById(inventory.getItemId());
+            if (item != null) {
+                // 将道具信息添加到DTO中（通过反射或直接设置）
+                dto.setItemName(item.getName());
+                dto.setItemDescription(item.getDescription());
+                dto.setItemType(item.getItemType());
+                dto.setItemRarity(item.getRarity());
+                dto.setItemCode(item.getCode());
+            }
+        }
+        
         return dto;
     }
 }

@@ -2,7 +2,9 @@ package com.dungeon.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dungeon.dto.UserCardDTO;
+import com.dungeon.entity.Card;
 import com.dungeon.entity.UserCard;
+import com.dungeon.mapper.CardMapper;
 import com.dungeon.mapper.UserCardMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,9 @@ public class UserCardService {
 
     @Autowired
     private UserCardMapper userCardMapper;
+
+    @Autowired
+    private CardMapper cardMapper;
 
     public List<UserCardDTO> getUserCards(Long userId) {
         LambdaQueryWrapper<UserCard> wrapper = new LambdaQueryWrapper<>();
@@ -101,6 +106,25 @@ public class UserCardService {
     private UserCardDTO toDTO(UserCard entity) {
         UserCardDTO dto = new UserCardDTO();
         BeanUtils.copyProperties(entity, dto);
+        
+        // 加载卡牌模板的详细信息
+        if (entity.getCardId() != null) {
+            Card card = cardMapper.selectById(entity.getCardId());
+            if (card != null) {
+                // 将卡牌信息添加到DTO中
+                dto.setCardName(card.getName());
+                dto.setCardDescription(card.getDescription());
+                dto.setCardType(card.getCardType());
+                dto.setCardRarity(card.getRarity());
+                dto.setCardCode(card.getCode());
+                // Card实体中没有manaCost、attack、hp字段，这些信息可能在statModifiers中
+                // 如果需要，可以从statModifiers JSON中解析
+                dto.setManaCost(card.getActionPointCost()); // 使用actionPointCost作为manaCost
+                dto.setAttack(null); // Card实体中没有attack字段
+                dto.setHp(null); // Card实体中没有hp字段
+            }
+        }
+        
         return dto;
     }
 

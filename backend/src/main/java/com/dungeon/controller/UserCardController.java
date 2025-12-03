@@ -12,9 +12,12 @@ import java.util.List;
 
 /**
  * 用户手牌接口
+ * 支持两种路径：
+ * - /user-cards (原有路径)
+ * - /card/user-cards (前端调用路径)
  */
 @RestController
-@RequestMapping("/user-cards")
+@RequestMapping({"/user-cards", "/card/user-cards"})
 public class UserCardController {
 
     @Autowired

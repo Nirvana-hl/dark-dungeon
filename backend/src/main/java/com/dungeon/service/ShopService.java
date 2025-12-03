@@ -29,7 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.Random;
 import java.util.stream.Collectors;
 
@@ -66,12 +68,18 @@ public class ShopService {
 
     /**
      * 获取商城商品列表
+     * 注意：会验证并更新价格，确保价格来自数据库的shopPrice字段
      * @return 商品列表（按displayOrder排序）
      */
     public List<ShopOfferDetailDTO> getShopOffers() {
         QueryWrapper<ShopOffer> wrapper = new QueryWrapper<>();
         wrapper.orderByAsc("display_order");
         List<ShopOffer> offers = shopOfferMapper.selectList(wrapper);
+
+        // 验证并更新价格，确保价格来自数据库
+        for (ShopOffer offer : offers) {
+            updateOfferPriceFromDatabase(offer);
+        }
 
         return offers.stream()
                 .map(this::toShopOfferDetailDTO)
@@ -403,6 +411,80 @@ public class ShopService {
         }
 
         return dto;
+    }
+
+    /**
+     * 更新商店商品的价格，确保价格来自数据库的shopPrice字段
+     * 如果数据库中的shopPrice与当前价格不一致，则更新
+     * @param offer 商店商品
+     */
+    private void updateOfferPriceFromDatabase(ShopOffer offer) {
+        if (offer == null || offer.getTargetId() == null) {
+            return;
+        }
+
+        try {
+            Long correctPrice = null;
+            String itemName = "未知";
+            
+            if ("item".equals(offer.getOfferType())) {
+                Item item = itemMapper.selectById(offer.getTargetId());
+                if (item != null) {
+                    itemName = item.getName() != null ? item.getName() : "未知道具";
+                    if (item.getShopPrice() != null && item.getShopPrice() > 0) {
+                        correctPrice = item.getShopPrice().longValue();
+                        System.out.println("[ShopService] 检查道具价格: offerId=" + offer.getId() + 
+                                         ", itemName=" + itemName + 
+                                         ", dbShopPrice=" + correctPrice + 
+                                         ", currentPrice=" + offer.getPrice());
+                    } else {
+                        System.out.println("[ShopService] 道具没有shopPrice: offerId=" + offer.getId() + 
+                                         ", itemName=" + itemName + 
+                                         ", shopPrice=" + item.getShopPrice());
+                    }
+                }
+            } else if ("card_character".equals(offer.getOfferType())) {
+                CardCharacter character = cardCharacterMapper.selectById(offer.getTargetId());
+                if (character != null) {
+                    itemName = character.getName() != null ? character.getName() : "未知角色";
+                    if (character.getShopPrice() != null && character.getShopPrice() > 0) {
+                        correctPrice = character.getShopPrice().longValue();
+                        System.out.println("[ShopService] 检查角色价格: offerId=" + offer.getId() + 
+                                         ", characterName=" + itemName + 
+                                         ", dbShopPrice=" + correctPrice + 
+                                         ", currentPrice=" + offer.getPrice());
+                    } else {
+                        System.out.println("[ShopService] 角色没有shopPrice: offerId=" + offer.getId() + 
+                                         ", characterName=" + itemName + 
+                                         ", shopPrice=" + character.getShopPrice());
+                    }
+                }
+            }
+
+            // 如果找到了正确的价格，且与当前价格不一致，则更新
+            if (correctPrice != null) {
+                Long oldPrice = offer.getPrice();
+                if (!correctPrice.equals(oldPrice)) {
+                    offer.setPrice(correctPrice);
+                    shopOfferMapper.updateById(offer);
+                    System.out.println("[ShopService] ✓ 更新商品价格: offerId=" + offer.getId() + 
+                                     ", name=" + itemName +
+                                     ", oldPrice=" + oldPrice + 
+                                     ", newPrice=" + correctPrice);
+                } else {
+                    System.out.println("[ShopService] ✓ 价格已正确: offerId=" + offer.getId() + 
+                                     ", name=" + itemName +
+                                     ", price=" + correctPrice);
+                }
+            } else {
+                System.out.println("[ShopService] ⚠ 无法获取正确价格: offerId=" + offer.getId() + 
+                                 ", name=" + itemName);
+            }
+        } catch (Exception e) {
+            System.err.println("[ShopService] ✗ 更新商品价格失败: offerId=" + offer.getId() + 
+                             ", error=" + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
 

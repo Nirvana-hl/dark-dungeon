@@ -19,9 +19,12 @@ import java.util.stream.Collectors;
 /**
  * 成就控制器
  * 提供成就相关的API接口
+ * 支持两种路径：
+ * - /achievements/* (原有路径)
+ * - /achievement/* (前端调用路径)
  */
 @RestController
-@RequestMapping("/achievements")
+@RequestMapping({"/achievements", "/achievement"})
 public class AchievementController {
     
     @Autowired
@@ -35,9 +38,9 @@ public class AchievementController {
     
     /**
      * 获取所有成就列表
-     * GET /achievements
+     * GET /achievements 或 GET /achievement/list
      */
-    @GetMapping
+    @GetMapping({"", "/list"})
     public Result<List<AchievementDTO>> getAllAchievements() {
         try {
             List<Achievement> achievements = achievementService.getAllAchievements();
@@ -109,11 +112,11 @@ public class AchievementController {
     
     /**
      * 获取用户成就列表（带完成状态）
-     * GET /achievements/user
+     * GET /achievements/user 或 GET /achievement/progress
      * 
      * @param request HttpServletRequest
      */
-    @GetMapping("/user")
+    @GetMapping({"/user", "/progress"})
     public Result<List<AchievementDTO>> getUserAchievements(HttpServletRequest request) {
         Long userId = getUserId(request);
         try {
@@ -184,6 +187,48 @@ public class AchievementController {
             return Result.success("获取成就统计成功", stats);
         } catch (Exception e) {
             return Result.error("获取成就统计失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 解锁成就
+     * POST /achievements/unlock 或 POST /achievement/unlock
+     * 
+     * @param request HttpServletRequest
+     * @param requestBody 请求体，包含 achievementId
+     */
+    @PostMapping("/unlock")
+    public Result<String> unlockAchievement(HttpServletRequest httpRequest, @RequestBody Map<String, Object> requestBody) {
+        Long userId = getUserId(httpRequest);
+        try {
+            Object achievementIdObj = requestBody.get("achievementId");
+            if (achievementIdObj == null) {
+                return Result.error(400, "成就ID不能为空");
+            }
+            
+            Long achievementId;
+            if (achievementIdObj instanceof Long) {
+                achievementId = (Long) achievementIdObj;
+            } else if (achievementIdObj instanceof String) {
+                try {
+                    achievementId = Long.parseLong((String) achievementIdObj);
+                } catch (NumberFormatException e) {
+                    return Result.error(400, "成就ID格式错误");
+                }
+            } else if (achievementIdObj instanceof Number) {
+                achievementId = ((Number) achievementIdObj).longValue();
+            } else {
+                return Result.error(400, "成就ID格式错误");
+            }
+            
+            boolean success = userAchievementService.completeAchievement(userId, achievementId);
+            if (success) {
+                return Result.success("解锁成就成功", null);
+            } else {
+                return Result.error("解锁成就失败");
+            }
+        } catch (Exception e) {
+            return Result.error("解锁成就失败: " + e.getMessage());
         }
     }
     

@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { gameApi } from '@/lib/api'
 import { useAuthStore } from './auth'
+import type { ApiResponse } from '@/lib/api'
+import type { AxiosResponse } from 'axios'
 
 export type CardType = 'character' | 'spell' | 'equipment'
 
@@ -76,15 +78,23 @@ export const useGameStore = defineStore('game', () => {
     enemyDifficulty.value = diff
   }
 
+  // 特性接口定义
+  interface CharacterTrait {
+    trait_key: string
+    base_power: number
+    power_per_star: number
+    description: string
+  }
+
   // 角色特性（从数据库加载）
-  const charTraits = ref<Record<string, { trait_key: string; base_power: number; power_per_star: number; description: string }>>({})
+  const charTraits = ref<Record<string, CharacterTrait>>({})
 
   async function loadCharacterTraits() {
     try {
-      const response = await gameApi.getCharacterTraits()
-      if (response.code === 200 && response.data) {
+      const response: AxiosResponse<ApiResponse<Record<string, CharacterTrait>>> = await gameApi.getCharacterTraits()
+      if (response.data.code === 200 && response.data.data) {
         charTraits.value = Object.fromEntries(
-          Object.entries(response.data).map(([name, trait]) => [
+          Object.entries(response.data.data).map(([name, trait]: [string, CharacterTrait]) => [
             name,
             {
               trait_key: trait.trait_key,
@@ -139,17 +149,27 @@ export const useGameStore = defineStore('game', () => {
     })
   }
 
+  // 用户卡牌接口
+  interface UserCardResponse {
+    name: string
+    type: 'character' | 'spell' | 'equipment'
+    quantity?: number
+    attack?: number
+    health?: number
+    effect?: 'fireball3' | 'teamBuffAtk1'
+  }
+
   // 从数据库加载玩家手牌
-  async function loadUserDeckFromDB(uid?: string) {
+  async function loadUserDeckFromDB() {
     const authStore = useAuthStore()
-    if (!authStore.session && !uid) {
+    if (!authStore.isAuthenticated) {
       log('未登录，无法加载玩家手牌')
       return
     }
     try {
-      const response = await gameApi.getUserCards()
-      if (response.code === 200 && response.data) {
-        const cards: Card[] = response.data.flatMap((r) => {
+      const response: AxiosResponse<ApiResponse<UserCardResponse[]>> = await gameApi.getUserCards()
+      if (response.data.code === 200 && response.data.data) {
+        const cards: Card[] = response.data.data.flatMap((r: UserCardResponse) => {
           const qty = Math.max(1, Number(r.quantity ?? 1))
           return Array.from({ length: qty }, () => ({
             id: uid2(),
@@ -176,13 +196,23 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  // 敌方卡牌接口
+  interface EnemyCardResponse {
+    name: string
+    type: 'character' | 'spell' | 'equipment'
+    attack?: number
+    health?: number
+    effect?: string
+    unique_play?: boolean
+  }
+
   // 从数据库加载敌方手牌（按关卡与难度）
   async function loadEnemyDeck(stageNum: number) {
     const diff = enemyDifficulty.value
     try {
-      const response = await gameApi.getEnemyCards(stageNum, diff)
-      if (response.code === 200 && response.data) {
-        enemyHand.value = response.data.map((r) => ({
+      const response: AxiosResponse<ApiResponse<EnemyCardResponse[]>> = await gameApi.getEnemyCards(stageNum, diff)
+      if (response.data.code === 200 && response.data.data) {
+        enemyHand.value = response.data.data.map((r: EnemyCardResponse) => ({
           id: uid2(),
           name: r.name,
           cost: r.type === 'spell' ? 2 : r.type === 'equipment' ? 3 : 2,

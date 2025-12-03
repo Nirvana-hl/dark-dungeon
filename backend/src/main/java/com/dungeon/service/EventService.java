@@ -1,124 +1,182 @@
 package com.dungeon.service;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.dungeon.dto.EventDTO;
 import com.dungeon.entity.Event;
 import com.dungeon.mapper.EventMapper;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 /**
  * 事件服务
  */
 @Service
 public class EventService {
-    
+
     @Autowired
     private EventMapper eventMapper;
-    
+
+    private static final double DEFAULT_CHANCE = 1.0d;
+
     /**
-     * 根据事件类型获取事件列表
+     * 获取营地事件列表
+     * @return 事件列表
      */
-    public List<Event> getEventsByLocationType(String locationType) {
-        return eventMapper.selectByLocationType(locationType);
+    public List<EventDTO> getCampEvents() {
+        QueryWrapper<Event> wrapper = new QueryWrapper<>();
+        wrapper.eq("location_type", "camp");
+        List<Event> events = eventMapper.selectList(wrapper);
+        
+        return events.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
-    
+
     /**
-     * 获取地牢内可触发的事件
-     * 根据触发条件和触发概率筛选
+     * 根据关卡信息随机触发一个地牢事件
+     *
+     * @param stageNumber   当前关卡编号
+     * @param chapterNumber 当前章节
+     * @return 匹配的事件，若无匹配则返回 null
      */
-    public List<Event> getAvailableDungeonEvents(Integer stageNumber, Integer chapterNumber) {
-        // 查询所有地牢事件
-        List<Event> allDungeonEvents = eventMapper.selectByLocationType("dungeon");
-        List<Event> availableEvents = new ArrayList<>();
-        
-        Random random = new Random();
-        
-        for (Event event : allDungeonEvents) {
-            // 检查触发条件
-            if (checkTriggerCondition(event, stageNumber, chapterNumber)) {
-                // 检查触发概率
-                if (event.getTriggerChance() != null) {
-                    double chance = event.getTriggerChance().doubleValue();
-                    if (random.nextDouble() < chance) {
-                        availableEvents.add(event);
-                    }
-                } else {
-                    // 如果没有设置触发概率，默认触发
-                    availableEvents.add(event);
-                }
+    public Event triggerRandomDungeonEvent(Integer stageNumber, Integer chapterNumber) {
+        LambdaQueryWrapper<Event> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Event::getLocationType, "dungeon");
+        List<Event> dungeonEvents = eventMapper.selectList(wrapper);
+        if (CollectionUtils.isEmpty(dungeonEvents)) {
+            return null;
+        }
+
+        List<Event> candidates = dungeonEvents.stream()
+                .filter(event -> matchesCondition(event, stageNumber, chapterNumber))
+                .collect(Collectors.toList());
+
+        List<Event> pool = CollectionUtils.isEmpty(candidates) ? dungeonEvents : candidates;
+        double totalWeight = pool.stream()
+                .mapToDouble(event -> event.getTriggerChance() != null
+                        ? event.getTriggerChance().doubleValue()
+                        : DEFAULT_CHANCE)
+                .filter(value -> value > 0)
+                .sum();
+
+        if (totalWeight <= 0) {
+            return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+        }
+
+        double randomPick = ThreadLocalRandom.current().nextDouble(totalWeight);
+        double cumulative = 0;
+        for (Event event : pool) {
+            double weight = event.getTriggerChance() != null
+                    ? Math.max(event.getTriggerChance().doubleValue(), 0)
+                    : DEFAULT_CHANCE;
+            cumulative += weight;
+            if (randomPick <= cumulative) {
+                return event;
             }
         }
-        
-        return availableEvents;
+        return pool.get(pool.size() - 1);
     }
-    
+
+
     /**
-     * 检查事件触发条件
+     * 完成任务事件
+     * @param userId 用户ID
+     * @param eventId 事件ID
+     * @return 事件效果信息
      */
-    private boolean checkTriggerCondition(Event event, Integer stageNumber, Integer chapterNumber) {
-        if (event.getTriggerCondition() == null || event.getTriggerCondition().isEmpty()) {
-            return true; // 没有触发条件，默认可以触发
+    @Transactional
+    public String completeEvent(Long userId, Long eventId) {
+        // 查询事件
+        Event event = eventMapper.selectById(eventId);
+        if (event == null) {
+            throw new RuntimeException("事件不存在");
         }
-        
+
+        // 验证是否为营地事件
+        if (!"camp".equals(event.getLocationType())) {
+            throw new RuntimeException("该事件不是营地事件");
+        }
+
+        // 这里可以应用事件效果（如增加金币、减少压力等）
+        // 简化实现：返回成功消息
+        return String.format("成功完成事件：%s", event.getName());
+    }
+
+    /**
+     * 实体转DTO
+     */
+    private EventDTO toDTO(Event event) {
+        EventDTO dto = new EventDTO();
+        BeanUtils.copyProperties(event, dto);
+        return dto;
+    }
+
+    private boolean matchesCondition(Event event, Integer stageNumber, Integer chapterNumber) {
+        if (!StringUtils.hasText(event.getTriggerCondition())) {
+            return true;
+        }
         try {
             JSONObject condition = JSON.parseObject(event.getTriggerCondition());
-            
-            // 检查关卡编号范围
-            if (condition.containsKey("stage_range")) {
-                List<Integer> range = condition.getList("stage_range", Integer.class);
-                if (range != null && range.size() == 2) {
-                    int min = range.get(0);
-                    int max = range.get(1);
-                    if (stageNumber < min || stageNumber > max) {
-                        return false;
+            if (condition == null) {
+                return true;
+            }
+            if (stageNumber != null) {
+                if (condition.containsKey("minStageNumber")
+                        && stageNumber < condition.getIntValue("minStageNumber")) {
+                    return false;
+                }
+                if (condition.containsKey("maxStageNumber")
+                        && stageNumber > condition.getIntValue("maxStageNumber")) {
+                    return false;
+                }
+                if (condition.containsKey("stageNumbers")) {
+                    JSONArray stages = condition.getJSONArray("stageNumbers");
+                    if (stages != null && !stages.isEmpty()) {
+                        boolean match = stages.stream()
+                                .filter(Number.class::isInstance)
+                                .map(Number.class::cast)
+                                .anyMatch(num -> num.intValue() == stageNumber);
+                        if (!match) {
+                            return false;
+                        }
                     }
                 }
             }
-            
-            // 检查章节
-            if (condition.containsKey("chapter")) {
-                Integer requiredChapter = condition.getInteger("chapter");
-                if (requiredChapter != null && !requiredChapter.equals(chapterNumber)) {
+
+            if (chapterNumber != null) {
+                if (condition.containsKey("chapters")) {
+                    JSONArray chapters = condition.getJSONArray("chapters");
+                    if (chapters != null && !chapters.isEmpty()) {
+                        boolean match = chapters.stream()
+                                .filter(Number.class::isInstance)
+                                .map(Number.class::cast)
+                                .anyMatch(num -> num.intValue() == chapterNumber);
+                        if (!match) {
+                            return false;
+                        }
+                    }
+                }
+                if (condition.containsKey("chapter")
+                        && chapterNumber.intValue() != condition.getIntValue("chapter")) {
                     return false;
                 }
             }
-            
-            // 检查章节范围
-            if (condition.containsKey("chapter_range")) {
-                List<Integer> range = condition.getList("chapter_range", Integer.class);
-                if (range != null && range.size() == 2) {
-                    int min = range.get(0);
-                    int max = range.get(1);
-                    if (chapterNumber < min || chapterNumber > max) {
-                        return false;
-                    }
-                }
-            }
-            
             return true;
-        } catch (Exception e) {
-            // 解析失败，默认可以触发
+        } catch (Exception ignored) {
+            // 解析失败时，默认允许触发，避免因为配置错误导致功能失效
             return true;
         }
-    }
-    
-    /**
-     * 随机触发一个地牢事件
-     */
-    public Event triggerRandomDungeonEvent(Integer stageNumber, Integer chapterNumber) {
-        List<Event> availableEvents = getAvailableDungeonEvents(stageNumber, chapterNumber);
-        if (availableEvents.isEmpty()) {
-            return null;
-        }
-        
-        Random random = new Random();
-        int index = random.nextInt(availableEvents.size());
-        return availableEvents.get(index);
     }
 }
-

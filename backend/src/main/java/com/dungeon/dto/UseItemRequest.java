@@ -13,6 +13,11 @@ public class UseItemRequest {
     private Long itemId;
     
     /**
+     * 背包记录ID（inventory表的id）- 前端使用此字段
+     */
+    private Long inventoryId;
+    
+    /**
      * 使用数量（默认为1）
      */
     private Integer quantity;

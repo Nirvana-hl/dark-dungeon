@@ -1,181 +1,222 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { characterApi, type CharacterDTO } from '@/lib/api'
+import { ref, computed, readonly } from 'vue'
+import apiClient, { API_ENDPOINTS, type ApiResponse } from '@/lib/api'
 import { useAuthStore } from './auth'
-
-export interface Character {
-  id: string
-  name: string
-  cls: '战士' | '法师' | '游侠'
-  stars: number // 星级 1~5
-  hp: number
-  mp: number
-}
+import type { 
+  UserPlayerCharacter, 
+  CardCharacter, 
+  UserCardCharacter,
+  CharacterClass,
+  Faction,
+  Rarity 
+} from '@/types'
 
 export const useCharactersStore = defineStore('characters', () => {
-  const list = ref<Character[]>([])
-  const selectedId = ref<string | null>(null)
-  const hasSession = ref<boolean>(false)
+  // 状态
+  const playerCharacter = ref<UserPlayerCharacter | null>(null)
+  const cardCharacters = ref<UserCardCharacter[]>([])
+  const availableCardCharacterTemplates = ref<CardCharacter[]>([])
+  const selectedCardCharacterId = ref<string | null>(null)
   const loading = ref<boolean>(false)
+  const errorMsg = ref<string | null>(null)
 
-  const selected = computed(() => list.value.find(c => c.id === selectedId.value) || null)
-
-  // 检查是否有登录会话
-  function checkSession() {
-    const authStore = useAuthStore()
-    hasSession.value = !!authStore.session
-    return hasSession.value
-  }
-
-  // 将后端DTO转换为前端Character
-  function fromDTO(dto: CharacterDTO): Character {
-    return {
-      id: dto.id?.toString() || '',
-      name: dto.name,
-      cls: dto.classType as Character['cls'],
-      stars: dto.stars,
-      hp: dto.hp,
-      mp: dto.mp
-    }
-  }
-
-  // 将前端Character转换为后端DTO
-  function toDTO(c: Partial<Character>): Partial<CharacterDTO> {
-    return {
-      name: c.name,
-      classType: c.cls,
-      stars: c.stars,
-      hp: c.hp,
-      mp: c.mp
-    }
-  }
-
-  async function load() {
-    loading.value = true
-    try {
-      if (!checkSession()) {
-        // 无会话，保持本地模式
-        return
+  // 计算属性
+  const selectedCardCharacter = computed(() => 
+    cardCharacters.value.find(c => c.id === selectedCardCharacterId.value) || null
+  )
+  
+  // 为Explore.vue提供selected属性
+  const selected = computed(() => {
+    // 返回当前选中的角色，如果没有则返回playerCharacter
+    return selectedCardCharacter.value || playerCharacter.value || {
+      attrs: {
+        exp: 0,
+        level: 1
       }
-      const response = await characterApi.getCharacters()
-      if (response.code === 200 && response.data) {
-        const mapped = response.data.map(fromDTO)
-        list.value = mapped
-        if (mapped.length > 0 && !selectedId.value) {
-          selectedId.value = mapped[0].id
-        }
-      } else if (response.data && response.data.length === 0) {
-        // 无数据，创建一个默认角色
-        const def: Partial<Character> = {
-          name: '新角色1',
-          cls: '战士',
-          stars: 1,
-          hp: 60,
-          mp: 30
-        }
-        await create(def)
+    }
+  })
+
+  const isAuthenticated = computed(() => {
+    const authStore = useAuthStore()
+    return authStore.isAuthenticated
+  })
+
+  // 加载玩家角色信息
+  async function loadPlayerCharacter(): Promise<void> {
+    if (!isAuthenticated.value) return
+
+    loading.value = true
+    errorMsg.value = null
+
+    try {
+      const response = await apiClient.get<ApiResponse<UserPlayerCharacter>>(
+        API_ENDPOINTS.CHARACTER.PLAYER_INSTANCE
+      )
+
+      if (response.data.code === 200 && response.data.data) {
+        playerCharacter.value = response.data.data
       }
     } catch (error: any) {
-      console.warn('Load characters error:', error.message)
+      errorMsg.value = error.response?.data?.message || '加载玩家角色失败'
+      console.error('Load player character error:', error)
     } finally {
       loading.value = false
     }
   }
 
-  function select(id: string) {
-    selectedId.value = id
-  }
+  // 加载卡牌角色列表
+  async function loadCardCharacters(): Promise<void> {
+    if (!isAuthenticated.value) return
 
-  async function create(payload?: Partial<Character>) {
-    const c: Partial<Character> = {
-      name: payload?.name ?? `新角色${list.value.length + 1}`,
-      cls: payload?.cls ?? '战士',
-      stars: payload?.stars ?? 1,
-      hp: payload?.hp ?? 60,
-      mp: payload?.mp ?? 30
-    }
+    loading.value = true
+    errorMsg.value = null
 
-    if (checkSession()) {
-      try {
-        const response = await characterApi.createCharacter(toDTO(c) as CharacterDTO)
-        if (response.code === 200 && response.data) {
-          const newChar = fromDTO(response.data)
-          list.value.push(newChar)
-          selectedId.value = newChar.id
+    try {
+      const response = await apiClient.get<ApiResponse<UserCardCharacter[]>>(
+        API_ENDPOINTS.CHARACTER.CARD_INSTANCE
+      )
+
+      if (response.data.code === 200 && response.data.data) {
+        cardCharacters.value = response.data.data
+        if (cardCharacters.value.length > 0 && !selectedCardCharacterId.value) {
+          selectedCardCharacterId.value = cardCharacters.value[0].id
         }
-      } catch (error: any) {
-        console.warn('Create character failed:', error.message)
       }
-    } else {
-      // 本地模式
-      const newChar: Character = {
-        id: Math.random().toString(36).slice(2, 10),
-        name: c.name || `新角色${list.value.length + 1}`,
-        cls: c.cls || '战士',
-        stars: c.stars || 1,
-        hp: c.hp || 60,
-        mp: c.mp || 30
-      }
-      list.value.push(newChar)
-      selectedId.value = newChar.id
+    } catch (error: any) {
+      errorMsg.value = error.response?.data?.message || '加载卡牌角色失败'
+      console.error('Load card characters error:', error)
+    } finally {
+      loading.value = false
     }
   }
 
-  async function remove(id: string) {
-    const idx = list.value.findIndex(c => c.id === id)
-    if (idx >= 0) {
-      const removed = list.value[idx]
-      if (selectedId.value === id) {
-        selectedId.value = list.value[0]?.id ?? null
-      }
+  // 加载可购买的卡牌角色模板
+  async function loadCardCharacterTemplates(): Promise<void> {
+    loading.value = true
+    errorMsg.value = null
 
-      if (checkSession() && removed.id) {
-        try {
-          const numId = Number(removed.id)
-          if (!isNaN(numId)) {
-            await characterApi.deleteCharacter(numId)
-            list.value.splice(idx, 1)
+    try {
+      const response = await apiClient.get<ApiResponse<CardCharacter[]>>(
+        API_ENDPOINTS.CHARACTER.CARD
+      )
+
+      if (response.data.code === 200 && response.data.data) {
+        availableCardCharacterTemplates.value = response.data.data
+      }
+    } catch (error: any) {
+      errorMsg.value = error.response?.data?.message || '加载卡牌角色模板失败'
+      console.error('Load card character templates error:', error)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 选择卡牌角色
+  function selectCardCharacter(id: string): void {
+    selectedCardCharacterId.value = id
+  }
+
+  // 上阵/下阵卡牌角色
+  async function toggleDeploy(cardCharacterId: string, round: number): Promise<boolean> {
+    const cardCharacter = cardCharacters.value.find(c => c.id === cardCharacterId)
+    if (!cardCharacter || !playerCharacter.value) return false
+
+    // 检查行动点是否足够
+    if (!cardCharacter.isDeployed) {
+      // 需要上阵地，检查行动点
+      const template = availableCardCharacterTemplates.value.find(
+        t => t.id === cardCharacter.cardCharacterId
+      )
+      if (template && playerCharacter.value.currentActionPoints < template.actionPointCost) {
+        errorMsg.value = '行动点不足'
+        return false
+      }
+    }
+
+    try {
+      const response = await apiClient.post<ApiResponse<boolean>>(
+        `${API_ENDPOINTS.CHARACTER.CARD_INSTANCE}/${cardCharacterId}/toggle-deploy`,
+        { round }
+      )
+
+      if (response.data.code === 200 && response.data.data) {
+        // 更新本地状态
+        cardCharacter.isDeployed = !cardCharacter.isDeployed
+        cardCharacter.deployedRound = cardCharacter.isDeployed ? round : 0
+
+        // 更新玩家行动点
+        if (cardCharacter.isDeployed) {
+          const template = availableCardCharacterTemplates.value.find(
+            t => t.id === cardCharacter.cardCharacterId
+          )
+          if (template) {
+            playerCharacter.value.currentActionPoints -= template.actionPointCost
           }
-        } catch (error: any) {
-          console.warn('Delete character failed:', error.message)
         }
+
+        errorMsg.value = null
+        return true
       } else {
-        list.value.splice(idx, 1)
+        errorMsg.value = response.data.message || '操作失败'
+        return false
       }
+    } catch (error: any) {
+      errorMsg.value = error.response?.data?.message || '操作失败'
+      console.error('Toggle deploy error:', error)
+      return false
     }
   }
 
-  async function starUp(id: string) {
-    const c = list.value.find(x => x.id === id)
-    if (!c) return
-    if (c.stars >= 5) return
-
-    if (checkSession() && c.id) {
-      try {
-        const numId = Number(c.id)
-        if (!isNaN(numId)) {
-          const response = await characterApi.starUp(numId)
-          if (response.code === 200 && response.data) {
-            const updated = fromDTO(response.data)
-            const idx = list.value.findIndex(x => x.id === id)
-            if (idx >= 0) {
-              list.value[idx] = updated
-            }
-          }
-        }
-      } catch (error: any) {
-        console.warn('Star up failed:', error.message)
-      }
-    } else {
-      // 本地模式
-      c.stars += 1
-      c.hp += 10
-      c.mp += 5
+  // 重置行动点（新回合开始时调用）
+  function resetActionPoints(): void {
+    if (playerCharacter.value) {
+      playerCharacter.value.currentActionPoints = playerCharacter.value.maxActionPoints
     }
   }
 
-  // 初始化时尝试加载
-  load().catch(() => {})
+  // 重置卡牌上阵状态（新回合开始时调用）
+  function resetDeployStatus(round: number): void {
+    cardCharacters.value.forEach(card => {
+      if (card.deployedRound < round) {
+        card.isDeployed = false
+        card.deployedRound = 0
+      }
+    })
+  }
 
-  return { list, selectedId, selected, loading, hasSession, select, create, remove, starUp, load }
+  // 加载所有角色数据
+  async function loadAll(): Promise<void> {
+    if (!isAuthenticated.value) return
+
+    await Promise.all([
+      loadPlayerCharacter(),
+      loadCardCharacters(),
+      loadCardCharacterTemplates()
+    ])
+  }
+
+  // 初始化
+  loadAll().catch(() => {})
+
+  return {
+    // 状态
+    playerCharacter: readonly(playerCharacter),
+    cardCharacters: readonly(cardCharacters),
+    availableCardCharacterTemplates: readonly(availableCardCharacterTemplates),
+    selectedCardCharacterId: readonly(selectedCardCharacterId),
+    selectedCardCharacter,
+    selected, // 添加这个属性供Explore.vue使用
+    loading: readonly(loading),
+    errorMsg: readonly(errorMsg),
+
+    // 方法
+    loadPlayerCharacter,
+    loadCardCharacters,
+    loadCardCharacterTemplates,
+    selectCardCharacter,
+    toggleDeploy,
+    resetActionPoints,
+    resetDeployStatus,
+    loadAll
+  }
 })

@@ -46,6 +46,9 @@ public class CampService {
     @Autowired
     private ShopOfferMapper shopOfferMapper;
 
+    @Autowired
+    private ItemService itemService;
+
     /**
      * 获取营地仪表盘所需的全部数据
      */
@@ -67,17 +70,8 @@ public class CampService {
     }
 
     private List<InventoryItemDTO> getInventoryItems(Long userId) {
-        LambdaQueryWrapper<Inventory> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Inventory::getUserId, userId);
-        List<Inventory> entities = inventoryMapper.selectList(wrapper);
-        if (entities == null || entities.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return entities.stream().map(item -> {
-            InventoryItemDTO dto = new InventoryItemDTO();
-            BeanUtils.copyProperties(item, dto);
-            return dto;
-        }).collect(Collectors.toList());
+        // 使用ItemService的方法，确保包含道具详细信息
+        return itemService.getUserInventory(userId);
     }
 
     private List<UserWalletDTO> getWallets(Long userId) {
