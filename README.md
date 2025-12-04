@@ -466,6 +466,72 @@ npm run build
   1. 后续可以考虑在 `StressDebuffDTO` 中添加 `id` 字段，统一前后端数据结构。
   2. 可以考虑将随机抽取逻辑移到后端，减少前端计算负担。
 
+## ♻️ 角色卡牌升星功能实现（2025-12-04）
+- **产出**：
+  1. **升星功能实现**：
+     - ✅ 修改了 `ShopService.addCardCharacterToUser()` 方法，购买角色时只添加到1星角色的数量上
+     - ✅ 在 `UserCardCharacterService` 中添加了 `upgradeStarLevel()` 方法
+     - ✅ 实现了消耗3个当前星级角色，创建新的更高星级记录的逻辑
+     - ✅ 实现了根据 `star_upgrade_payload` 计算属性增幅的逻辑
+     - ✅ 添加了 `POST /user-card-characters/{id}/upgrade-star` 接口
+  2. **数据隔离**：
+     - ✅ 每个星级是独立的记录（1星和2星是不同的记录）
+     - ✅ 购买1星角色不会添加到2星角色的数量上
+     - ✅ 升星时创建新的记录，而不是修改现有记录
+  3. **创建文件**：
+     - `角色卡牌升星功能分析与实现方案.md`：详细的分析报告和实现说明
+- **功能说明**：
+  1. **购买逻辑**：购买角色时，只添加到1星角色的数量上（查询条件包含 `current_star_level = 1`）
+  2. **升星条件**：当1星角色数量 >= 3 时，可以点击升星
+  3. **升星效果**：消耗3个1星角色，创建新的2星角色记录，并根据 `star_upgrade_payload` 计算属性增幅
+  4. **数据隔离**：每个星级是独立的记录，互不影响
+- **使用方式**：
+  - 购买角色：自动添加到1星角色数量
+  - 升星操作：`POST /user-card-characters/{id}/upgrade-star`
+  - 升星后：创建新的更高星级记录，属性根据配置自动增幅
+
+## ♻️ 敌人卡牌查询接口优化（2025-12-04）
+- **产出**：
+  1. **接口功能增强**：
+     - ✅ 修改了 `GET /game/enemy-cards` 接口，支持可选的 `enemyId` 参数
+     - ✅ 添加了 `GET /game/stage-enemies` 接口，返回关卡中所有可能的敌人列表
+     - ✅ 在 `EnemyService` 中添加了 `getStageEnemiesList()` 方法
+  2. **问题解决**：
+     - ✅ 解决了"一个关卡中不同敌人的卡牌无法区分"的问题
+     - ✅ 现在可以通过 `enemyId` 直接查询指定敌人的卡牌
+     - ✅ 可以通过 `stage-enemies` 接口获取关卡中所有敌人，然后逐个查询卡牌
+  3. **创建文件**：
+     - `敌人卡牌查询接口使用说明.md`：详细的接口使用说明和示例代码
+- **使用方式**：
+  1. **直接查询**：`GET /game/enemy-cards?enemyId=1` - 查询指定敌人的卡牌
+  2. **获取敌人列表**：`GET /game/stage-enemies?stage=1&difficulty=普通` - 获取关卡中所有可能的敌人
+  3. **随机查询**：`GET /game/enemy-cards?stage=1&difficulty=普通` - 随机选择一个敌人并返回其卡牌
+
+## ♻️ 敌人卡牌系统分析与实现（2025-12-04）
+- **产出**：
+  1. **敌人卡牌系统可行性分析**：
+     - ✅ 数据库结构完全支持：`enemy_cards` 表关联 `cards` 表，`cards` 表的 `cardType` 字段可以区分装备（equipment）和法术（spell）
+     - ✅ 后端代码已实现：`EnemyService.getEnemyCardsByEnemyId()` 可以获取敌人的所有卡牌（包括装备和法术）
+     - ⚠️ **当前限制**：`DungeonService.simulateBattle()` 只是简单的回合制战斗，没有实际使用敌人的卡牌
+     - ✅ **实现方案**：提供了详细的实现方案，包括改进 `simulateBattle()` 方法、实现敌人 AI 策略、卡牌效果执行等
+  2. **敌人角色卡功能实现**：
+     - ✅ 创建了 `enemy_card_characters` 表，用于关联敌人和角色卡（`card_characters`）
+     - ✅ 创建了 `EnemyCardCharacter` 实体类和 `EnemyCardCharacterMapper` 接口
+     - ✅ 在 `EnemyService` 中添加了 `getEnemyCardCharactersByEnemyId()` 方法
+     - ✅ 修改了 `getEnemyCardsByEnemyId()` 方法，自动合并敌人的卡牌（法术/装备）和角色卡
+     - ✅ 敌人现在可以从 `enemy_cards` 表获取法术/装备卡牌，从 `enemy_card_characters` 表获取角色卡
+  3. **创建文件**：
+     - `敌人卡牌系统分析与实现方案.md`：详细分析报告，包含数据库结构、代码实现、实现步骤和代码示例
+     - `database/add_enemy_card_characters_table.sql`：数据库迁移脚本，创建敌人角色卡关联表
+- **问题**：
+  1. 当前战斗系统没有使用敌人的卡牌，敌人只是根据基础属性进行攻击
+  2. 数据库中敌人卡牌数据较少（只有1条记录），需要为每个敌人添加更多卡牌
+- **改进**：
+  1. **优先级1（简单）**：完善数据库数据，为每个敌人添加装备和法术卡牌
+  2. **优先级2（复杂）**：改进 `simulateBattle()` 方法，实现敌人抽牌、出牌和卡牌效果执行
+  3. **优先级3（高级）**：实现更复杂的 AI 策略，让敌人根据战况智能选择卡牌
+  4. **已完成**：✅ 敌人角色卡功能已实现，敌人可以从 `enemy_card_characters` 表抽取角色卡
+
 ---
 
 **最后更新**: 2024年 | **维护者**: 项目团队

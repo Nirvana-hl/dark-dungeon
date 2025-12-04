@@ -17,7 +17,7 @@ import java.util.List;
  * - /card/user-cards (前端调用路径)
  */
 @RestController
-@RequestMapping({"/user-cards", "/card/user-cards"})
+@RequestMapping("/user-cards")
 public class UserCardController {
 
     @Autowired

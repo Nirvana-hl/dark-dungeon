@@ -306,23 +306,6 @@ public class CampController {
         }
     }
 
-    /**
-     * 获取AI建议
-     * GET /camp/ai-suggestions
-     * 
-     * @param request HTTP请求（用于获取当前用户）
-     * @return AI建议列表
-     */
-    @GetMapping("/ai-suggestions")
-    public Result<List<AISuggestionDTO>> getAISuggestions(HttpServletRequest request) {
-        try {
-            Long userId = getUserId(request);
-            List<AISuggestionDTO> suggestions = aiSuggestionService.getAISuggestions(userId);
-            return Result.success(suggestions);
-        } catch (Exception e) {
-            return Result.error("获取AI建议失败: " + e.getMessage());
-        }
-    }
 
     /**
      * 刷新AI建议

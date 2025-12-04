@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  * - /achievement/* (前端调用路径)
  */
 @RestController
-@RequestMapping({"/achievements", "/achievement"})
+@RequestMapping("/achievements")
 public class AchievementController {
     
     @Autowired

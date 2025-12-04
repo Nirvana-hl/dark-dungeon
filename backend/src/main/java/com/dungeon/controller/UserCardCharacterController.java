@@ -87,6 +87,26 @@ public class UserCardCharacterController {
         return Result.success("删除成功", null);
     }
 
+    /**
+     * 升星功能
+     * 消耗3个当前星级的角色，创建一个新的更高星级的角色记录
+     * POST /user-card-characters/{id}/upgrade-star
+     * 
+     * @param id 要升星的角色记录ID
+     * @param request HTTP请求
+     * @return 升星后的角色记录
+     */
+    @PostMapping("/{id}/upgrade-star")
+    public Result<UserCardCharacterDTO> upgradeStarLevel(@PathVariable Long id, HttpServletRequest request) {
+        try {
+            Long userId = getUserId(request);
+            UserCardCharacterDTO result = userCardCharacterService.upgradeStarLevel(userId, id);
+            return Result.success("升星成功", result);
+        } catch (Exception e) {
+            return Result.error("升星失败: " + e.getMessage());
+        }
+    }
+
     private Long getUserId(HttpServletRequest request) {
         String token = request.getHeader("Authorization");
         if (token == null || !token.startsWith("Bearer ")) {
