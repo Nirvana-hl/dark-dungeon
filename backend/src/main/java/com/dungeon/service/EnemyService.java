@@ -6,10 +6,14 @@ import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dungeon.entity.Card;
+import com.dungeon.entity.CardCharacter;
 import com.dungeon.entity.Enemy;
 import com.dungeon.entity.EnemyCard;
+import com.dungeon.entity.EnemyCardCharacter;
 import com.dungeon.entity.Stage;
+import com.dungeon.mapper.CardCharacterMapper;
 import com.dungeon.mapper.CardMapper;
+import com.dungeon.mapper.EnemyCardCharacterMapper;
 import com.dungeon.mapper.EnemyCardMapper;
 import com.dungeon.mapper.EnemyMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +39,12 @@ public class EnemyService {
 
     @Autowired
     private CardMapper cardMapper;
+
+    @Autowired
+    private EnemyCardCharacterMapper enemyCardCharacterMapper;
+
+    @Autowired
+    private CardCharacterMapper cardCharacterMapper;
 
     @Autowired
     private StageService stageService;
@@ -66,36 +76,141 @@ public class EnemyService {
     }
 
     /**
-     * 根据敌人ID获取卡牌列表
+     * 根据敌人ID获取卡牌列表（包括法术、装备和角色卡）
+     * 
+     * @param enemyId 敌人ID
+     * @return 合并后的卡牌列表，包含法术、装备和角色卡
      */
     public List<Map<String, Object>> getEnemyCardsByEnemyId(Long enemyId) {
         if (enemyId == null) {
             return new ArrayList<>();
         }
 
+        List<Map<String, Object>> allCards = new ArrayList<>();
+
+        // 1. 获取法术和装备卡牌（从 enemy_cards 表）
         LambdaQueryWrapper<EnemyCard> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(EnemyCard::getEnemyId, enemyId);
         List<EnemyCard> enemyCards = enemyCardMapper.selectList(wrapper);
-        if (CollectionUtils.isEmpty(enemyCards)) {
+        
+        if (!CollectionUtils.isEmpty(enemyCards)) {
+            List<Long> cardIds = enemyCards.stream()
+                    .map(EnemyCard::getCardId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            if (!cardIds.isEmpty()) {
+                List<Card> cards = cardMapper.selectBatchIds(cardIds);
+                if (!CollectionUtils.isEmpty(cards)) {
+                    allCards.addAll(convertToEnemyCardDTOList(cards));
+                }
+            }
+        }
+
+        // 2. 获取角色卡（从 enemy_card_characters 表）
+        List<Map<String, Object>> characterCards = getEnemyCardCharactersByEnemyId(enemyId);
+        if (!CollectionUtils.isEmpty(characterCards)) {
+            allCards.addAll(characterCards);
+        }
+
+        return allCards;
+    }
+
+    /**
+     * 根据敌人ID获取角色卡列表
+     * 
+     * @param enemyId 敌人ID
+     * @return 角色卡列表
+     */
+    public List<Map<String, Object>> getEnemyCardCharactersByEnemyId(Long enemyId) {
+        if (enemyId == null) {
             return new ArrayList<>();
         }
 
-        List<Long> cardIds = enemyCards.stream()
-                .map(EnemyCard::getCardId)
+        LambdaQueryWrapper<EnemyCardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(EnemyCardCharacter::getEnemyId, enemyId);
+        List<EnemyCardCharacter> enemyCardCharacters = enemyCardCharacterMapper.selectList(wrapper);
+        
+        if (CollectionUtils.isEmpty(enemyCardCharacters)) {
+            return new ArrayList<>();
+        }
+
+        List<Long> cardCharacterIds = enemyCardCharacters.stream()
+                .map(EnemyCardCharacter::getCardCharacterId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
 
-        if (cardIds.isEmpty()) {
+        if (cardCharacterIds.isEmpty()) {
             return new ArrayList<>();
         }
 
-        List<Card> cards = cardMapper.selectBatchIds(cardIds);
-        if (CollectionUtils.isEmpty(cards)) {
+        List<CardCharacter> cardCharacters = cardCharacterMapper.selectBatchIds(cardCharacterIds);
+        if (CollectionUtils.isEmpty(cardCharacters)) {
             return new ArrayList<>();
         }
 
-        return convertToEnemyCardDTOList(cards);
+        return convertToEnemyCardCharacterDTOList(cardCharacters);
+    }
+
+    /**
+     * 获取关卡中所有可能的敌人列表
+     * 用于前端展示关卡中可能出现的所有敌人，然后可以单独查询每个敌人的卡牌
+     * 
+     * @param stageNumber 关卡编号
+     * @param difficulty 难度
+     * @return 敌人列表，包含敌人ID、名称、难度等信息
+     */
+    public List<Map<String, Object>> getStageEnemiesList(Integer stageNumber, String difficulty) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        // 1. 根据关卡编号查询关卡信息
+        Stage stage = null;
+        if (stageNumber != null) {
+            stage = stageService.getStageByNumber(stageNumber);
+        }
+        
+        // 2. 优先从关卡的敌人池中获取所有可能的敌人
+        if (stage != null && StringUtils.hasText(stage.getEnemyPool())) {
+            List<WeightedEnemy> weightedEnemies = parseEnemyPool(stage.getEnemyPool());
+            if (!CollectionUtils.isEmpty(weightedEnemies)) {
+                for (WeightedEnemy weightedEnemy : weightedEnemies) {
+                    if (weightedEnemy.getEnemyId() != null) {
+                        Enemy enemy = enemyMapper.selectById(weightedEnemy.getEnemyId());
+                        if (enemy != null) {
+                            Map<String, Object> enemyInfo = new HashMap<>();
+                            enemyInfo.put("id", enemy.getId());
+                            enemyInfo.put("name", enemy.getName());
+                            enemyInfo.put("difficulty", enemy.getDifficulty());
+                            enemyInfo.put("weight", weightedEnemy.getWeight());
+                            result.add(enemyInfo);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 3. 如果没有从敌人池获取到，根据难度查询所有可能的敌人
+        if (result.isEmpty()) {
+            String normalizedDifficulty = normalizeDifficulty(difficulty);
+            if (normalizedDifficulty != null) {
+                LambdaQueryWrapper<Enemy> wrapper = new LambdaQueryWrapper<>();
+                wrapper.eq(Enemy::getDifficulty, normalizedDifficulty);
+                List<Enemy> candidates = enemyMapper.selectList(wrapper);
+                
+                for (Enemy enemy : candidates) {
+                    Map<String, Object> enemyInfo = new HashMap<>();
+                    enemyInfo.put("id", enemy.getId());
+                    enemyInfo.put("name", enemy.getName());
+                    enemyInfo.put("difficulty", enemy.getDifficulty());
+                    enemyInfo.put("weight", 1);  // 默认权重为1
+                    result.add(enemyInfo);
+                }
+            }
+        }
+        
+        return result;
     }
 
     /**
@@ -292,6 +407,73 @@ public class EnemyService {
         public int getWeight() {
             return weight;
         }
+    }
+
+    /**
+     * 将CardCharacter实体列表转换为前端期望的EnemyCard格式
+     */
+    private List<Map<String, Object>> convertToEnemyCardCharacterDTOList(List<CardCharacter> cardCharacters) {
+        return cardCharacters.stream()
+                .map(this::convertToEnemyCardCharacterDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 将CardCharacter实体转换为前端期望的EnemyCard格式
+     * 前端期望格式：
+     * {
+     *   name: string,
+     *   type: "character",
+     *   attack: number,
+     *   health: number,
+     *   effect?: string
+     * }
+     */
+    private Map<String, Object> convertToEnemyCardCharacterDTO(CardCharacter cardCharacter) {
+        Map<String, Object> dto = new HashMap<>();
+        
+        // 基础字段
+        dto.put("name", cardCharacter.getName() != null ? cardCharacter.getName() : "");
+        dto.put("type", "character");  // 标记为角色卡
+        
+        // 基础属性
+        dto.put("attack", cardCharacter.getBaseAttack() != null ? cardCharacter.getBaseAttack() : 0);
+        dto.put("health", cardCharacter.getBaseHp() != null ? cardCharacter.getBaseHp() : 0);
+        
+        // 行动点消耗
+        if (cardCharacter.getActionPointCost() != null) {
+            dto.put("actionPointCost", cardCharacter.getActionPointCost());
+        }
+        
+        // 稀有度
+        if (StringUtils.hasText(cardCharacter.getRarity())) {
+            dto.put("rarity", cardCharacter.getRarity());
+        }
+        
+        // 职业和阵营
+        if (StringUtils.hasText(cardCharacter.getClassType())) {
+            dto.put("class", cardCharacter.getClassType());
+        }
+        if (StringUtils.hasText(cardCharacter.getFaction())) {
+            dto.put("faction", cardCharacter.getFaction());
+        }
+        
+        // 特性（从 traits JSON 中提取）
+        if (StringUtils.hasText(cardCharacter.getTraits())) {
+            try {
+                dto.put("traits", cardCharacter.getTraits());
+                dto.put("effect", cardCharacter.getTraits());  // 也作为 effect 字段
+            } catch (Exception e) {
+                // 解析失败，忽略
+            }
+        }
+        
+        // 背景故事
+        if (StringUtils.hasText(cardCharacter.getLore())) {
+            dto.put("lore", cardCharacter.getLore());
+        }
+        
+        return dto;
     }
 
     /**

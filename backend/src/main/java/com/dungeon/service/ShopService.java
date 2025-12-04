@@ -29,9 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
-import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.Random;
 import java.util.stream.Collectors;
 
@@ -343,8 +341,8 @@ public class ShopService {
 
     /**
      * 添加角色到用户（卡牌角色）
-     * 购买角色后，如果已有该角色则增加数量，否则创建新记录
-     * 这样便于后续实现升星功能（消耗数量来升星）
+     * 购买角色后，只添加到1星角色的数量上
+     * 这样确保购买的角色不会添加到更高星级的角色数量上
      */
     private void addCardCharacterToUser(Long userId, Long cardCharacterId, Integer quantity) {
         // 查询角色模板
@@ -353,18 +351,19 @@ public class ShopService {
             throw new RuntimeException("角色模板不存在");
         }
 
-        // 查询是否已有该角色
+        // 查询是否已有该角色的1星记录（购买时只添加到1星角色）
         QueryWrapper<UserCardCharacter> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userId)
-               .eq("card_character_id", cardCharacterId);
+               .eq("card_character_id", cardCharacterId)
+               .eq("current_star_level", 1);  // 只查询1星角色
         UserCardCharacter existing = userCardCharacterMapper.selectOne(wrapper);
 
         if (existing != null) {
-            // 如果已有该角色，增加数量
+            // 如果已有1星角色，增加数量
             existing.setQuantity(existing.getQuantity() != null ? existing.getQuantity() + quantity : quantity);
             userCardCharacterMapper.updateById(existing);
         } else {
-            // 如果没有，创建新记录
+            // 如果没有，创建新的1星角色记录
             UserCardCharacter userCardCharacter = new UserCardCharacter();
             userCardCharacter.setUserId(userId);
             userCardCharacter.setCardCharacterId(cardCharacterId);
@@ -373,7 +372,7 @@ public class ShopService {
             userCardCharacter.setCurrentArmor(0);
             userCardCharacter.setIsDeployed(false);
             userCardCharacter.setDeployedRound(0);
-            userCardCharacter.setCurrentStarLevel(template.getBaseStarLevel() != null ? template.getBaseStarLevel() : 1);
+            userCardCharacter.setCurrentStarLevel(1);  // 购买的角色始终是1星
             userCardCharacter.setQuantity(quantity);
             userCardCharacterMapper.insert(userCardCharacter);
         }
