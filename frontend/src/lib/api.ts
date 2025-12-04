@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios'
 
 // API 配置
 // 注意：后端 Controller 没有 /api 前缀，所以这里不使用 /api
-const API_BASE_URL = 'http://localhost:8080'
+const API_BASE_URL = 'http://26.83.153.194:8080'
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
@@ -268,6 +268,14 @@ export const userCardCharacterApi = {
   // 获取全部角色卡
   async getAllCardCharacters() {
     return await apiClient.get('/user-card-characters')
+  },
+  
+  // 升星角色卡（消耗3个卡牌，星级+1）
+  async upgradeStarLevel(userCardCharacterId: string | number, newStarLevel: number, newQuantity: number) {
+    return await apiClient.put(`/user-card-characters/${userCardCharacterId}`, {
+      currentStarLevel: newStarLevel,
+      quantity: newQuantity
+    })
   }
 }
 
