@@ -2,8 +2,11 @@ package com.dungeon.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dungeon.dto.CardCharacterDTO;
+import com.dungeon.dto.CardCharacterTraitDTO;
 import com.dungeon.entity.CardCharacter;
+import com.dungeon.entity.CardCharacterTrait;
 import com.dungeon.mapper.CardCharacterMapper;
+import com.dungeon.mapper.CardCharacterTraitMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
@@ -24,6 +27,9 @@ public class CardCharacterService {
 
     @Autowired
     private CardCharacterMapper cardCharacterMapper;
+
+    @Autowired
+    private CardCharacterTraitMapper cardCharacterTraitMapper;
 
     /**
      * 查询全部卡牌角色模板
@@ -95,6 +101,36 @@ public class CardCharacterService {
      */
     public void delete(Long id) {
         cardCharacterMapper.deleteById(id);
+    }
+
+    /**
+     * 根据卡牌角色ID查询特性列表
+     * @param cardCharacterId 卡牌角色ID
+     * @return 特性列表
+     */
+    public List<CardCharacterTraitDTO> getTraitsByCardCharacterId(Long cardCharacterId) {
+        if (cardCharacterId == null) {
+            return List.of();
+        }
+        
+        // 使用LambdaQueryWrapper查询
+        LambdaQueryWrapper<CardCharacterTrait> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CardCharacterTrait::getCardCharacterId, cardCharacterId);
+        List<CardCharacterTrait> traits = cardCharacterTraitMapper.selectList(wrapper);
+        
+        // 转换为DTO
+        return traits.stream()
+                .map(this::toTraitDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 将CardCharacterTrait实体转换为DTO
+     */
+    private CardCharacterTraitDTO toTraitDTO(CardCharacterTrait entity) {
+        CardCharacterTraitDTO dto = new CardCharacterTraitDTO();
+        BeanUtils.copyProperties(entity, dto);
+        return dto;
     }
 
     private CardCharacterDTO toDTO(CardCharacter entity) {

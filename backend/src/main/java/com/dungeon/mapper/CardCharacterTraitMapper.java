@@ -18,6 +18,6 @@ public interface CardCharacterTraitMapper extends BaseMapper<CardCharacterTrait>
      * @param cardCharacterId 卡牌角色ID
      * @return 特性列表
      */
-    List<CardCharacterTrait> selectByCardCharacterId(@Param("cardCharacterId") String cardCharacterId);
+    List<CardCharacterTrait> selectByCardCharacterId(@Param("cardCharacterId") Long cardCharacterId);
 }
 

@@ -2,6 +2,7 @@ package com.dungeon.controller;
 
 import com.dungeon.common.Result;
 import com.dungeon.dto.CardCharacterDTO;
+import com.dungeon.dto.CardCharacterTraitDTO;
 import com.dungeon.service.CardCharacterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -80,6 +81,33 @@ public class CardCharacterController {
     public Result<Void> delete(@PathVariable Long id) {
         cardCharacterService.delete(id);
         return Result.success("删除成功", null);
+    }
+
+    /**
+     * 获取卡牌角色的特性列表
+     * GET /api/card-characters/{id}/traits
+     * 
+     * 示例：
+     * GET /api/card-characters/1/traits
+     * 
+     * @param id 卡牌角色ID
+     * @return 特性列表，包含effectPayload和scalingPayload
+     */
+    @GetMapping("/{id}/traits")
+    public Result<List<CardCharacterTraitDTO>> getCardCharacterTraits(@PathVariable Long id) {
+        try {
+            // 先检查卡牌角色是否存在
+            CardCharacterDTO cardCharacter = cardCharacterService.getById(id);
+            if (cardCharacter == null) {
+                return Result.error(404, "卡牌角色不存在");
+            }
+            
+            // 查询特性列表
+            List<CardCharacterTraitDTO> traits = cardCharacterService.getTraitsByCardCharacterId(id);
+            return Result.success(traits);
+        } catch (Exception e) {
+            return Result.error("获取卡牌角色特性失败: " + e.getMessage());
+        }
     }
 }
 
