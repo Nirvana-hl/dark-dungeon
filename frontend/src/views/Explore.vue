@@ -193,36 +193,6 @@
       </aside>
     </div>
 
-    <!-- 奖励弹窗 -->
-    <Transition name="modal">
-      <div v-if="rewardOpen" class="reward-modal-overlay" @click.self="rewardOpen = false">
-        <div class="reward-modal">
-          <div class="modal-header">
-            <div class="modal-icon">🎁</div>
-            <h3 class="modal-title">关卡奖励</h3>
-          </div>
-          <div class="modal-content">
-            <p class="reward-message">恭喜通关第 {{ rewardLevel }} 关！</p>
-            <div class="reward-list">
-              <div class="reward-item">
-                <span class="reward-icon">🪙</span>
-                <span class="reward-label">金币</span>
-                <span class="reward-value">+{{ rewardGold }}</span>
-              </div>
-              <div class="reward-item">
-                <span class="reward-icon">⭐</span>
-                <span class="reward-label">经验</span>
-                <span class="reward-value">+{{ rewardExp }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn-secondary" @click="rewardOpen = false">稍后领取</button>
-            <button class="btn-primary" @click="claimReward">立即领取</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -232,6 +202,7 @@ import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useWalletStore } from '@/stores/wallet'
 import { useCharactersStore } from '@/stores/characters'
 import { useGameStore } from '@/stores/game'
+import { stageProgressApi } from '@/lib/api'
 
 type Stage = {
   level: number
@@ -257,21 +228,60 @@ const claimedLevels = ref<number[]>([])
 
 async function loadProgress() {
   try {
-    passedLevels.value = [1, 2, 3]
-    claimedLevels.value = [1, 2]
-  } catch {}
+    // 从后端加载关卡进度
+    const response = await stageProgressApi.getAllProgress()
+    if (response.data.code === 200 && response.data.data) {
+      const progressList = response.data.data as Array<{ stageNumber: number; isPassed: boolean }>
+      // 提取已通过的关卡编号
+      passedLevels.value = progressList
+        .filter(p => p.isPassed)
+        .map(p => p.stageNumber)
+        .sort((a, b) => a - b)
+      
+      log(`已加载关卡进度：${passedLevels.value.length} 个关卡已通过`)
+      
+      // 如果没有进度记录，确保第1关是解锁的（但未通过）
+      if (passedLevels.value.length === 0) {
+        log('首次进入，初始化第1关')
+        currentLevel.value = 1
+      } else {
+        // 设置当前关卡为最后一个已通过的关卡的下一个，或第1关
+        const maxPassed = Math.max(...passedLevels.value)
+        currentLevel.value = Math.min(maxPassed + 1, maxLevel)
+      }
+    } else {
+      log('加载关卡进度失败，使用默认值')
+      currentLevel.value = 1
+    }
+  } catch (error) {
+    console.error('加载关卡进度失败:', error)
+    log('加载关卡进度失败，使用默认值')
+    // 如果加载失败，默认从第1关开始
+    currentLevel.value = 1
+  }
 }
 
 async function upsertProgress(level: number, changes: Partial<{ passed: boolean; claimed: boolean }>) {
   try {
     if (changes.passed && !passedLevels.value.includes(level)) {
-      passedLevels.value.push(level)
+      // 调用后端API保存关卡进度
+      try {
+        await stageProgressApi.passStage(level)
+        passedLevels.value.push(level)
+        passedLevels.value.sort((a, b) => a - b)
+        log(`关卡 ${level} 已标记为通过`)
+      } catch (error) {
+        console.error('保存关卡进度失败:', error)
+        // 即使后端保存失败，也在本地标记，避免用户重复通关
+        passedLevels.value.push(level)
+        passedLevels.value.sort((a, b) => a - b)
+      }
     }
     if (changes.claimed && !claimedLevels.value.includes(level)) {
       claimedLevels.value.push(level)
     }
   } catch (error) {
-    console.log('Progress updated locally')
+    console.error('更新进度失败:', error)
   }
 }
 
@@ -357,10 +367,6 @@ function stopBattleLog() {
   if (battleTimer) { clearInterval(battleTimer); battleTimer = null }
 }
 
-const rewardOpen = ref(false)
-const rewardGold = ref(0)
-const rewardExp = ref(0)
-const rewardLevel = ref(0)
 
 async function startStage() {
   if (inBattle.value) return
@@ -399,56 +405,6 @@ async function completeStage() {
   }
   
   log(`胜利：第 ${currentLevel.value} 关 - ${stage.value.name}`)
-  const { gold, exp } = getRewards(stage.value.difficulty)
-  rewardGold.value = gold
-  rewardExp.value = exp
-  rewardLevel.value = currentLevel.value
-  rewardOpen.value = true
-}
-
-async function claimReward() {
-  const lvl = rewardLevel.value
-  rewardOpen.value = false
-  
-  try {
-    if (wallet && wallet.add) {
-      await wallet.add(rewardGold.value)
-    }
-    log(`奖励领取成功：金币 +${rewardGold.value}`)
-  } catch (error) {
-    log('金币奖励发放失败，使用本地记录')
-  }
-  
-  const selected = chars.selected
-  if (selected) {
-    const prevExp = Number(((selected as any).attrs?.exp) ?? 0)
-    const totalExp = prevExp + rewardExp.value
-    const levelUp = Math.floor(totalExp / 100)
-    const newExp = totalExp % 100
-    const prevLevel = Number(((selected as any).attrs?.level) ?? 1)
-    const newLevel = Math.max(1, prevLevel + levelUp)
-    try {
-      const selectedAttrs = (selected as any).attrs
-      if (selectedAttrs) {
-        selectedAttrs.exp = newExp
-        selectedAttrs.level = newLevel
-      }
-      log(`角色经验 +${rewardExp.value}${levelUp > 0 ? `，升级 +${levelUp}` : ''}`)
-    } catch (error) {
-      log(`角色经验发放失败：${error}`)
-    }
-  } else {
-    log('未选择角色，经验未发放。')
-  }
-  
-  try {
-    if (!claimedLevels.value.includes(lvl)) {
-      claimedLevels.value.push(lvl)
-      await upsertProgress(lvl, { claimed: true })
-    }
-  } catch (error) {
-    log('进度更新失败，使用本地存储')
-  }
 }
 
 function nextStage() {
@@ -516,25 +472,14 @@ onMounted(async () => {
     log('数据加载失败，使用本地模拟数据')
   }
   
+  // 处理战斗胜利返回的情况（进度已在 Game.vue 中保存，这里只需要刷新显示）
   const victory = route.query.victory === '1'
   const lvl = Number(route.query.level ?? 0)
   if (victory && lvl > 0) {
     currentLevel.value = lvl
-    if (!passedLevels.value.includes(lvl)) {
-      passedLevels.value.push(lvl)
-      try {
-        await upsertProgress(lvl, { passed: true })
-      } catch (error) {
-        log('进度更新失败，使用本地存储')
-      }
-    }
-    const diff = stageInfo(lvl).difficulty
-    const { gold, exp } = getRewards(diff)
-    rewardGold.value = gold
-    rewardExp.value = exp
-    rewardLevel.value = lvl
-    rewardOpen.value = true
-    log(`战斗胜利返回：第 ${lvl} 关奖励待领取`)
+    // 重新加载进度以确保显示最新状态
+    await loadProgress()
+    log(`战斗胜利返回：第 ${lvl} 关`)
   }
 })
 
@@ -1167,115 +1112,6 @@ onUnmounted(() => stopBattleLog())
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* 奖励弹窗 */
-.reward-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(5px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 20px;
-}
-
-.reward-modal {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 2px solid rgba(212, 175, 55, 0.5);
-  border-radius: 20px;
-  padding: 32px;
-  max-width: 500px;
-  width: 100%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-.modal-icon {
-  font-size: 4rem;
-  margin-bottom: 12px;
-}
-
-.modal-title {
-  font-size: 1.75rem;
-  font-weight: bold;
-  color: #d4af37;
-  margin: 0;
-}
-
-.modal-content {
-  margin-bottom: 24px;
-}
-
-.reward-message {
-  text-align: center;
-  font-size: 1.1rem;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 20px;
-}
-
-.reward-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.reward-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: rgba(212, 175, 55, 0.1);
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  border-radius: 12px;
-}
-
-.reward-icon {
-  font-size: 1.5rem;
-}
-
-.reward-label {
-  flex: 1;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.reward-value {
-  font-size: 1.25rem;
-  font-weight: bold;
-  color: #d4af37;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-}
-
-/* 过渡动画 */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.modal-enter-active .reward-modal,
-.modal-leave-active .reward-modal {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-from .reward-modal,
-.modal-leave-to .reward-modal {
-  transform: scale(0.9) translateY(-20px);
-  opacity: 0;
-}
 
 /* 响应式设计 */
 @media (max-width: 1200px) {

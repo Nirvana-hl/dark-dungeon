@@ -24,11 +24,19 @@ export const useCampStore = defineStore('camp', () => {
   // 计算属性
   const playerCharacter = computed(() => {
     const result = campData.value?.userPlayerCharacter || null
-    console.log('[CampStore] playerCharacter computed 被调用:', {
-      hasCampData: !!campData.value,
-      hasUserPlayerCharacter: !!campData.value?.userPlayerCharacter,
-      result: result ? { id: result.id, name: result.playerCharacterName } : null
-    })
+    // 只在调试时输出日志，避免过多日志
+    if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
+      console.log('[CampStore] playerCharacter computed 被调用:', {
+        hasCampData: !!campData.value,
+        hasUserPlayerCharacter: !!campData.value?.userPlayerCharacter,
+        result: result ? { 
+          id: result.id, 
+          name: result.playerCharacterName,
+          currentHp: result.currentHp,
+          maxHp: result.maxHp
+        } : null
+      })
+    }
     return result
   })
   const availableCards = computed(() => campData.value?.userCards || [])

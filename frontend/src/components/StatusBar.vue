@@ -2,13 +2,16 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGameStore } from '@/stores/game'
+import { useCampStore } from '@/stores/camp'
 
 const game = useGameStore()
+const campStore = useCampStore()
 const { heroHP, mana, manaMax, turn } = storeToRefs(game)
 
-const heroHPMax = 100
+// 从营地数据获取最大血量，如果没有则使用默认值100
+const heroHPMax = computed(() => campStore.playerCharacter?.maxHp || 100)
 
-const healthPct = computed(() => Math.max(0, Math.min(100, Math.round((heroHP.value / heroHPMax) * 100))))
+const healthPct = computed(() => Math.max(0, Math.min(100, Math.round((heroHP.value / heroHPMax.value) * 100))))
 
 // 获取HP颜色
 const healthColor = computed(() => {

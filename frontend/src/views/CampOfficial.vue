@@ -761,7 +761,7 @@ const cardFilter = ref({
 // 配置数据
 const functionTabs = ref([
   { id: 'cards', name: '卡组管理', icon: 'fas fa-layer-group', count: 0 },
-  { id: 'inventory', name: '背包道具', icon: 'fas fa-backpack', count: 0 },
+  { id: 'inventory', name: '背包道具', icon: 'fas fa-shopping-bag', count: 0 },
   { id: 'shop', name: '商城&货币', icon: 'fas fa-store', count: 0 },
   { id: 'events', name: '任务事件', icon: 'fas fa-scroll', count: 0 },
   { id: 'ai', name: 'AI助手', icon: 'fas fa-robot', count: 0 }
@@ -785,7 +785,6 @@ const rarities = ref([
 const inventoryCategories = ref([
   { type: 'consumable', name: '消耗品', icon: 'fas fa-flask' },
   { type: 'material', name: '材料', icon: 'fas fa-gem' },
-  { type: 'equipment', name: '装备', icon: 'fas fa-shield-alt' },
   { type: 'special', name: '特殊', icon: 'fas fa-star' }
 ])
 

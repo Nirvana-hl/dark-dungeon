@@ -144,9 +144,9 @@ export const gameApi = {
     return await apiClient.get('/card/user-cards')
   },
   
-  // 获取敌方卡牌
+  // 获取敌方卡牌（从后端获取敌人的卡牌列表，包括法术、装备和角色卡）
   async getEnemyCards(stageNum: number, difficulty: string) {
-    return await apiClient.get(`/card/enemy-cards?stage=${stageNum}&difficulty=${difficulty}`)
+    return await apiClient.get(`/game/enemy-cards?stage=${stageNum}&difficulty=${difficulty}`)
   }
 }
 
@@ -270,12 +270,10 @@ export const userCardCharacterApi = {
     return await apiClient.get('/user-card-characters')
   },
   
-  // 升星角色卡（消耗3个卡牌，星级+1）
-  async upgradeStarLevel(userCardCharacterId: string | number, newStarLevel: number, newQuantity: number) {
-    return await apiClient.put(`/user-card-characters/${userCardCharacterId}`, {
-      currentStarLevel: newStarLevel,
-      quantity: newQuantity
-    })
+  // 升星角色卡（消耗3个卡牌，星级+1，并应用面板提升）
+  // 使用专门的升星接口，会自动应用 starUpgradePayload 中的属性增幅
+  async upgradeStarLevel(userCardCharacterId: string | number) {
+    return await apiClient.post(`/user-card-characters/${userCardCharacterId}/upgrade-star`)
   }
 }
 
@@ -442,6 +440,45 @@ export const API_ENDPOINTS = {
     ACHIEVEMENT_STATS: '/statistics/achievement-stats',
     RECENT_ACTIVITY: '/statistics/recent-activity',
   },
+  // 关卡进度相关
+  STAGE_PROGRESS: {
+    LIST: '/user-stage-progress',
+    GET: (stageNumber: number) => `/user-stage-progress/${stageNumber}`,
+    PASS: (stageNumber: number) => `/user-stage-progress/${stageNumber}/pass`,
+    ATTEMPT: (stageNumber: number) => `/user-stage-progress/${stageNumber}/attempt`,
+    STATS: '/user-stage-progress/stats',
+  },
 } as const
 
 export type ApiEndpointKeys = keyof typeof API_ENDPOINTS
+
+// 关卡进度相关 API 方法
+export const stageProgressApi = {
+  // 获取所有关卡进度
+  async getAllProgress() {
+    return await apiClient.get(API_ENDPOINTS.STAGE_PROGRESS.LIST)
+  },
+  
+  // 获取单个关卡进度
+  async getProgress(stageNumber: number) {
+    return await apiClient.get(API_ENDPOINTS.STAGE_PROGRESS.GET(stageNumber))
+  },
+  
+  // 通过关卡
+  async passStage(stageNumber: number, chapterNumber?: number) {
+    const params = chapterNumber ? { chapterNumber } : {}
+    return await apiClient.post(API_ENDPOINTS.STAGE_PROGRESS.PASS(stageNumber), null, { params })
+  },
+  
+  // 记录关卡尝试（失败时调用）
+  async recordAttempt(stageNumber: number, result: 'victory' | 'defeat', chapterNumber?: number) {
+    const params: any = { result }
+    if (chapterNumber) params.chapterNumber = chapterNumber
+    return await apiClient.post(API_ENDPOINTS.STAGE_PROGRESS.ATTEMPT(stageNumber), null, { params })
+  },
+  
+  // 获取统计信息
+  async getStats() {
+    return await apiClient.get(API_ENDPOINTS.STAGE_PROGRESS.STATS)
+  },
+}

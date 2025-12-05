@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGameStore } from '@/stores/game'
+import { useCampStore } from '@/stores/camp'
 import { ref } from 'vue'
 
 const game = useGameStore()
-const { heroHP, enemyHP, board, enemyBoard, turn, logs, mana, manaMax } = storeToRefs(game)
+const campStore = useCampStore()
+const { heroHP, enemyHP, board, enemyBoard, enemyHand, enemyDeck, enemyMana, enemyManaMax, enemyDeckExhausted, hasEnemyPlayedCards, turn, logs, mana, manaMax, hand, deck, deckExhausted } = storeToRefs(game)
 
 const props = defineProps<{
   draggingEquipCard: import('@/stores/game').Card | null
@@ -15,10 +17,11 @@ const emit = defineEmits<{
   (e: 'equip-to-minion', payload: { minionId: string }): void
 }>()
 
-const heroHPMax = 100
+// 从营地数据获取最大血量，如果没有则使用默认值100
+const heroHPMax = computed(() => campStore.playerCharacter?.maxHp || 100)
 const enemyHPMax = 100
 
-const heroHPPercent = computed(() => Math.max(0, Math.min(100, (heroHP.value / heroHPMax) * 100)))
+const heroHPPercent = computed(() => Math.max(0, Math.min(100, (heroHP.value / heroHPMax.value) * 100)))
 const enemyHPPercent = computed(() => Math.max(0, Math.min(100, (enemyHP.value / enemyHPMax) * 100)))
 
 // 简易图标映射（如未引入字体图标，将显示 emoji）
@@ -55,34 +58,50 @@ function getHPColorClass(percent: number) {
     <!-- 左侧：战斗区域 -->
     <div class="battle-arena">
       <!-- 敌方区域 -->
-      <div class="enemy-zone">
+      <div class="enemy-zone" :class="{ 'enemy-turn-active': turn === 'opponent' }">
         <div class="zone-header">
           <div class="zone-title">
             <span class="title-icon">👹</span>
             <span class="title-text">敌方</span>
           </div>
-          <div class="hp-display enemy-hp">
-            <div class="hp-bar-container">
-              <div class="hp-bar-bg">
-                <div 
-                  class="hp-bar-fill"
-                  :class="getHPColorClass(enemyHPPercent)"
-                  :style="{ width: enemyHPPercent + '%' }"
-                ></div>
+          <div class="info-row">
+            <div class="hp-display enemy-hp">
+              <div class="hp-bar-container">
+                <div class="hp-bar-bg">
+                  <div 
+                    class="hp-bar-fill"
+                    :class="getHPColorClass(enemyHPPercent)"
+                    :style="{ width: enemyHPPercent + '%' }"
+                  ></div>
+                </div>
+                <div class="hp-text">
+                  <span class="hp-value">{{ enemyHP }}</span>
+                  <span class="hp-separator">/</span>
+                  <span class="hp-max">{{ enemyHPMax }}</span>
+                </div>
               </div>
-              <div class="hp-text">
-                <span class="hp-value">{{ enemyHP }}</span>
-                <span class="hp-separator">/</span>
-                <span class="hp-max">{{ enemyHPMax }}</span>
+            </div>
+            <div class="stats">
+              <div class="stat-badge" title="敌人法力值">
+                <span class="stat-icon">💎</span>
+                <span class="stat-value">{{ enemyMana }}/{{ enemyManaMax }}</span>
+              </div>
+              <div class="stat-badge" title="敌人手牌">
+                <span class="stat-icon">🃏</span>
+                <span class="stat-value">{{ enemyHand.length }}</span>
+              </div>
+              <div class="stat-badge" title="敌人牌库">
+                <span class="stat-icon">📚</span>
+                <span class="stat-value">{{ enemyDeck.length }}</span>
+              </div>
+              <div v-if="enemyDeckExhausted" class="stat-badge exhausted" title="敌人牌库已耗尽">
+                <span class="stat-icon">⚠️</span>
+                <span class="stat-value">耗尽</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="turn-indicator" :class="{ 'enemy-turn': turn === 'opponent' }">
-          <span class="turn-icon">{{ turn === 'opponent' ? '⚡' : '⏸️' }}</span>
-          <span class="turn-text">{{ turn === 'opponent' ? '敌方回合' : '等待中' }}</span>
-        </div>
 
         <div class="characters-grid">
           <div 
@@ -92,9 +111,15 @@ function getHPColorClass(percent: number) {
           >
             <div class="character-header">
               <div class="character-name">{{ e.name }}</div>
-              <div v-if="e.shield && e.shield > 0" class="shield-badge">
-                <span class="shield-icon">🛡️</span>
-                <span class="shield-value">{{ e.shield }}</span>
+              <div class="header-badges">
+                <div v-if="e.shield && e.shield > 0" class="shield-badge">
+                  <span class="shield-icon">🛡️</span>
+                  <span class="shield-value">{{ e.shield }}</span>
+                </div>
+                <div v-if="e.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
+                  <span class="status-icon">😴</span>
+                  <span class="status-text">准备中</span>
+                </div>
               </div>
             </div>
             
@@ -124,9 +149,11 @@ function getHPColorClass(percent: number) {
           </div>
           
           <div v-if="enemyBoard.length === 0" class="empty-zone">
-            <span class="empty-icon">💀</span>
-            <span class="empty-text">敌方角色已被击败</span>
-            <span class="empty-hint">可直接对敌方造成伤害</span>
+            <span v-if="!hasEnemyPlayedCards" class="empty-icon">⏳</span>
+            <span v-else class="empty-icon">💀</span>
+            <span v-if="!hasEnemyPlayedCards" class="empty-text">等待敌人出牌</span>
+            <span v-else class="empty-text">敌方角色已被击败</span>
+            <span v-if="hasEnemyPlayedCards" class="empty-hint">可直接对敌方造成伤害</span>
           </div>
         </div>
       </div>
@@ -139,34 +166,50 @@ function getHPColorClass(percent: number) {
       </div>
 
       <!-- 我方区域 -->
-      <div class="ally-zone">
+      <div class="ally-zone" :class="{ 'ally-turn-active': turn === 'player' }">
         <div class="zone-header">
           <div class="zone-title">
             <span class="title-icon">⚔️</span>
             <span class="title-text">我方</span>
           </div>
-          <div class="hp-display ally-hp">
-            <div class="hp-bar-container">
-              <div class="hp-bar-bg">
-                <div 
-                  class="hp-bar-fill"
-                  :class="getHPColorClass(heroHPPercent)"
-                  :style="{ width: heroHPPercent + '%' }"
-                ></div>
+          <div class="info-row">
+            <div class="hp-display ally-hp">
+              <div class="hp-bar-container">
+                <div class="hp-bar-bg">
+                  <div 
+                    class="hp-bar-fill"
+                    :class="getHPColorClass(heroHPPercent)"
+                    :style="{ width: heroHPPercent + '%' }"
+                  ></div>
+                </div>
+                <div class="hp-text">
+                  <span class="hp-value">{{ heroHP }}</span>
+                  <span class="hp-separator">/</span>
+                  <span class="hp-max">{{ heroHPMax }}</span>
+                </div>
               </div>
-              <div class="hp-text">
-                <span class="hp-value">{{ heroHP }}</span>
-                <span class="hp-separator">/</span>
-                <span class="hp-max">{{ heroHPMax }}</span>
+            </div>
+            <div class="stats">
+              <div class="stat-badge" title="我方法力值">
+                <span class="stat-icon">💎</span>
+                <span class="stat-value">{{ mana }}/{{ manaMax }}</span>
+              </div>
+              <div class="stat-badge" title="我方手牌">
+                <span class="stat-icon">🃏</span>
+                <span class="stat-value">{{ hand.length }}</span>
+              </div>
+              <div class="stat-badge" title="我方牌库">
+                <span class="stat-icon">📚</span>
+                <span class="stat-value">{{ deck.length }}</span>
+              </div>
+              <div v-if="deckExhausted" class="stat-badge exhausted" title="我方牌库已耗尽">
+                <span class="stat-icon">⚠️</span>
+                <span class="stat-value">耗尽</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="turn-indicator" :class="{ 'ally-turn': turn === 'player' }">
-          <span class="turn-icon">{{ turn === 'player' ? '⚡' : '⏸️' }}</span>
-          <span class="turn-text">{{ turn === 'player' ? '你的回合' : '等待中' }}</span>
-        </div>
 
         <div class="characters-grid">
           <div 
@@ -178,13 +221,19 @@ function getHPColorClass(percent: number) {
           >
             <div class="character-header">
               <div class="character-name">{{ m.name }}</div>
-              <div v-if="m.shield && m.shield > 0" class="shield-badge">
-                <span class="shield-icon">🛡️</span>
-                <span class="shield-value">{{ m.shield }}</span>
-              </div>
-              <div v-if="m.stars" class="star-badge">
-                <span class="star-icon">⭐</span>
-                <span class="star-value">{{ m.stars }}</span>
+              <div class="header-badges">
+                <div v-if="m.shield && m.shield > 0" class="shield-badge">
+                  <span class="shield-icon">🛡️</span>
+                  <span class="shield-value">{{ m.shield }}</span>
+                </div>
+                <div v-if="m.stars" class="star-badge">
+                  <span class="star-icon">⭐</span>
+                  <span class="star-value">{{ m.stars }}</span>
+                </div>
+                <div v-if="m.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
+                  <span class="status-icon">😴</span>
+                  <span class="status-text">准备中</span>
+                </div>
               </div>
             </div>
             
@@ -289,15 +338,77 @@ function getHPColorClass(percent: number) {
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+.enemy-zone.enemy-turn-active {
+  border-color: rgba(239, 68, 68, 0.8);
+  border-width: 3px;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.4), inset 0 0 30px rgba(239, 68, 68, 0.1);
+  animation: zone-highlight 2s ease-in-out infinite;
+}
+
 .ally-zone {
   border-color: rgba(59, 130, 246, 0.3);
 }
 
+.ally-zone.ally-turn-active {
+  border-color: rgba(59, 130, 246, 0.8);
+  border-width: 3px;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4), inset 0 0 30px rgba(59, 130, 246, 0.1);
+  animation: zone-highlight 2s ease-in-out infinite;
+}
+
+@keyframes zone-highlight {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4), inset 0 0 30px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6), inset 0 0 40px rgba(59, 130, 246, 0.2);
+  }
+}
+
 .zone-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stats {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stat-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat-badge.exhausted {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.stat-icon {
+  font-size: 0.875rem;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: #e8e8e8;
 }
 
 .zone-title {
@@ -405,47 +516,6 @@ function getHPColorClass(percent: number) {
   color: #60a5fa;
 }
 
-/* 回合指示器 */
-.turn-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(71, 85, 105, 0.3);
-  border-radius: 8px;
-  margin-bottom: 16px;
-  font-size: 0.875rem;
-  color: #94a3b8;
-  transition: all 0.3s ease;
-}
-
-.turn-indicator.enemy-turn {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #f87171;
-  animation: pulse-turn 2s infinite;
-}
-
-.turn-indicator.ally-turn {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.4);
-  color: #60a5fa;
-  animation: pulse-turn 2s infinite;
-}
-
-@keyframes pulse-turn {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
-}
-
-.turn-icon {
-  font-size: 1rem;
-}
-
-.turn-text {
-  font-weight: 600;
-}
 
 /* 角色网格 */
 .characters-grid {
@@ -530,6 +600,13 @@ function getHPColorClass(percent: number) {
   flex-wrap: wrap;
 }
 
+.header-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 .character-name {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -541,7 +618,7 @@ function getHPColorClass(percent: number) {
   white-space: nowrap;
 }
 
-.shield-badge, .star-badge {
+.shield-badge, .star-badge, .status-badge {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -557,13 +634,23 @@ function getHPColorClass(percent: number) {
   border-color: rgba(139, 92, 246, 0.4);
 }
 
-.shield-icon, .star-icon {
+.status-badge.summoning-sickness {
+  background: rgba(107, 114, 128, 0.3);
+  border-color: rgba(107, 114, 128, 0.5);
+  opacity: 0.8;
+}
+
+.shield-icon, .star-icon, .status-icon {
   font-size: 0.75rem;
 }
 
-.shield-value, .star-value {
+.shield-value, .star-value, .status-text {
   font-weight: 700;
   color: #e2e8f0;
+}
+
+.status-text {
+  font-size: 0.625rem;
 }
 
 .character-avatar {

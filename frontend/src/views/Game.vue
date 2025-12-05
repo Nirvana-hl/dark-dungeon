@@ -6,6 +6,11 @@ import CardItem from '@/components/CardItem.vue'
 import { useGameStore } from '@/stores/game'
 import type { Card } from '@/stores/game'
 import { storeToRefs } from 'pinia'
+import { useWalletStore } from '@/stores/wallet'
+import { useCampStore } from '@/stores/camp'
+import apiClient from '@/lib/api'
+import { CurrencyType } from '@/types'
+import { stageProgressApi } from '@/lib/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,12 +20,29 @@ const chapter = computed(() => (level.value ? Math.floor((level.value - 1) / 5) 
 
 const game = useGameStore()
 const { hand, canPlay, winner, mana, manaMax, deckExhausted, deck } = storeToRefs(game)
+const enemyDifficulty = computed(() => game.enemyDifficulty)
 
 const isEndingTurn = ref(false)
 const showExitConfirm = ref(false)
 const draggingEquipCard = ref<Card | null>(null)
 const selectedEquipCard = ref<Card | null>(null)
 const remainingDeck = computed(() => deck.value.length)
+
+// 结算画面相关
+const showVictoryModal = ref(false)
+const showDefeatModal = ref(false)
+const victoryReward = ref({
+  gold: 0,
+  exp: 0,
+  stress: 0
+})
+const defeatInfo = ref({
+  stressIncrease: 0,
+  hpRestored: 0,
+  maxHp: 0
+})
+const playerCharacter = computed(() => useCampStore().playerCharacter)
+const wallet = useWalletStore()
 
 function onPlay(id: string) {
   game.playCard(id)
@@ -84,6 +106,12 @@ onMounted(async () => {
   const diff = lv <= 10 ? '普通' : lv <= 20 ? '困难' : '噩梦'
   game.configureEncounter(diff as any)
 
+  // 确保营地数据已加载（用于获取玩家血量）
+  const campStore = useCampStore()
+  if (!campStore.playerCharacter) {
+    await campStore.fetchCampData()
+  }
+
   // 从 Spring Boot API 加载用户数据
   await game.loadUserDeckFromDB()
   await game.loadEnemyDeck(lv)
@@ -94,15 +122,139 @@ onMounted(async () => {
 watch(level, async (lv) => {
   const diff = lv && lv <= 10 ? '普通' : lv && lv <= 20 ? '困难' : '噩梦'
   game.configureEncounter(diff as any)
+  
+  // 确保营地数据已加载（用于获取玩家血量）
+  const campStore = useCampStore()
+  if (!campStore.playerCharacter) {
+    await campStore.fetchCampData()
+  }
+  
   await game.loadEnemyDeck(lv || 1)
   game.reset()
 })
 
-// 监听胜负，均回到闯关并显示奖励（失败也按需求标记通关并待领取奖励）
-watch(winner, (w) => {
+// 计算奖励（根据关卡难度）
+function calculateReward() {
+  const lv = level.value || 1
+  const diff = enemyDifficulty.value || '普通'
+  
+  // 基础奖励
+  let baseGold = 50
+  let baseExp = 50
+  let baseStress = 5
+  
+  // 根据难度调整
+  if (diff === '困难') {
+    baseGold = 100
+    baseExp = 100
+    baseStress = 8
+  } else if (diff === '噩梦') {
+    baseGold = 150
+    baseExp = 150
+    baseStress = 12
+  }
+  
+  // 根据关卡数增加奖励
+  const levelMultiplier = 1 + (lv - 1) * 0.1
+  const gold = Math.floor(baseGold * levelMultiplier)
+  const exp = Math.floor(baseExp * levelMultiplier)
+  const stress = Math.floor(baseStress * levelMultiplier)
+  
+  return { gold, exp, stress }
+}
+
+// 应用奖励到角色
+async function applyRewards() {
+  const reward = victoryReward.value
+  
+  try {
+    // 1. 增加金币
+    if (reward.gold > 0) {
+      await wallet.addCurrency(CurrencyType.GOLD, BigInt(reward.gold), 'battle_victory')
+    }
+    
+    // 2. 更新角色血量、行动点和压力值
+    // 重要：使用战斗中的 heroHP，而不是营地中的 currentHp，确保战斗扣除的血量不返回
+    if (playerCharacter.value?.id) {
+      const battleHp = game.heroHP // 使用战斗中的血量
+      const currentActionPoints = playerCharacter.value.currentActionPoints
+      const currentStress = Math.min(100, (playerCharacter.value.currentStress || 0) + reward.stress)
+      
+      console.log('[Game] 保存战斗后的血量:', {
+        battleHp,
+        previousHp: playerCharacter.value.currentHp,
+        maxHp: playerCharacter.value.maxHp
+      })
+      
+      // 保存战斗后的血量（战斗扣除的血量不返回）
+      await apiClient.put(`/user-player-characters/${playerCharacter.value.id}`, {
+        currentHp: battleHp, // 使用战斗中的血量
+        currentActionPoints,
+        currentStress
+      })
+      
+      // 更新营地store中的血量，确保营地界面显示最新血量
+      const campStore = useCampStore()
+      campStore.updatePlayerCharacter({
+        currentHp: battleHp
+      })
+    }
+  } catch (error) {
+    console.error('应用奖励失败:', error)
+  }
+}
+
+// 确认结算，返回探索界面
+async function confirmVictory() {
+  await applyRewards()
+  
+  // 保存关卡进度
+  const lv = Number(route.query.level ?? 1)
+  try {
+    await stageProgressApi.passStage(lv)
+    console.log(`[Game] 关卡 ${lv} 已标记为通过`)
+  } catch (error) {
+    console.error('[Game] 保存关卡进度失败:', error)
+  }
+  
+  showVictoryModal.value = false
+  router.push({ path: '/explore', query: { level: String(lv), victory: '1' } })
+}
+
+// 确认失败结算，返回探索界面
+function confirmDefeat() {
+  showDefeatModal.value = false
   const lv = String(route.query.level ?? '1')
-  if (w === 'player' || w === 'enemy') {
-    router.push({ path: '/explore', query: { victory: '1', level: lv } })
+  router.push({ path: '/explore', query: { level: lv } })
+}
+
+// 监听胜负，显示结算画面
+watch(winner, async (w) => {
+  if (w === 'player') {
+    // 计算奖励
+    victoryReward.value = calculateReward()
+    // 显示结算画面
+    showVictoryModal.value = true
+  } else if (w === 'enemy') {
+    // 失败时计算失败信息（濒死机制已更新血量和压力值）
+    const campStore = useCampStore()
+    const playerChar = campStore.playerCharacter
+    
+    if (playerChar) {
+      const maxHp = playerChar.maxHp || 100
+      const halfHp = Math.floor(maxHp / 2)
+      const currentStress = playerChar.currentStress || 0
+      const previousStress = Math.max(0, currentStress - 50) // 估算之前的压力值
+      
+      defeatInfo.value = {
+        stressIncrease: 50,
+        hpRestored: halfHp,
+        maxHp: maxHp
+      }
+    }
+    
+    // 显示失败结算画面
+    showDefeatModal.value = true
   }
 })
 </script>
@@ -167,7 +319,7 @@ watch(winner, (w) => {
             <span>手牌 ({{ hand.length }}/10)</span>
           </div>
           <div class="hand-helpers">
-            <div class="hand-hint">点击卡牌打出</div>
+          <div class="hand-hint">点击卡牌打出</div>
             <div v-if="deckExhausted" class="deck-empty-badge" title="本场战斗无法再抽牌">
               <span class="badge-icon">⚠️</span>
               <span class="badge-text">牌库已耗尽</span>
@@ -258,6 +410,108 @@ watch(winner, (w) => {
         <div class="modal-actions">
           <button class="modal-btn cancel-btn" @click="cancelExit">取消</button>
           <button class="modal-btn confirm-btn" @click="confirmExit">确认退出</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 战斗胜利结算弹窗 -->
+    <div v-if="showVictoryModal" class="modal-overlay victory-overlay">
+      <div class="victory-modal" @click.stop>
+        <div class="victory-header">
+          <div class="victory-icon">🏆</div>
+          <h2 class="victory-title">战斗胜利！</h2>
+          <p class="victory-subtitle">第 {{ level }} 关 · {{ enemyDifficulty }}</p>
+        </div>
+        
+        <div class="victory-content">
+          <!-- 奖励展示 -->
+          <div class="reward-section">
+            <h3 class="reward-title">获得奖励</h3>
+            <div class="reward-list">
+              <div class="reward-item gold-reward">
+                <div class="reward-icon">🪙</div>
+                <div class="reward-info">
+                  <div class="reward-label">金币</div>
+                  <div class="reward-value">+{{ victoryReward.gold }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 角色提升 -->
+          <div class="character-progress-section">
+            <h3 class="progress-title">角色提升</h3>
+            <div class="progress-list">
+              <div class="progress-item exp-progress">
+                <div class="progress-icon">⭐</div>
+                <div class="progress-info">
+                  <div class="progress-label">经验值</div>
+                  <div class="progress-value">+{{ victoryReward.exp }}</div>
+                </div>
+              </div>
+              <div class="progress-item stress-progress">
+                <div class="progress-icon">😰</div>
+                <div class="progress-info">
+                  <div class="progress-label">压力值</div>
+                  <div class="progress-value">+{{ victoryReward.stress }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="victory-actions">
+          <button class="victory-btn" @click="confirmVictory">
+            <span class="btn-icon">✓</span>
+            <span class="btn-text">确认</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 战斗失败结算弹窗 -->
+    <div v-if="showDefeatModal" class="modal-overlay defeat-overlay">
+      <div class="defeat-modal" @click.stop>
+        <div class="defeat-header">
+          <div class="defeat-icon">💀</div>
+          <h2 class="defeat-title">战斗失败</h2>
+          <p class="defeat-subtitle">第 {{ level }} 关 · {{ enemyDifficulty }}</p>
+        </div>
+        
+        <div class="defeat-content">
+          <!-- 濒死机制说明 -->
+          <div class="near-death-section">
+            <h3 class="near-death-title">⚠️ 濒死触发</h3>
+            <p class="near-death-description">你的生命值归零，触发了濒死机制</p>
+          </div>
+
+          <!-- 状态变化 -->
+          <div class="status-change-section">
+            <h3 class="status-title">状态变化</h3>
+            <div class="status-list">
+              <div class="status-item stress-change">
+                <div class="status-icon">😰</div>
+                <div class="status-info">
+                  <div class="status-label">压力值增加</div>
+                  <div class="status-value negative">+{{ defeatInfo.stressIncrease }}</div>
+                </div>
+              </div>
+              <div class="status-item hp-restore">
+                <div class="status-icon">❤️</div>
+                <div class="status-info">
+                  <div class="status-label">生命值恢复</div>
+                  <div class="status-value positive">{{ defeatInfo.hpRestored }}/{{ defeatInfo.maxHp }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="defeat-actions">
+          <button class="defeat-btn" @click="confirmDefeat">
+            <span class="btn-icon">✓</span>
+            <span class="btn-text">确认</span>
+          </button>
         </div>
       </div>
     </div>
@@ -852,6 +1106,497 @@ watch(winner, (w) => {
 
   .btn-label {
     font-size: 0.875rem;
+  }
+}
+
+/* 战斗胜利结算弹窗 */
+.victory-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.victory-modal {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border: 2px solid rgba(251, 191, 36, 0.5);
+  border-radius: 24px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(251, 191, 36, 0.3);
+  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.victory-modal::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.1) 0%, transparent 70%);
+  animation: rotate 10s linear infinite;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.victory-header {
+  text-align: center;
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.victory-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  animation: bounce 1s ease infinite;
+  display: inline-block;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.victory-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 0 0 8px 0;
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+}
+
+.victory-subtitle {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.victory-content {
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.reward-section,
+.character-progress-section {
+  margin-bottom: 24px;
+}
+
+.reward-title,
+.progress-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reward-title::before,
+.progress-title::before {
+  content: '';
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(180deg, #fbbf24, #f59e0b);
+  border-radius: 2px;
+}
+
+.reward-list,
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reward-item,
+.progress-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.reward-item:hover,
+.progress-item:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(148, 163, 184, 0.4);
+  transform: translateX(4px);
+}
+
+.reward-icon,
+.progress-icon {
+  font-size: 2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.gold-reward .reward-icon {
+  background: rgba(251, 191, 36, 0.2);
+}
+
+.exp-progress .progress-icon {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.stress-progress .progress-icon {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.progress-info,
+.reward-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progress-label,
+.reward-label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.progress-value,
+.reward-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.gold-reward .reward-value {
+  color: #fbbf24;
+}
+
+.exp-progress .progress-value {
+  color: #60a5fa;
+}
+
+.stress-progress .progress-value {
+  color: #f87171;
+}
+
+.victory-actions {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.victory-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.victory-btn:hover {
+  background: linear-gradient(135deg, #fcd34d, #fbbf24);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.4);
+}
+
+.victory-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 1.25rem;
+}
+
+.btn-text {
+  font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+  .victory-modal {
+    padding: 24px;
+    max-width: 90%;
+  }
+
+  .victory-icon {
+    font-size: 3rem;
+  }
+
+  .victory-title {
+    font-size: 1.5rem;
+  }
+
+  .reward-item,
+  .progress-item {
+    padding: 12px;
+  }
+
+  .reward-icon,
+  .progress-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+  }
+}
+
+/* 战斗失败结算弹窗 */
+.defeat-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.defeat-modal {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border: 2px solid rgba(239, 68, 68, 0.5);
+  border-radius: 24px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(239, 68, 68, 0.3);
+  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.defeat-modal::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.1) 0%, transparent 70%);
+  animation: rotate 10s linear infinite;
+}
+
+.defeat-header {
+  text-align: center;
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.defeat-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.defeat-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #f87171;
+  margin-bottom: 8px;
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+.defeat-subtitle {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.defeat-content {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 32px;
+}
+
+.near-death-section {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.near-death-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #f87171;
+  margin-bottom: 8px;
+}
+
+.near-death-description {
+  font-size: 0.875rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.status-change-section {
+  margin-top: 24px;
+}
+
+.status-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 16px;
+}
+
+.status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.status-icon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 8px;
+}
+
+.status-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-label {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.status-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.status-value.negative {
+  color: #f87171;
+}
+
+.status-value.positive {
+  color: #60a5fa;
+}
+
+.defeat-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.defeat-btn {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.8));
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 12px;
+  padding: 12px 32px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.defeat-btn:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+.defeat-btn:active {
+  transform: translateY(0);
+}
+
+.defeat-btn .btn-icon {
+  font-size: 1.125rem;
+}
+
+@media (max-width: 768px) {
+  .defeat-modal {
+    padding: 24px;
+    max-width: 90%;
+  }
+
+  .defeat-icon {
+    font-size: 3rem;
+  }
+
+  .defeat-title {
+    font-size: 1.5rem;
   }
 }
 </style>
