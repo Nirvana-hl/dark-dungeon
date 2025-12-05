@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.dungeon.dto.EnemyPanelDTO;
 import com.dungeon.entity.Card;
 import com.dungeon.entity.CardCharacter;
 import com.dungeon.entity.Enemy;
@@ -553,10 +554,98 @@ public class EnemyService {
         if (normalizedDifficulty == null) {
             return new ArrayList<>();
         }
-        
+
         LambdaQueryWrapper<Enemy> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Enemy::getDifficulty, normalizedDifficulty);
         return enemyMapper.selectList(wrapper);
     }
-}
 
+    /**
+     * 构建敌人面板数据
+     * 从 enemies.base_stats / enemies.behavior_script 中解析出
+     * 生命值、攻击、防御以及攻击特性标签
+     *
+     * @param enemyId 敌人ID
+     * @return 敌人面板 DTO，如果找不到敌人则返回 null
+     */
+    public EnemyPanelDTO getEnemyPanel(Long enemyId) {
+        Enemy enemy = getEnemyById(enemyId);
+        if (enemy == null) {
+            return null;
+        }
+
+        Integer hp = null;
+        Integer attack = null;
+        Integer armor = null;
+        List<String> attackTraits = new ArrayList<>();
+
+        // 1. 解析基础属性 base_stats
+        if (StringUtils.hasText(enemy.getBaseStats())) {
+            try {
+                JSONObject baseStats = JSON.parseObject(enemy.getBaseStats());
+                if (baseStats.containsKey("hp")) {
+                    hp = baseStats.getInteger("hp");
+                }
+                if (baseStats.containsKey("attack")) {
+                    attack = baseStats.getInteger("attack");
+                }
+                if (baseStats.containsKey("armor")) {
+                    armor = baseStats.getInteger("armor");
+                }
+            } catch (Exception ignored) {
+                // 如果解析失败，保持默认 null，避免直接抛错中断接口
+            }
+        }
+
+        // 2. 解析攻击特性（来自 behavior_script）
+        if (StringUtils.hasText(enemy.getBehaviorScript())) {
+            try {
+                JSONObject behavior = JSON.parseObject(enemy.getBehaviorScript());
+
+                // 2.1 优先从 attack_traits 数组读取
+                if (behavior.containsKey("attack_traits")) {
+                    Object node = behavior.get("attack_traits");
+                    if (node instanceof JSONArray) {
+                        for (Object o : (JSONArray) node) {
+                            if (o != null) {
+                                String value = String.valueOf(o).trim();
+                                if (!value.isEmpty()) {
+                                    attackTraits.add(value);
+                                }
+                            }
+                        }
+                    } else if (node instanceof String) {
+                        String value = ((String) node).trim();
+                        if (!value.isEmpty()) {
+                            attackTraits.add(value);
+                        }
+                    }
+                }
+
+                // 2.2 如果没有 attack_traits，就回退使用 pattern 字段作为攻击特性标签
+                if (attackTraits.isEmpty() && behavior.containsKey("pattern")) {
+                    String pattern = behavior.getString("pattern");
+                    if (StringUtils.hasText(pattern)) {
+                        attackTraits.add(pattern.trim());
+                    }
+                }
+            } catch (Exception ignored) {
+                // 行为脚本解析失败时，不影响基础属性返回
+            }
+        }
+
+        String[] traitsArray = attackTraits.isEmpty()
+                ? new String[0]
+                : attackTraits.toArray(new String[0]);
+
+        return new EnemyPanelDTO(
+                enemy.getId(),
+                enemy.getName(),
+                enemy.getDifficulty(),
+                hp,
+                attack,
+                armor,
+                traitsArray
+        );
+    }
+}

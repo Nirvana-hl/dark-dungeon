@@ -1,6 +1,7 @@
 package com.dungeon.controller;
 
 import com.dungeon.common.Result;
+import com.dungeon.dto.EnemyPanelDTO;
 import com.dungeon.service.EnemyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -88,5 +89,40 @@ public class GameController {
             return Result.error("获取关卡敌人列表失败: " + e.getMessage());
         }
     }
-}
 
+    /**
+     * 获取敌人面板信息
+     * 返回敌人的基础属性（生命值、攻击、防御）以及攻击特性
+     *
+     * 示例：
+     * GET /api/game/enemy-panel?enemyId=1
+     *
+     * 响应 data 示例：
+     * {
+     *   "id": 1,
+     *   "name": "暗影猎手",
+     *   "difficulty": "normal",
+     *   "hp": 120,
+     *   "attack": 18,
+     *   "armor": 5,
+     *   "attackTraits": ["strike_poison"]
+     * }
+     *
+     * @param enemyId 敌人ID（必填）
+     */
+    @GetMapping("/enemy-panel")
+    public Result<EnemyPanelDTO> getEnemyPanel(@RequestParam Long enemyId) {
+        if (enemyId == null) {
+            return Result.error("enemyId 不能为空");
+        }
+        try {
+            EnemyPanelDTO panel = enemyService.getEnemyPanel(enemyId);
+            if (panel == null) {
+                return Result.error("未找到指定的敌人");
+            }
+            return Result.success(panel);
+        } catch (Exception e) {
+            return Result.error("获取敌人面板失败: " + e.getMessage());
+        }
+    }
+}
