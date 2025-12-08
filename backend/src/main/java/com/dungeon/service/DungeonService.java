@@ -58,6 +58,21 @@ public class DungeonService {
     @Autowired
     private UserPlayerCharacterService userPlayerCharacterService;
 
+    @Autowired
+    private CardEffectService cardEffectService;
+
+    @Autowired
+    private CardService cardService;
+
+    @Autowired
+    private CardCharacterService cardCharacterService;
+
+    @Autowired
+    private UserCardService userCardService;
+
+    @Autowired
+    private UserCardCharacterService userCardCharacterService;
+
     private static final Random RANDOM = new Random();
 
     public List<DungeonDTO> getAllDungeons() {
@@ -457,8 +472,10 @@ public class DungeonService {
                 : new JSONObject();
 
         int heroHp = hero.getCurrentHp() != null ? hero.getCurrentHp() : hero.getMaxHp();
+        int heroMaxHp = hero.getMaxHp() != null ? hero.getMaxHp() : heroHp;
         int heroAttack = Math.max(8, hero.getMaxActionPoints() * 3);
         int enemyHp = enemyStats.getIntValue("hp", 80);
+        int enemyMaxHp = enemyHp;
         int enemyAttack = enemyStats.getIntValue("attack", 10);
 
         if ("aggressive".equalsIgnoreCase(strategy)) {
@@ -468,28 +485,250 @@ public class DungeonService {
             enemyAttack -= 2;
         }
 
-        List<String> log = new ArrayList<>();
+        // 创建战斗上下文
+        CardEffectService.BattleContext context = new CardEffectService.BattleContext(
+                heroHp, heroMaxHp, heroAttack, enemyHp, enemyMaxHp, enemyAttack);
+
+        // 加载用户卡组（用于战斗中使用卡牌效果）
+        List<com.dungeon.dto.CardDTO> userCards = loadUserCardsForBattle(hero.getUserId());
+        
+        // 加载角色特性（用于每回合触发特性效果）
+        List<com.dungeon.dto.CardCharacterTraitDTO> characterTraits = loadCharacterTraitsForBattle(hero.getUserId());
+
         int round = 1;
-        while (heroHp > 0 && enemyHp > 0 && round <= 20) {
-            int heroDamage = Math.max(5, heroAttack + RANDOM.nextInt(6) - 3);
-            enemyHp -= heroDamage;
-            log.add("第" + round + "回合：玩家造成 " + heroDamage + " 点伤害。敌人剩余 " + Math.max(enemyHp, 0) + " HP。");
-            if (enemyHp <= 0) {
+        int heroMana = 3; // 每回合初始法力值
+        int maxMana = 10; // 最大法力值
+
+        while (context.getHeroHp() > 0 && context.getEnemyHp() > 0 && round <= 20) {
+            context.addLog("========== 第 " + round + " 回合 ==========");
+            
+            // 玩家回合开始：触发角色特性效果
+            applyCharacterTraitsAtTurnStart(characterTraits, context, round);
+            
+            // 玩家回合：恢复法力值并抽牌
+            heroMana = Math.min(heroMana + 1, maxMana);
+            context.addLog("玩家回合开始，当前法力值：" + heroMana + "/" + maxMana);
+            
+            // 玩家行动：随机使用一张卡牌（如果有足够的法力值）
+            if (!userCards.isEmpty() && heroMana > 0) {
+                useRandomCard(userCards, context, heroMana);
+            }
+            
+            // 玩家攻击
+            int heroDamage = Math.max(5, context.getHeroAttack() + RANDOM.nextInt(6) - 3);
+            applyDamage(context, heroDamage, true, "玩家攻击");
+            if (context.getEnemyHp() <= 0) {
                 break;
             }
-            int enemyDamage = Math.max(4, enemyAttack + RANDOM.nextInt(6) - 2);
-            heroHp -= enemyDamage;
-            log.add("第" + round + "回合：敌人造成 " + enemyDamage + " 点伤害。玩家剩余 " + Math.max(heroHp, 0) + " HP。");
+            
+            // 敌人回合
+            context.addLog("敌人回合开始");
+            int enemyDamage = Math.max(4, context.getEnemyAttack() + RANDOM.nextInt(6) - 2);
+            applyDamage(context, enemyDamage, false, "敌人攻击");
+            
             round++;
         }
 
         BattleResultDTO result = new BattleResultDTO();
         result.setEnemyName(enemy.getName());
-        result.setHeroRemainingHp(Math.max(heroHp, 0));
-        result.setEnemyRemainingHp(Math.max(enemyHp, 0));
-        result.setBattleLog(log);
-        result.setOutcome(enemyHp <= 0 ? "victory" : "defeat");
+        result.setHeroRemainingHp(Math.max(context.getHeroHp(), 0));
+        result.setEnemyRemainingHp(Math.max(context.getEnemyHp(), 0));
+        result.setBattleLog(context.getBattleLog());
+        result.setOutcome(context.getEnemyHp() <= 0 ? "victory" : "defeat");
         return result;
+    }
+
+    /**
+     * 加载用户卡组（用于战斗）
+     */
+    private List<com.dungeon.dto.CardDTO> loadUserCardsForBattle(Long userId) {
+        try {
+            // 获取用户卡组中的卡牌（默认卡组ID=1）
+            List<com.dungeon.dto.UserCardDTO> userCards = userCardService.getDeckCards(userId, 1L);
+            List<com.dungeon.dto.CardDTO> cards = new ArrayList<>();
+            
+            for (com.dungeon.dto.UserCardDTO userCard : userCards) {
+                // 根据卡牌模板ID获取卡牌模板信息（包含effectPayload）
+                if (userCard.getCardId() != null) {
+                    com.dungeon.dto.CardDTO card = cardService.getById(userCard.getCardId());
+                    if (card != null) {
+                        // 添加卡牌到战斗卡组（即使没有effectPayload也可以添加，因为可能有statModifiers）
+                        cards.add(card);
+                    }
+                }
+            }
+            
+            return cards;
+        } catch (Exception e) {
+            // 加载失败时返回空列表，不影响战斗进行
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 加载角色特性（用于战斗）
+     */
+    private List<com.dungeon.dto.CardCharacterTraitDTO> loadCharacterTraitsForBattle(Long userId) {
+        try {
+            // 获取用户上阵的角色卡
+            List<com.dungeon.dto.UserCardCharacterDTO> deployedCharacters = 
+                    userCardCharacterService.getDeployedCardCharacters(userId);
+            List<com.dungeon.dto.CardCharacterTraitDTO> allTraits = new ArrayList<>();
+            
+            for (com.dungeon.dto.UserCardCharacterDTO userChar : deployedCharacters) {
+                // 根据卡牌角色模板ID获取特性
+                if (userChar.getCardCharacterId() != null) {
+                    List<com.dungeon.dto.CardCharacterTraitDTO> traits = 
+                            cardCharacterService.getTraitsByCardCharacterId(userChar.getCardCharacterId());
+                    allTraits.addAll(traits);
+                }
+            }
+            
+            return allTraits;
+        } catch (Exception e) {
+            // 加载失败时返回空列表，不影响战斗进行
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 在回合开始时应用角色特性效果
+     */
+    private void applyCharacterTraitsAtTurnStart(List<com.dungeon.dto.CardCharacterTraitDTO> traits, 
+                                                  CardEffectService.BattleContext context, 
+                                                  int round) {
+        if (traits == null || traits.isEmpty()) {
+            return;
+        }
+
+        for (com.dungeon.dto.CardCharacterTraitDTO trait : traits) {
+            if (!StringUtils.hasText(trait.getEffectPayload())) {
+                continue;
+            }
+
+            try {
+                // 计算特性效果（考虑星级缩放）
+                com.alibaba.fastjson2.JSONObject baseEffect = com.alibaba.fastjson2.JSON.parseObject(trait.getEffectPayload());
+                com.alibaba.fastjson2.JSONObject scaledEffect = cardEffectService.calculateTraitEffectWithScaling(
+                        baseEffect, trait.getScalingPayload(), 1); // 默认1星，后续可以从用户角色数据获取实际星级
+
+                // 执行特性效果
+                if (scaledEffect.containsKey("heal_allies")) {
+                    int healAmount = scaledEffect.getIntValue("heal_allies");
+                    int oldHp = context.getHeroHp();
+                    context.setHeroHp(context.getHeroHp() + healAmount);
+                    int actualHeal = context.getHeroHp() - oldHp;
+                    if (actualHeal > 0) {
+                        context.addLog("特性：" + trait.getName() + "，英雄恢复 " + actualHeal + " 点生命");
+                    }
+                }
+
+                if (scaledEffect.containsKey("armor_bonus")) {
+                    int armorBonus = scaledEffect.getIntValue("armor_bonus");
+                    context.setHeroShield(context.getHeroShield() + armorBonus);
+                    context.addLog("特性：" + trait.getName() + "，英雄获得 " + armorBonus + " 点护甲");
+                }
+
+                if (scaledEffect.containsKey("attack_bonus")) {
+                    int attackBonus = scaledEffect.getIntValue("attack_bonus");
+                    context.setHeroAttack(context.getHeroAttack() + attackBonus);
+                    context.addLog("特性：" + trait.getName() + "，英雄攻击力 +" + attackBonus);
+                }
+            } catch (Exception e) {
+                context.addLog("特性效果执行失败：" + trait.getName() + "，错误：" + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 随机使用一张卡牌
+     */
+    private void useRandomCard(List<com.dungeon.dto.CardDTO> cards, 
+                               CardEffectService.BattleContext context, 
+                               int availableMana) {
+        if (cards.isEmpty()) {
+            return;
+        }
+
+        // 筛选出可以使用的卡牌（法力值足够）
+        List<com.dungeon.dto.CardDTO> usableCards = new ArrayList<>();
+        for (com.dungeon.dto.CardDTO card : cards) {
+            int cost = card.getActionPointCost() != null ? card.getActionPointCost() : 1;
+            if (cost <= availableMana) {
+                usableCards.add(card);
+            }
+        }
+
+        if (usableCards.isEmpty()) {
+            return;
+        }
+
+        // 随机选择一张卡牌
+        com.dungeon.dto.CardDTO selectedCard = usableCards.get(RANDOM.nextInt(usableCards.size()));
+        int cost = selectedCard.getActionPointCost() != null ? selectedCard.getActionPointCost() : 1;
+
+        // 确定目标类型
+        String target = "enemy"; // 默认对敌人
+        if (selectedCard.getCardType() != null && "spell".equalsIgnoreCase(selectedCard.getCardType())) {
+            // 法术卡牌，根据效果确定目标
+            if (StringUtils.hasText(selectedCard.getEffectPayload())) {
+                try {
+                    com.alibaba.fastjson2.JSONObject effect = com.alibaba.fastjson2.JSON.parseObject(selectedCard.getEffectPayload());
+                    if (effect.containsKey("target")) {
+                        target = effect.getString("target");
+                    } else if (effect.containsKey("heal") || effect.containsKey("heal_amount")) {
+                        target = "hero"; // 治疗法术对英雄
+                    }
+                } catch (Exception e) {
+                    // 解析失败，使用默认目标
+                }
+            }
+        }
+
+        // 执行卡牌效果
+        context.addLog("玩家使用卡牌：" + selectedCard.getName() + "（消耗 " + cost + " 点法力）");
+        cardEffectService.executeCardEffect(selectedCard.getEffectPayload(), selectedCard.getName(), context, target);
+    }
+
+    /**
+     * 应用伤害（考虑护盾）
+     */
+    private void applyDamage(CardEffectService.BattleContext context, int damage, boolean isToEnemy, String source) {
+        if (isToEnemy) {
+            // 对敌人造成伤害
+            int shieldAbsorb = Math.min(context.getEnemyShield(), damage);
+            int actualDamage = damage - shieldAbsorb;
+            
+            context.setEnemyShield(context.getEnemyShield() - shieldAbsorb);
+            context.setEnemyHp(context.getEnemyHp() - actualDamage);
+            
+            String log = source + "对敌人造成 " + damage + " 点伤害";
+            if (shieldAbsorb > 0) {
+                log += "（护盾吸收 " + shieldAbsorb + " 点）";
+            }
+            log += "。敌人剩余 " + context.getEnemyHp() + "/" + context.getEnemyMaxHp() + " HP";
+            if (context.getEnemyShield() > 0) {
+                log += "，护盾 " + context.getEnemyShield();
+            }
+            context.addLog(log);
+        } else {
+            // 对英雄造成伤害
+            int shieldAbsorb = Math.min(context.getHeroShield(), damage);
+            int actualDamage = damage - shieldAbsorb;
+            
+            context.setHeroShield(context.getHeroShield() - shieldAbsorb);
+            context.setHeroHp(context.getHeroHp() - actualDamage);
+            
+            String log = source + "对英雄造成 " + damage + " 点伤害";
+            if (shieldAbsorb > 0) {
+                log += "（护盾吸收 " + shieldAbsorb + " 点）";
+            }
+            log += "。英雄剩余 " + context.getHeroHp() + "/" + context.getHeroMaxHp() + " HP";
+            if (context.getHeroShield() > 0) {
+                log += "，护盾 " + context.getHeroShield();
+            }
+            context.addLog(log);
+        }
     }
 
     private Map<String, Object> generateDefaultRewards(Run run, RunProgressState state) {
