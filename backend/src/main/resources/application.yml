@@ -49,3 +49,4 @@ jwt:
 # 跨域配置（前端地址）
 cors:
   allowed-origins: http://localhost:5180
+

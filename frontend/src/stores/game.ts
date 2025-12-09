@@ -8,6 +8,7 @@ import { useCampStore } from './camp'
 import type { ApiResponse } from '@/lib/api'
 import type { AxiosResponse } from 'axios'
 import apiClient from '@/lib/api'
+import { soundManager, SoundType } from '@/utils/soundManager'
 
 export type CardType = 'character' | 'spell' | 'equipment'
 
@@ -48,6 +49,9 @@ export interface Minion {
   traits?: Array<{ effectPayload?: string; scalingPayload?: string }>
   // 部署位置（0-5，共6个位置，0为最前排）
   position?: number
+  // 攻击动画状态
+  attackState?: 'idle' | 'attacking' | 'returning'
+  attackTargetId?: string // 攻击目标ID
 }
 
 function uid() {
@@ -100,6 +104,7 @@ export const useGameStore = defineStore('game', () => {
     if (enemyHP.value <= 0 && !battleOver.value) {
       battleOver.value = true
       winner.value = 'player'
+      soundManager.playSound(SoundType.VICTORY)
       log('胜利：敌方生命归零！')
     }
     
@@ -166,6 +171,7 @@ export const useGameStore = defineStore('game', () => {
     // 结束战斗，标记为失败
     battleOver.value = true
     winner.value = 'enemy'
+    soundManager.playSound(SoundType.DEFEAT)
     log('战斗失败：触发濒死机制')
   }
 
@@ -304,6 +310,8 @@ export const useGameStore = defineStore('game', () => {
       if (actual > 0) healedCount++
     })
     if (healedCount > 0) {
+      // 播放治疗音效
+      soundManager.playSound(SoundType.HEAL, { volume: 0.4 })
       const side = isEnemy ? '敌方' : '我方'
       log(`治疗：${side} ${source.name} 在${reason}为全体恢复 ${healAmount} 点生命`)
     }
@@ -325,6 +333,7 @@ export const useGameStore = defineStore('game', () => {
       switch (t.trait_key) {
         case 'priest_bless':
           // 祭司：为友方全体恢复生命
+          soundManager.playSound(SoundType.HEAL, { volume: 0.4 })
           board.value = board.value.map(x => ({ ...x, health: x.health + power }))
           log(`特性：祭司祝福，友方全体恢复 ${power} 点生命`)
           break
@@ -783,6 +792,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function draw(n = 2) {
+    let drawnCount = 0
     for (let i = 0; i < n; i++) {
       if (deck.value.length === 0) {
         if (!deckExhausted.value) {
@@ -795,6 +805,11 @@ export const useGameStore = defineStore('game', () => {
       if (!c) break
       if (hand.value.length < 10) {
         hand.value.push(c)
+        drawnCount++
+        // 播放发牌音效（延迟播放，避免重叠）
+        setTimeout(() => {
+          soundManager.playSound(SoundType.DRAW_CARD, { volume: 0.4 })
+        }, i * 100)
       } else {
         log('提示：手牌已满，本次抽到的卡牌被丢弃。')
       }
@@ -830,6 +845,8 @@ export const useGameStore = defineStore('game', () => {
     if (card.cost > mana.value) return
     // 扣蓝
     mana.value -= card.cost
+    // 播放出牌音效
+    soundManager.playSound(SoundType.PLAY_CARD)
     // 处理类型
     if (card.type === 'character') {
       // 检查位置是否可用
@@ -873,7 +890,8 @@ export const useGameStore = defineStore('game', () => {
         cardCharacterId: card.cardCharacterId,
         effectPayload: card.effectPayload,
         traits: [], // 特性列表将在需要时加载
-        position: position
+        position: position,
+        attackState: 'idle' // 初始化攻击状态
         }
         board.value.push(m)
       // 按位置排序，确保显示顺序正确
@@ -885,15 +903,14 @@ export const useGameStore = defineStore('game', () => {
           m.traits = traits ?? []
         }).catch(() => {})
       }
-        // 即时触发一次特性（按星级计算强度），随后每回合开始也会自动结算
+        // 注意：召唤时不应该触发治疗特性，只在回合开始时触发
+        // 这里只处理非治疗类的即时特性（如护盾）
         const t = charTraits.value[card.name]
         if (t) {
           const power = getTraitPower(card.name, 1)
           if (power > 0) {
-            if (t.trait_key === 'priest_bless') {
-              board.value = board.value.map(x => ({ ...x, health: x.health + power }))
-              log(`特性：${card.name} 祭司祝福，友方全体恢复 ${power} 点生命`)
-            } else if (t.trait_key === 'shield_guard') {
+            if (t.trait_key === 'shield_guard') {
+              // 盾卫：召唤时可以为队友提供护盾
               let idx = 0
               for (let i = 1; i < board.value.length; i++) {
                 if (board.value[i].health < board.value[idx].health) idx = i
@@ -902,6 +919,7 @@ export const useGameStore = defineStore('game', () => {
               target.shield = (target.shield ?? 0) + power
               log(`特性：${card.name} 盾卫守护，为 ${target.name} 提供 ${power} 点护盾`)
           }
+            // 注意：priest_bless（祭司祝福）只在回合开始时触发，不在召唤时触发
         }
       }
       hand.value.splice(idx, 1)
@@ -952,6 +970,9 @@ export const useGameStore = defineStore('game', () => {
       
       // 执行治疗效果
       if (isHealSpell && healAmount > 0) {
+        // 播放治疗音效
+        soundManager.playSound(SoundType.HEAL, { volume: 0.5 })
+        
         // 治疗我方所有卡牌
         let healedCount = 0
         board.value.forEach(m => {
@@ -1051,47 +1072,122 @@ export const useGameStore = defineStore('game', () => {
     hand.value.splice(idx, 1)
   }
 
-  function endTurn() {
+  /**
+   * 执行单个随从的攻击（带动画和延迟）
+   */
+  async function executeAttack(attacker: Minion, target: Minion | null, isBoss: boolean): Promise<void> {
+    return new Promise((resolve) => {
+      // 1. 设置攻击状态 - 开始攻击
+      attacker.attackState = 'attacking'
+      if (target) {
+        attacker.attackTargetId = target.id
+      }
+      
+      // 触发攻击开始事件
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('attack-start', {
+          detail: { attackerId: attacker.id, targetId: target?.id, isBoss }
+        }))
+      }
+      
+      // 2. 等待角色移动到目标位置（350ms）
+      setTimeout(() => {
+        // 3. 播放攻击音效（角色到达目标位置时）
+        soundManager.playSound(SoundType.ATTACK, { volume: 0.6 })
+        
+        // 4. 等待攻击动作（120ms，让音效和动画同步更快）
+        setTimeout(() => {
+          // 5. 计算伤害
+          if (target) {
+            const absorb = Math.min(target.shield ?? 0, attacker.attack)
+            target.shield = Math.max(0, (target.shield ?? 0) - absorb)
+            const dmg = attacker.attack - absorb
+            const beforeHealth = target.health
+            target.health = Math.max(0, target.health - dmg)
+            
+            // 6. 立即播放受击音效和触发受击反馈（显示扣血）
+            soundManager.playSound(SoundType.HIT, { volume: 0.7 })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('enemy-hit', {
+                detail: { minionId: target.id, damage: dmg, beforeHealth, afterHealth: target.health }
+              }))
+            }
+          
+          log(`我方随从 ${attacker.name} 攻击敌方 ${target.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}，盾 ${target.shield}）`)
+          
+          if (target.health <= 0) {
+            const enemyIndex = enemyBoard.value.findIndex(e => e.id === target.id)
+            if (enemyIndex >= 0) {
+              enemyBoard.value.splice(enemyIndex, 1)
+            }
+            log(`敌方角色 ${target.name} 被击败！现在可对敌方造成直接伤害。`)
+          }
+          } else if (isBoss) {
+            // 攻击敌方本体
+            soundManager.playSound(SoundType.HIT, { volume: 0.7 })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('enemy-boss-hit', {
+                detail: { damage: attacker.attack }
+              }))
+            }
+            enemyHP.value = Math.max(0, enemyHP.value - attacker.attack)
+          }
+          
+          // 7. 设置返回状态
+          attacker.attackState = 'returning'
+          
+          // 8. 等待返回动画完成（400ms）
+          setTimeout(() => {
+            // 9. 重置攻击状态
+            attacker.attackState = 'idle'
+            attacker.attackTargetId = undefined
+            
+            // 触发攻击结束事件
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('attack-end', {
+                detail: { attackerId: attacker.id }
+              }))
+            }
+            
+            resolve()
+          }, 320)
+        }, 120) // 攻击动作延迟（减少延迟，让音效更快响应）
+      }, 350) // 移动到目标位置延迟
+    })
+  }
+
+  async function endTurn() {
     if (turn.value !== 'player') return
     if (battleOver.value) return
+    
     // 我方随从攻击阶段（只允许可以攻击的随从攻击）
     // 按位置排序，前排优先攻击
     const sortedBoard = [...board.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
     
-    // 找到敌方最前排的角色（position 最小的）
-    const sortedEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
-    const enemyRole = sortedEnemyBoard[0]
     let total = 0
     
-    sortedBoard.forEach(m => {
-      // 检查是否可以攻击（召唤疲劳机制）
-      if (m.canAttack === false) {
-        return // 跳过不能攻击的随从
-      }
-      
-      if (enemyRole) {
-        // 先消耗护盾
-        const absorb = Math.min(enemyRole.shield ?? 0, m.attack)
-        enemyRole.shield = Math.max(0, (enemyRole.shield ?? 0) - absorb)
-        const dmg = m.attack - absorb
-        enemyRole.health = Math.max(0, enemyRole.health - dmg)
-        log(`我方随从 ${m.name} 攻击敌方 ${enemyRole.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${enemyRole.health}，盾 ${enemyRole.shield}）`)
-        if (enemyRole.health <= 0) {
-          const enemyIndex = enemyBoard.value.findIndex(e => e.id === enemyRole.id)
-          if (enemyIndex >= 0) {
-            enemyBoard.value.splice(enemyIndex, 1)
-          }
-          log(`敌方角色 ${enemyRole.name} 被击败！现在可对敌方造成直接伤害。`)
-        }
+    // 逐个执行攻击（带延迟和动画），每次重新获取当前敌方最前排，保证每次都有目标且效果展示
+    for (const m of sortedBoard) {
+      if (battleOver.value) break
+      if (m.canAttack === false) continue
+
+      // 每次攻击前重新确定当前目标
+      const currentEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+      const currentEnemyRole = currentEnemyBoard[0]
+
+      if (currentEnemyRole) {
+        await executeAttack(m, currentEnemyRole, false)
       } else {
-        enemyHP.value = Math.max(0, enemyHP.value - m.attack)
+        await executeAttack(m, null, true)
         total += m.attack
       }
 
       // 攻击后触发治疗（如果有 heal_allies）
       maybeHealAllies(m, board.value, '攻击后')
-    })
-    if (!enemyRole && total > 0) {
+    }
+    
+    // 如果敌方没有随从且造成了直接伤害，记录日志
+    if (enemyBoard.value.length === 0 && total > 0) {
       log(`我方随从合计对敌方造成 ${total} 伤害（敌方HP ${enemyHP.value}）`)
       checkVictory()
     }
@@ -1200,7 +1296,8 @@ export const useGameStore = defineStore('game', () => {
             stars: 1,
             canAttack: false, // 召唤疲劳：刚打出的随从本回合不能攻击
             effectPayload: card.effectPayload,
-            position: autoPosition
+            position: autoPosition,
+            attackState: 'idle' // 初始化攻击状态
           }
           enemyBoard.value.push(minion)
           // 按位置排序
@@ -1329,38 +1426,52 @@ export const useGameStore = defineStore('game', () => {
     if (battleOver.value) return
     
     // 1. 敌人战场上的角色攻击（只允许可以攻击的随从攻击）
-    // 按位置排序，前排优先攻击
+    // 每次攻击前重新获取当前我方前排，确保目标存在并能显示受击效果
     const sortedEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
     
-    sortedEnemyBoard.forEach((enemyMinion, index) => {
-      if (battleOver.value) return
+    for (const enemyMinion of sortedEnemyBoard) {
+      if (battleOver.value) break
+      if (enemyMinion.canAttack === false) continue
       
-      // 检查是否可以攻击（召唤疲劳机制）
-      if (enemyMinion.canAttack === false) {
-        return // 跳过不能攻击的随从
-      }
+      const currentBoard = [...board.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+      const target = currentBoard[0]
       
-      // 优先攻击我方随从（优先攻击前排，position 最小的）
-      if (board.value.length > 0) {
-        // 按位置排序，找到最前排的角色
-        const sortedBoard = [...board.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
-        const target = sortedBoard[0]
+      if (target) {
         const targetIndex = board.value.findIndex(m => m.id === target.id)
         
-        // 先消耗护盾
         const absorb = Math.min(target.shield ?? 0, enemyMinion.attack)
         target.shield = Math.max(0, (target.shield ?? 0) - absorb)
         const dmg = enemyMinion.attack - absorb
         
         target.health = Math.max(0, target.health - dmg)
+        
+        soundManager.playSound(SoundType.ATTACK, { volume: 0.5 })
+        setTimeout(() => {
+          soundManager.playSound(SoundType.HIT, { volume: 0.6 })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ally-hit', { 
+              detail: { minionId: target.id, damage: dmg } 
+            }))
+          }
+        }, 200)
+        
         log(`敌人 ${enemyMinion.name} 攻击我方 ${target.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
         
-        if (target.health <= 0) {
+        if (target.health <= 0 && targetIndex >= 0) {
           board.value.splice(targetIndex, 1)
           log(`我方随从 ${target.name} 倒下。`)
         }
       } else {
-        // 没有随从，直接攻击英雄
+        soundManager.playSound(SoundType.ATTACK, { volume: 0.5 })
+        setTimeout(() => {
+          soundManager.playSound(SoundType.HIT, { volume: 0.6 })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('player-hit', { 
+              detail: { damage: enemyMinion.attack } 
+            }))
+          }
+        }, 200)
+        
         heroHP.value = Math.max(0, heroHP.value - enemyMinion.attack)
         log(`敌人 ${enemyMinion.name} 攻击我方英雄，造成 ${enemyMinion.attack} 伤害（我方HP ${heroHP.value}）`)
         checkVictory()
@@ -1368,7 +1479,7 @@ export const useGameStore = defineStore('game', () => {
 
       // 攻击后触发治疗（如果有 heal_allies）
       maybeHealAllies(enemyMinion, enemyBoard.value, '攻击后', true)
-    })
+    }
     
     // 2. 敌人本体攻击（如果敌人面板有攻击力）
     if (!battleOver.value && enemyPanel.value && enemyPanel.value.attack && enemyPanel.value.attack > 0) {
@@ -1393,6 +1504,17 @@ export const useGameStore = defineStore('game', () => {
         }
       } else {
         // 没有随从，直接攻击英雄
+        soundManager.playSound(SoundType.ATTACK, { volume: 0.6 })
+        setTimeout(() => {
+          soundManager.playSound(SoundType.HIT, { volume: 0.7 })
+          // 触发玩家受击反馈
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('player-hit', { 
+              detail: { damage: enemyBaseAttack } 
+            }))
+          }
+        }, 200)
+        
         heroHP.value = Math.max(0, heroHP.value - enemyBaseAttack)
         log(`敌人本体发动攻击，对我方英雄造成 ${enemyBaseAttack} 伤害（我方HP ${heroHP.value}）`)
         checkVictory()

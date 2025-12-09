@@ -11,6 +11,7 @@ import { useCampStore } from '@/stores/camp'
 import apiClient from '@/lib/api'
 import { CurrencyType } from '@/types'
 import { stageProgressApi } from '@/lib/api'
+import { soundManager } from '@/utils/soundManager'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +140,11 @@ async function endTurn() {
 
 // 根据关卡参数配置敌方难度并开局（从数据库加载玩家/敌方手牌）
 onMounted(async () => {
+  // 预加载音效（非阻塞）
+  soundManager.preloadSounds().catch(err => {
+    console.warn('[Game] 音效预加载失败:', err)
+  })
+
   const lv = level.value || 1
   const diff = lv <= 10 ? '普通' : lv <= 20 ? '困难' : '噩梦'
   game.configureEncounter(diff as any)

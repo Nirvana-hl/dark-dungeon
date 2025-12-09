@@ -1,13 +1,186 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGameStore } from '@/stores/game'
 import { useCampStore } from '@/stores/camp'
-import { ref } from 'vue'
 
 const game = useGameStore()
 const campStore = useCampStore()
 const { heroHP, enemyHP, board, enemyBoard, enemyHand, enemyDeck, enemyMana, enemyManaMax, enemyDeckExhausted, hasEnemyPlayedCards, currentEnemyId, enemyPanel, turn, logs, mana, manaMax, hand, deck, deckExhausted } = storeToRefs(game)
+
+// 受击反馈状态
+const hitEffects = ref<Map<string, { timestamp: number; damage: number }>>(new Map())
+const playerHitEffect = ref<{ timestamp: number; damage: number } | null>(null)
+const enemyBossHitEffect = ref<{ timestamp: number; damage: number } | null>(null)
+
+// 攻击动画状态 - 存储攻击者的绝对位置信息
+const attackingMinions = ref<Map<string, { targetId: string; isBoss: boolean; x: number; y: number; targetX: number; targetY: number }>>(new Map())
+
+// 计算攻击位移 - 使用固定定位，计算从攻击者到目标的绝对位置
+function calculateAttackOffset(attackerId: string, targetId: string | null, isBoss: boolean): Promise<{ x: number; y: number; targetX: number; targetY: number }> {
+  // 等待DOM更新后获取元素位置
+  return new Promise<{ x: number; y: number; targetX: number; targetY: number }>((resolve) => {
+    setTimeout(() => {
+      const attackerEl = document.querySelector(`[data-attacker-id="${attackerId}"]`) as HTMLElement
+      let targetEl: HTMLElement | null = null
+      
+      if (isBoss) {
+        // 攻击敌人本体：找到敌人头像
+        targetEl = document.querySelector('.enemy-panel .player-avatar-container') as HTMLElement
+      } else if (targetId) {
+        // 攻击敌方角色：找到目标角色卡片
+        targetEl = document.querySelector(`[data-minion-id="${targetId}"]`) as HTMLElement
+      }
+      
+      if (attackerEl && targetEl) {
+        const attackerRect = attackerEl.getBoundingClientRect()
+        const targetRect = targetEl.getBoundingClientRect()
+        
+        // 计算中心点位置（相对于视口）
+        const attackerX = attackerRect.left + attackerRect.width / 2
+        const attackerY = attackerRect.top + attackerRect.height / 2
+        const targetX = targetRect.left + targetRect.width / 2
+        const targetY = targetRect.top + targetRect.height / 2
+        
+        resolve({ x: attackerX, y: attackerY, targetX, targetY })
+      } else {
+        // 如果找不到元素，使用估算值
+        if (isBoss) {
+          resolve({ x: 200, y: 400, targetX: 1000, targetY: 400 })
+        } else {
+          resolve({ x: 200, y: 400, targetX: 800, targetY: 400 })
+        }
+      }
+    }, 50)
+  })
+}
+
+// 监听攻击事件
+async function handleAttackStart(event: CustomEvent) {
+  const { attackerId, targetId, isBoss } = event.detail
+  if (attackerId && (targetId || isBoss)) {
+    const positions = await calculateAttackOffset(attackerId, targetId || null, !!isBoss)
+    // 通过新 Map 触发响应式更新，确保动画立即生效
+    const next = new Map(attackingMinions.value)
+    next.set(attackerId, { 
+      targetId: targetId || '', 
+      isBoss: !!isBoss,
+      x: positions.x,
+      y: positions.y,
+      targetX: positions.targetX,
+      targetY: positions.targetY
+    })
+    attackingMinions.value = next
+  }
+}
+
+function handleAttackEnd(event: CustomEvent) {
+  const { attackerId } = event.detail
+  if (attackerId) {
+    const next = new Map(attackingMinions.value)
+    next.delete(attackerId)
+    attackingMinions.value = next
+  }
+}
+
+// 检查是否正在攻击
+function isAttacking(minionId: string): boolean {
+  return attackingMinions.value.has(minionId)
+}
+
+function getAttackTarget(minionId: string): { targetId: string; isBoss: boolean; x: number; y: number; targetX: number; targetY: number } | undefined {
+  return attackingMinions.value.get(minionId)
+}
+
+// 获取攻击样式 - 使用固定定位跳出方框
+function getAttackStyle(minionId: string): string {
+  const target = getAttackTarget(minionId)
+  if (!target) return ''
+  return `
+    position: fixed;
+    left: ${target.x}px;
+    top: ${target.y}px;
+    --start-x: ${target.x}px;
+    --start-y: ${target.y}px;
+    --target-x: ${target.targetX}px;
+    --target-y: ${target.targetY}px;
+    z-index: 10000;
+  `
+}
+
+// 监听受击事件
+function handleEnemyHit(event: CustomEvent) {
+  const { minionId, damage, beforeHealth, afterHealth } = event.detail
+  const next = new Map(hitEffects.value)
+  next.set(minionId, { timestamp: Date.now(), damage })
+  hitEffects.value = next
+  // 3秒后清除效果
+  setTimeout(() => {
+    const cleared = new Map(hitEffects.value)
+    cleared.delete(minionId)
+    hitEffects.value = cleared
+  }, 3000)
+  
+  // 如果有血量变化信息，可以用于显示更详细的反馈
+  if (beforeHealth !== undefined && afterHealth !== undefined) {
+    console.log(`[BattleField] ${minionId} 受击: ${beforeHealth} -> ${afterHealth} (伤害: ${damage})`)
+  }
+}
+
+function handleAllyHit(event: CustomEvent) {
+  const { minionId, damage } = event.detail
+  const next = new Map(hitEffects.value)
+  next.set(minionId, { timestamp: Date.now(), damage })
+  hitEffects.value = next
+  setTimeout(() => {
+    const cleared = new Map(hitEffects.value)
+    cleared.delete(minionId)
+    hitEffects.value = cleared
+  }, 3000)
+}
+
+function handlePlayerHit(event: CustomEvent) {
+  const { damage } = event.detail
+  playerHitEffect.value = { timestamp: Date.now(), damage }
+  setTimeout(() => {
+    playerHitEffect.value = null
+  }, 2000)
+}
+
+function handleEnemyBossHit(event: CustomEvent) {
+  const { damage } = event.detail
+  enemyBossHitEffect.value = { timestamp: Date.now(), damage }
+  setTimeout(() => {
+    enemyBossHitEffect.value = null
+  }, 2000)
+}
+
+// 检查是否有受击效果
+function hasHitEffect(minionId: string): boolean {
+  return hitEffects.value.has(minionId)
+}
+
+function getHitEffect(minionId: string): { timestamp: number; damage: number } | undefined {
+  return hitEffects.value.get(minionId)
+}
+
+onMounted(() => {
+  window.addEventListener('enemy-hit', handleEnemyHit as EventListener)
+  window.addEventListener('ally-hit', handleAllyHit as EventListener)
+  window.addEventListener('player-hit', handlePlayerHit as EventListener)
+  window.addEventListener('enemy-boss-hit', handleEnemyBossHit as EventListener)
+  window.addEventListener('attack-start', handleAttackStart as unknown as EventListener)
+  window.addEventListener('attack-end', handleAttackEnd as EventListener)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('enemy-hit', handleEnemyHit as EventListener)
+  window.removeEventListener('ally-hit', handleAllyHit as EventListener)
+  window.removeEventListener('player-hit', handlePlayerHit as EventListener)
+  window.removeEventListener('enemy-boss-hit', handleEnemyBossHit as EventListener)
+  window.removeEventListener('attack-start', handleAttackStart as unknown as EventListener)
+  window.removeEventListener('attack-end', handleAttackEnd as EventListener)
+})
 
 // 调试：监听 enemyPanel 变化
 import { watch } from 'vue'
@@ -110,12 +283,16 @@ function handleSlotDrop(event: DragEvent, position: number) {
         <div class="vertical-info-panel ally-panel">
           <div class="vertical-info-content">
             <!-- 圆形头像框 -->
-            <div class="player-avatar-container">
+            <div class="player-avatar-container" :class="{ 'hit-effect': playerHitEffect }">
               <div class="vertical-name-text">{{ playerCharacterName }}</div>
               <div class="player-avatar-circle">
                 <span :class="['player-avatar-icon', playerCharacterIcon.color]">
                   {{ playerCharacterIcon.emoji }}
                 </span>
+              </div>
+              <!-- 玩家受击伤害数字 -->
+              <div v-if="playerHitEffect" class="damage-number player-damage">
+                -{{ playerHitEffect.damage }}
               </div>
             </div>
             <!-- 血条 -->
@@ -154,12 +331,53 @@ function handleSlotDrop(event: DragEvent, position: number) {
                 @dragover.prevent="handleSlotDragOver($event, slotIndex + 2)"
                 @drop.prevent="handleSlotDrop($event, slotIndex + 2)"
               >
+              <!-- 原位置的角色卡片（攻击时半透明） -->
               <div 
                 v-if="getMinionAtPosition(slotIndex + 2)"
                 class="character-card ally-card"
+                :class="{ 
+                  'hit-effect': hasHitEffect(getMinionAtPosition(slotIndex + 2)!.id),
+                  'attacking': isAttacking(getMinionAtPosition(slotIndex + 2)!.id)
+                }"
+                :data-attacker-id="getMinionAtPosition(slotIndex + 2)!.id"
                 @dragover.prevent
                 @drop.prevent="emit('equip-to-minion', { minionId: getMinionAtPosition(slotIndex + 2)!.id })"
               >
+                <!-- 攻击时的克隆体（跳出方框，Teleport 到 body，避免任何裁剪/层级影响） -->
+                <Teleport to="body">
+                  <div 
+                    v-if="isAttacking(getMinionAtPosition(slotIndex + 2)!.id)"
+                    class="character-card-attack-clone"
+                    :style="getAttackStyle(getMinionAtPosition(slotIndex + 2)!.id)"
+                  >
+                    <div class="character-header">
+                      <div class="character-name">{{ getMinionAtPosition(slotIndex + 2)!.name }}</div>
+                    </div>
+                    <div class="character-avatar">
+                      <span :class="['avatar-icon', iconFor(getMinionAtPosition(slotIndex + 2)!.name, 'ally').color]">
+                        {{ iconFor(getMinionAtPosition(slotIndex + 2)!.name, 'ally').emoji }}
+                      </span>
+                    </div>
+                    <div class="character-stats">
+                      <div class="stat-item attack-stat">
+                        <span class="stat-icon">⚔️</span>
+                        <span class="stat-value">{{ getMinionAtPosition(slotIndex + 2)!.attack }}</span>
+                      </div>
+                      <div class="stat-item hp-stat">
+                        <span class="stat-icon">❤️</span>
+                        <span class="stat-value">{{ getMinionAtPosition(slotIndex + 2)!.health }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Teleport>
+                <!-- 我方受击伤害数字 -->
+                <div 
+                  v-if="hasHitEffect(getMinionAtPosition(slotIndex + 2)!.id)"
+                  class="damage-number"
+                  :key="getHitEffect(getMinionAtPosition(slotIndex + 2)!.id)?.timestamp"
+                >
+                  -{{ getHitEffect(getMinionAtPosition(slotIndex + 2)!.id)?.damage }}
+                </div>
                 <div class="character-header">
                   <div class="character-name">{{ getMinionAtPosition(slotIndex + 2)!.name }}</div>
                   <div class="header-badges">
@@ -173,7 +391,6 @@ function handleSlotDrop(event: DragEvent, position: number) {
                     </div>
                     <div v-if="getMinionAtPosition(slotIndex + 2)!.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
                       <span class="status-icon">😴</span>
-                      <span class="status-text">准备中</span>
                     </div>
                   </div>
                 </div>
@@ -219,12 +436,53 @@ function handleSlotDrop(event: DragEvent, position: number) {
                 @dragover.prevent="handleSlotDragOver($event, slotIndex - 1)"
                 @drop.prevent="handleSlotDrop($event, slotIndex - 1)"
               >
+              <!-- 原位置的角色卡片（攻击时半透明） -->
               <div 
                 v-if="getMinionAtPosition(slotIndex - 1)"
                 class="character-card ally-card"
+                :class="{ 
+                  'hit-effect': hasHitEffect(getMinionAtPosition(slotIndex - 1)!.id),
+                  'attacking': isAttacking(getMinionAtPosition(slotIndex - 1)!.id)
+                }"
+                :data-attacker-id="getMinionAtPosition(slotIndex - 1)!.id"
                 @dragover.prevent
                 @drop.prevent="emit('equip-to-minion', { minionId: getMinionAtPosition(slotIndex - 1)!.id })"
               >
+                <!-- 攻击时的克隆体（Teleport 到 body，避免裁剪/层级问题） -->
+                <Teleport to="body">
+                  <div 
+                    v-if="isAttacking(getMinionAtPosition(slotIndex - 1)!.id)"
+                    class="character-card-attack-clone"
+                    :style="getAttackStyle(getMinionAtPosition(slotIndex - 1)!.id)"
+                  >
+                    <div class="character-header">
+                      <div class="character-name">{{ getMinionAtPosition(slotIndex - 1)!.name }}</div>
+                    </div>
+                    <div class="character-avatar">
+                      <span :class="['avatar-icon', iconFor(getMinionAtPosition(slotIndex - 1)!.name, 'ally').color]">
+                        {{ iconFor(getMinionAtPosition(slotIndex - 1)!.name, 'ally').emoji }}
+                      </span>
+                    </div>
+                    <div class="character-stats">
+                      <div class="stat-item attack-stat">
+                        <span class="stat-icon">⚔️</span>
+                        <span class="stat-value">{{ getMinionAtPosition(slotIndex - 1)!.attack }}</span>
+                      </div>
+                      <div class="stat-item hp-stat">
+                        <span class="stat-icon">❤️</span>
+                        <span class="stat-value">{{ getMinionAtPosition(slotIndex - 1)!.health }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Teleport>
+                <!-- 我方受击伤害数字 -->
+                <div 
+                  v-if="hasHitEffect(getMinionAtPosition(slotIndex - 1)!.id)"
+                  class="damage-number"
+                  :key="getHitEffect(getMinionAtPosition(slotIndex - 1)!.id)?.timestamp"
+                >
+                  -{{ getHitEffect(getMinionAtPosition(slotIndex - 1)!.id)?.damage }}
+                </div>
                 <div class="character-header">
                   <div class="character-name">{{ getMinionAtPosition(slotIndex - 1)!.name }}</div>
                   <div class="header-badges">
@@ -238,7 +496,6 @@ function handleSlotDrop(event: DragEvent, position: number) {
                     </div>
                     <div v-if="getMinionAtPosition(slotIndex - 1)!.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
                       <span class="status-icon">😴</span>
-                      <span class="status-text">准备中</span>
                     </div>
                   </div>
                 </div>
@@ -301,7 +558,20 @@ function handleSlotDrop(event: DragEvent, position: number) {
                 <div 
                   v-if="getEnemyMinionAtPosition(slotIndex - 1)"
                   class="character-card enemy-card"
+                  :class="{ 
+                    'hit-effect': hasHitEffect(getEnemyMinionAtPosition(slotIndex - 1)!.id),
+                    'attack-target': Array.from(attackingMinions.values()).some(a => a.targetId === getEnemyMinionAtPosition(slotIndex - 1)!.id)
+                  }"
+                  :data-minion-id="getEnemyMinionAtPosition(slotIndex - 1)!.id"
                 >
+                  <!-- 受击伤害数字 -->
+                  <div 
+                    v-if="hasHitEffect(getEnemyMinionAtPosition(slotIndex - 1)!.id)"
+                    class="damage-number enemy-damage"
+                    :key="getHitEffect(getEnemyMinionAtPosition(slotIndex - 1)!.id)?.timestamp"
+                  >
+                    -{{ getHitEffect(getEnemyMinionAtPosition(slotIndex - 1)!.id)?.damage }}
+                  </div>
                   <div class="character-header">
                     <div class="character-name">{{ getEnemyMinionAtPosition(slotIndex - 1)!.name }}</div>
                     <div class="header-badges">
@@ -349,7 +619,20 @@ function handleSlotDrop(event: DragEvent, position: number) {
                 <div 
                   v-if="getEnemyMinionAtPosition(slotIndex + 2)"
                   class="character-card enemy-card"
+                  :class="{ 
+                    'hit-effect': hasHitEffect(getEnemyMinionAtPosition(slotIndex + 2)!.id),
+                    'attack-target': Array.from(attackingMinions.values()).some(a => a.targetId === getEnemyMinionAtPosition(slotIndex + 2)!.id)
+                  }"
+                  :data-minion-id="getEnemyMinionAtPosition(slotIndex + 2)!.id"
                 >
+                  <!-- 受击伤害数字 -->
+                  <div 
+                    v-if="hasHitEffect(getEnemyMinionAtPosition(slotIndex + 2)!.id)"
+                    class="damage-number enemy-damage"
+                    :key="getHitEffect(getEnemyMinionAtPosition(slotIndex + 2)!.id)?.timestamp"
+                  >
+                    -{{ getHitEffect(getEnemyMinionAtPosition(slotIndex + 2)!.id)?.damage }}
+                  </div>
                   <div class="character-header">
                     <div class="character-name">{{ getEnemyMinionAtPosition(slotIndex + 2)!.name }}</div>
                     <div class="header-badges">
@@ -396,12 +679,16 @@ function handleSlotDrop(event: DragEvent, position: number) {
         <div class="vertical-info-panel enemy-panel">
           <div class="vertical-info-content">
             <!-- 圆形头像框 -->
-            <div class="player-avatar-container">
+            <div class="player-avatar-container" :class="{ 'hit-effect': enemyBossHitEffect }">
               <div class="vertical-name-text">{{ enemyCharacterName }}</div>
               <div class="player-avatar-circle enemy-avatar">
                 <span :class="['player-avatar-icon', enemyCharacterIcon.color]">
                   {{ enemyCharacterIcon.emoji }}
                 </span>
+              </div>
+              <!-- 敌人本体受击伤害数字 -->
+              <div v-if="enemyBossHitEffect" class="damage-number enemy-boss-damage">
+                -{{ enemyBossHitEffect.damage }}
               </div>
             </div>
             <div class="hp-display enemy-hp horizontal">
@@ -472,7 +759,7 @@ function handleSlotDrop(event: DragEvent, position: number) {
   padding: 20px;
   position: relative;
   z-index: 1;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* 战斗区域：左右对称，中间分隔 */
@@ -482,6 +769,7 @@ function handleSlotDrop(event: DragEvent, position: number) {
   gap: 16px;
   align-items: stretch;
   height: 100%;
+  overflow: visible;
 }
 
 /* 区域通用样式 */
@@ -830,7 +1118,7 @@ function handleSlotDrop(event: DragEvent, position: number) {
   min-width: 0;
   justify-content: center;
   align-items: center;
-  padding: 12px;
+  padding: 8px 6px; /* 缩小上下内边距 */
   overflow: hidden;
 }
 
@@ -1053,10 +1341,10 @@ function handleSlotDrop(event: DragEvent, position: number) {
 /* 左列和右列样式已通过 battle-column 统一设置 */
 
 .battle-slot {
-  width: 140px;
-  height: 180px;
-  min-width: 140px;
-  min-height: 180px;
+  width: 150px;
+  height: 150px;
+  min-width: 150px;
+  min-height: 150px;
   border: 2px dashed rgba(148, 163, 184, 0.3);
   border-radius: 10px;
   padding: 0;
@@ -1106,11 +1394,12 @@ function handleSlotDrop(event: DragEvent, position: number) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
-  width: 140px;
-  height: 180px;
-  min-width: 140px;
+  width: 150px;
+  height: 150px;
+  min-width: 150px;
   box-sizing: border-box;
   flex-shrink: 0;
+  z-index: 10;
 }
 
 .equipment-dots {
@@ -1139,6 +1428,9 @@ function handleSlotDrop(event: DragEvent, position: number) {
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
   transition: left 0.5s;
+  pointer-events: none;
+  /* 限制滑动光效只在卡牌内部，避免超出边界 */
+  clip-path: inset(0 round 12px);
 }
 
 .character-card:hover::before {
@@ -1217,9 +1509,10 @@ function handleSlotDrop(event: DragEvent, position: number) {
 }
 
 .status-badge.summoning-sickness {
-  background: rgba(107, 114, 128, 0.3);
-  border-color: rgba(107, 114, 128, 0.5);
-  opacity: 0.8;
+  background: rgba(55, 65, 81, 0.35); /* 更暗的灰色，表示准备中 */
+  border-color: rgba(55, 65, 81, 0.55);
+  color: #9ca3af;
+  opacity: 0.9;
 }
 
 .shield-icon, .star-icon, .status-icon {
@@ -1512,6 +1805,300 @@ function handleSlotDrop(event: DragEvent, position: number) {
 
   .hp-display:not(.horizontal) {
     min-width: 120px;
+  }
+}
+
+/* 受击反馈效果 */
+.hit-effect {
+  animation: hit-flash 0.5s ease;
+}
+
+@keyframes hit-flash {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  15% {
+    transform: scale(1.05);
+    filter: brightness(1.5);
+  }
+  30% {
+    transform: scale(0.98);
+    filter: brightness(0.8);
+  }
+  45% {
+    transform: scale(1.02);
+    filter: brightness(1.3);
+  }
+  60% {
+    transform: scale(0.99);
+    filter: brightness(0.9);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* 伤害数字显示 */
+.damage-number {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ef4444;
+  text-shadow: 
+    0 0 10px rgba(239, 68, 68, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  pointer-events: none;
+  animation: damage-float 1s ease-out forwards;
+  user-select: none;
+}
+
+.enemy-damage {
+  color: #fbbf24;
+  text-shadow: 
+    0 0 10px rgba(251, 191, 36, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.player-damage {
+  color: #ef4444;
+  font-size: 1.25rem;
+}
+
+.enemy-boss-damage {
+  color: #fbbf24;
+  font-size: 1.25rem;
+}
+
+@keyframes damage-float {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -80%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -120%) scale(0.9);
+  }
+}
+
+/* 玩家头像受击效果 */
+.player-avatar-container.hit-effect {
+  animation: avatar-hit-shake 0.5s ease;
+}
+
+@keyframes avatar-hit-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-3px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(3px);
+  }
+}
+
+/* 攻击动画效果 - 原卡片半透明 */
+.character-card.attacking {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* 攻击克隆体 - 跳出方框攻击 */
+.character-card-attack-clone {
+  position: fixed;
+  width: 120px;   /* 缩小克隆体尺寸，减小覆盖面积 */
+  height: 160px;
+  min-width: 120px;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border: 2px solid rgba(59, 130, 246, 0.8);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 置于最顶层，避免被任何战场层级覆盖 */
+  z-index: 2147483647 !important; /* 接近浏览器上限 */
+  pointer-events: none;
+  animation: attack-move-clone 0.9s ease-in-out forwards; /* 稍加速，贴合新高度 */
+  transform-origin: center center;
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.6), 0 0 20px rgba(59, 130, 246, 0.4);
+  will-change: transform, left, top;
+  margin-left: -70px; /* 减去卡片宽度的一半，使中心对齐 */
+  margin-top: -90px; /* 减去卡片高度的一半，使中心对齐 */
+}
+
+.character-card-attack-clone .character-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.character-card-attack-clone .character-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-card-attack-clone .character-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
+.character-card-attack-clone .avatar-icon {
+  font-size: 1.8rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.character-card-attack-clone .character-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.character-card-attack-clone .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.character-card-attack-clone .attack-stat {
+  color: #fbbf24;
+}
+
+.character-card-attack-clone .hp-stat {
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.character-card-attack-clone .stat-icon {
+  font-size: 0.75rem;
+}
+
+.character-card-attack-clone .stat-value {
+  font-size: 0.8125rem;
+}
+
+/* 允许攻击克隆体/伤害数字跨越容器，不被裁剪 */
+.battle-field,
+.battle-arena,
+.ally-zone,
+.enemy-zone,
+.battle-area,
+.battle-slots,
+.battle-slot {
+  overflow: visible !important;
+  position: relative;
+}
+
+/* 卡牌本体保持裁剪，限制内部光效不出界（克隆体已 Teleport，不受此限制） */
+.character-card {
+  overflow: hidden;
+}
+
+@keyframes attack-move-clone {
+  0% {
+    left: var(--start-x, 200px);
+    top: var(--start-y, 400px);
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  40% {
+    /* 移动到目标位置 */
+    left: var(--target-x, 800px);
+    top: var(--target-y, 400px);
+    transform: translate(0, 0) scale(1.1);
+    opacity: 1;
+  }
+  50% {
+    /* 攻击动作 - 向前突进 */
+    left: calc(var(--target-x, 800px) + 15px);
+    top: var(--target-y, 400px);
+    transform: translate(0, 0) scale(1.3) rotate(12deg);
+    opacity: 1;
+  }
+  60% {
+    /* 攻击后稍微后退 */
+    left: var(--target-x, 800px);
+    top: var(--target-y, 400px);
+    transform: translate(0, 0) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    /* 返回原位置并淡出 */
+    left: var(--start-x, 200px);
+    top: var(--start-y, 400px);
+    transform: translate(0, 0) scale(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes attack-glow {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+}
+
+/* 攻击目标高亮 */
+.character-card.attack-target {
+  animation: target-flash 0.3s ease-out;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+}
+
+@keyframes target-flash {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.5);
+  }
+}
+
+/* 敌人本体受击目标 */
+.player-avatar-container.hit-effect[data-is-boss="true"] {
+  animation: avatar-hit-shake 0.5s ease, boss-target-flash 0.3s ease-out;
+}
+
+@keyframes boss-target-flash {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3);
   }
 }
 </style>

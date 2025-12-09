@@ -1,8 +1,10 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios'
 
 // API 配置
-// 注意：后端 Controller 没有 /api 前缀，所以这里不使用 /api
-const API_BASE_URL = 'http://26.83.153.194:8080'
+// 优先使用环境变量，默认指向本地后端
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
+  'http://localhost:8080'
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({

@@ -194,11 +194,11 @@ function handleDragEnd() {
   position: relative;
   min-width: 140px;
   width: 140px;
-  height: 200px;
+  height: 180px; /* 降低手牌高度，减少占用空间 */
   background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
   border: 2px solid rgba(148, 163, 184, 0.3);
   border-radius: 12px;
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   cursor: pointer;
