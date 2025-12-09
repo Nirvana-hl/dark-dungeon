@@ -11,8 +11,14 @@ const emit = defineEmits<{
   (e: 'play', id: string): void
   (e: 'start-equip-drag', card: Card): void
   (e: 'end-equip-drag'): void
+  (e: 'start-character-drag', card: Card): void
+  (e: 'end-character-drag'): void
   // 装备点击时，仅查看详情，不直接打出
   (e: 'show-equipment', card: Card): void
+  // 角色卡点击时，仅查看详情，不直接打出
+  (e: 'show-character', card: Card): void
+  // 法术卡点击时，仅查看详情，不直接打出
+  (e: 'show-spell', card: Card): void
 }>()
 
 const isHovered = ref(false)
@@ -75,33 +81,46 @@ function handleClick() {
     return
   }
 
-  isPlaying.value = true
-  setTimeout(() => {
-    isPlaying.value = false
-  }, 300)
-  // 触发冷却
-  if (cooldown.value > 0) {
-    currentCooldown.value = cooldown.value
-    // 这里应该由游戏状态管理来处理冷却，这里只是UI展示
+  // 角色卡：点击只查看详情，不直接打出（需要通过拖拽部署）
+  if (props.card.type === 'character') {
+    emit('show-character', props.card)
+    return
   }
-  // 通知父组件打出这张牌
-  emit('play', props.card.id)
+
+  // 法术卡：点击只查看详情，不直接打出
+  if (props.card.type === 'spell') {
+    emit('show-spell', props.card)
+    return
+  }
 }
 
 function handleDragStart(e: DragEvent) {
-  if (props.card.type !== 'equipment') return
-  try {
-    e.dataTransfer?.setData('text/plain', String(props.card.id))
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move'
-    }
-  } catch {}
-  emit('start-equip-drag', props.card)
+  // 支持装备卡和角色卡的拖拽
+  if (props.card.type === 'equipment') {
+    try {
+      e.dataTransfer?.setData('text/plain', String(props.card.id))
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+      }
+    } catch {}
+    emit('start-equip-drag', props.card)
+  } else if (props.card.type === 'character') {
+    try {
+      e.dataTransfer?.setData('text/plain', String(props.card.id))
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+      }
+    } catch {}
+    emit('start-character-drag', props.card)
+  }
 }
 
 function handleDragEnd() {
-  if (props.card.type !== 'equipment') return
-  emit('end-equip-drag')
+  if (props.card.type === 'equipment') {
+    emit('end-equip-drag')
+  } else if (props.card.type === 'character') {
+    emit('end-character-drag')
+  }
 }
 </script>
 
@@ -118,7 +137,7 @@ function handleDragEnd() {
         'playing': isPlaying
       }
     ]"
-    :draggable="card.type === 'equipment'"
+    :draggable="card.type === 'equipment' || card.type === 'character'"
     @click="handleClick"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"

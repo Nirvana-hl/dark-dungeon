@@ -26,16 +26,16 @@ export const useCampStore = defineStore('camp', () => {
     const result = campData.value?.userPlayerCharacter || null
     // 只在调试时输出日志，避免过多日志
     if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
-      console.log('[CampStore] playerCharacter computed 被调用:', {
-        hasCampData: !!campData.value,
-        hasUserPlayerCharacter: !!campData.value?.userPlayerCharacter,
+    console.log('[CampStore] playerCharacter computed 被调用:', {
+      hasCampData: !!campData.value,
+      hasUserPlayerCharacter: !!campData.value?.userPlayerCharacter,
         result: result ? { 
           id: result.id, 
           name: result.playerCharacterName,
           currentHp: result.currentHp,
           maxHp: result.maxHp
         } : null
-      })
+    })
     }
     return result
   })

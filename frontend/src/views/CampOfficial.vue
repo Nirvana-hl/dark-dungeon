@@ -24,10 +24,6 @@
           </div>
           
           <div class="quick-stats">
-            <div class="stat-compact">
-              <i class="fas fa-bolt"></i>
-              <span>{{ playerCharacter?.currentActionPoints || 0 }}/{{ playerCharacter?.maxActionPoints || 5 }}</span>
-            </div>
             <div class="stat-compact" :class="stressLevelClass">
               <i class="fas fa-brain"></i>
               <span>{{ playerCharacter?.currentStress || 0 }}%</span>
@@ -165,7 +161,17 @@
                   <span class="rarity-tag" :class="getCharacterRarityClass(character)">
                     {{ getCharacterRarityLabel(character.characterRarity) }}
                   </span>
-                  <span class="quantity-tag">×{{ character.quantity || 1 }}</span>
+                  <span class="quantity-tag">×{{ character.quantity ?? 0 }}</span>
+                  <button
+                    v-if="(character.quantity ?? 0) >= 3"
+                    class="star-up-btn"
+                    :disabled="isUpgradingStar[character.id] || (character.currentStarLevel || 1) >= 5"
+                    @click.stop="upgradeCharacterStar(character)"
+                    :title="(character.currentStarLevel || 1) >= 5 ? '已达到最大星级' : '消耗3张卡牌升星'"
+                  >
+                    <i class="fas fa-star"></i>
+                    升星
+                  </button>
                 </div>
                 <div class="character-card-body">
                   <div class="character-name">
@@ -699,7 +705,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { campApi, stressApi, userCardApi } from '@/lib/api'
+import { campApi, stressApi, userCardApi, userCardCharacterApi } from '@/lib/api'
 import CharacterPanel from '@/components/CharacterPanel.vue'
 import ShopPanel from '@/components/ShopPanel.vue'
 import ClassSelectionModal from '@/components/ClassSelectionModal.vue'
@@ -730,6 +736,7 @@ const walletStore = useWalletStore()
 // 数据定义 - 使用 store 的响应式引用，确保数据同步
 const { playerCharacter } = storeToRefs(campStore)
 const userWallets = ref<any[]>([])
+const isUpgradingStar = ref<Record<string | number, boolean>>({})
 const userCards = ref<any[]>([])
 const equippedCards = ref<any[]>([])
 const inventory = ref<any[]>([])
@@ -963,6 +970,62 @@ function formatCharacterClass(classType?: string) {
   }
   if (!classType) return '未知职业'
   return classMap[classType.toLowerCase()] || classType
+}
+
+// 升星角色卡牌
+async function upgradeCharacterStar(character: any) {
+  const characterId = character.id || character.userCardCharacterId
+  if (!characterId) {
+    showNotification('error', '角色ID无效', 'fas fa-exclamation-triangle')
+    return
+  }
+  
+  // 检查数量是否足够（使用实际数量，不使用默认值）
+  const actualQuantity = Number(character.quantity ?? 0) || 0
+  if (actualQuantity < 3) {
+    showNotification('error', `需要至少3张卡牌才能升星，当前只有 ${actualQuantity} 张`, 'fas fa-exclamation-triangle')
+    return
+  }
+  
+  // 检查是否已达到最大星级
+  if ((character.currentStarLevel || 1) >= 5) {
+    showNotification('error', '已达到最大星级', 'fas fa-exclamation-triangle')
+    return
+  }
+  
+  // 防止重复点击
+  if (isUpgradingStar.value[characterId]) {
+    return
+  }
+  
+  try {
+    isUpgradingStar.value[characterId] = true
+    
+    console.log('[CampOfficial] 开始升星:', {
+      characterName: character.characterName,
+      characterId: characterId,
+      currentStarLevel: character.currentStarLevel || 1,
+      quantity: character.quantity ?? 0
+    })
+    
+    // 调用后端升星接口
+    const response = await userCardCharacterApi.upgradeStarLevel(characterId)
+    
+    if (response.data.code === 200) {
+      showNotification('success', `${character.characterName || '角色'} 升星成功！`, 'fas fa-star')
+      
+      // 刷新营地数据以获取最新的星级和数量
+      await loadCampData()
+    } else {
+      throw new Error(response.data.message || '升星失败')
+    }
+  } catch (error) {
+    console.error('[CampOfficial] 升星失败:', error)
+    const errorMessage = error instanceof Error ? error.message : '升星失败'
+    showNotification('error', errorMessage, 'fas fa-exclamation-triangle')
+  } finally {
+    isUpgradingStar.value[characterId] = false
+  }
 }
 
 // 切换角色部署状态（待命/已上阵）
@@ -1713,8 +1776,10 @@ async function loadCampData() {
       // 但为了处理可能的历史数据（多个记录），按 cardCharacterId 分组合并
       const characterMap = new Map<number | string, any>()
       rawCardCharacters.forEach((char: any) => {
-        // 使用 cardCharacterId 作为唯一键（如果存在），否则使用 id
-        const key = char.cardCharacterId ?? char.id
+        // 使用 cardCharacterId + 当前星级作为唯一键，避免不同星级被合并
+        const star = Number(char.currentStarLevel ?? 1) || 1
+        const baseKey = char.cardCharacterId ?? char.id
+        const key = baseKey ? `${baseKey}::${star}` : null
         if (!key) {
           console.warn('[CampOfficial] 角色卡牌缺少唯一标识:', char)
           return
@@ -1723,8 +1788,8 @@ async function loadCampData() {
         if (characterMap.has(key)) {
           // 如果已有该角色，累加数量（处理历史数据可能有多个记录的情况）
           const existing = characterMap.get(key)
-          const existingQty = existing.quantity ?? 1
-          const newQty = char.quantity ?? 1
+          const existingQty = Number(existing.quantity ?? 1) || 0
+          const newQty = Number(char.quantity ?? 0) || 0
           existing.quantity = existingQty + newQty
           // 保留最新的部署状态和其他属性
           if (char.isDeployed !== undefined) {
@@ -1735,20 +1800,22 @@ async function loadCampData() {
             existing.id = char.id
           }
         } else {
-          // 新角色，直接添加，确保 quantity 有值
+          // 新角色，直接添加，保持后端返回的 quantity 值（不强制设置为1）
           characterMap.set(key, {
             ...char,
-            quantity: char.quantity ?? 1
+            quantity: Number(char.quantity ?? 0) || 0
           })
         }
       })
       
       cardCharacters.value = Array.from(characterMap.values())
       
-      // 确保所有角色卡牌都有 quantity 字段，且至少为 1
+      // 确保所有角色卡牌都有 quantity 字段（但不强制设置为1，保持后端返回的真实值）
       cardCharacters.value.forEach((char: any) => {
-        if (!char.quantity || char.quantity < 1) {
-          char.quantity = 1
+        if (char.quantity === null || char.quantity === undefined) {
+          char.quantity = 0 // 如果后端没有返回 quantity，设置为 0 而不是 1
+        } else {
+          char.quantity = Number(char.quantity) || 0 // 统一转为数字
         }
       })
       
@@ -3421,6 +3488,8 @@ section {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .rarity-tag {
@@ -3441,6 +3510,39 @@ section {
 .quantity-tag {
   font-weight: 600;
   color: #e8e8e8;
+}
+
+.star-up-btn {
+  padding: 0.25rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #1f2937;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.star-up-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+}
+
+.star-up-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.star-up-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(107, 114, 128, 0.5);
+  color: #9ca3af;
 }
 
 .character-name {

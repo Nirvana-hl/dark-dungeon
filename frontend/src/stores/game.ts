@@ -1,3 +1,5 @@
+
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { gameApi, userCardApi, userCardCharacterApi } from '@/lib/api'
@@ -21,6 +23,10 @@ export interface Card {
   bonusAttack?: number
   bonusHp?: number
   bonusDefense?: number
+  // 效果配置（JSON字符串，来自后端 effectPayload）
+  effectPayload?: string
+  // 卡牌角色ID（用于获取特性）
+  cardCharacterId?: number | string
 }
 
 export interface Minion {
@@ -34,6 +40,14 @@ export interface Minion {
   equipmentNames?: string[]
   // 是否可以攻击（召唤疲劳：刚打出的随从本回合不能攻击）
   canAttack?: boolean
+  // 效果配置（JSON字符串，来自后端 effectPayload）
+  effectPayload?: string
+  // 卡牌角色ID（用于获取特性）
+  cardCharacterId?: number | string
+  // 角色特性列表（从后端加载）
+  traits?: Array<{ effectPayload?: string; scalingPayload?: string }>
+  // 部署位置（0-5，共6个位置，0为最前排）
+  position?: number
 }
 
 function uid() {
@@ -67,6 +81,10 @@ export const useGameStore = defineStore('game', () => {
   const enemyManaMax = ref(1) // 敌人最大法力值
   const enemyDeckExhausted = ref(false) // 敌人牌库是否耗尽
   const hasEnemyPlayedCards = ref(false) // 敌人是否已经出过牌（用于区分"游戏刚开始"和"敌人角色被击败"）
+  
+  // 敌人本体信息
+  const currentEnemyId = ref<number | null>(null) // 当前战斗的敌人ID
+  const enemyPanel = ref<{ name?: string; attack?: number; hp?: number; armor?: number; difficulty?: string } | null>(null) // 敌人面板信息（名字、攻击力、生命值、护甲、难度）
 
   // 胜负状态
   const battleOver = ref<boolean>(false)
@@ -173,6 +191,8 @@ export const useGameStore = defineStore('game', () => {
 
   // 角色特性（从数据库加载）
   const charTraits = ref<Record<string, CharacterTrait>>({})
+  // 卡牌角色特性缓存：按 cardCharacterId 存储后端返回的 traits 数组
+  const cardCharacterTraitsCache = ref<Record<string, Array<{ effectPayload?: string; scalingPayload?: string }>>>({})
 
   async function loadCharacterTraits() {
     try {
@@ -203,9 +223,100 @@ export const useGameStore = defineStore('game', () => {
     return Math.round(t.base_power + t.power_per_star * (s - 1))
   }
 
+  /**
+   * 按 cardCharacterId 加载特性（后端接口），带缓存
+   */
+  async function loadCardCharacterTraits(cardCharacterId?: number | string): Promise<Array<{ effectPayload?: string; scalingPayload?: string }>> {
+    if (!cardCharacterId) return []
+    const key = String(cardCharacterId)
+    if (cardCharacterTraitsCache.value[key]) return cardCharacterTraitsCache.value[key]
+    try {
+      const res = await gameApi.getCardCharacterTraits(cardCharacterId)
+      if (res.data.code === 200 && Array.isArray(res.data.data)) {
+        cardCharacterTraitsCache.value[key] = res.data.data
+        return res.data.data
+      }
+    } catch (e) {
+      log('加载角色特性失败：' + (e as any)?.message)
+    }
+    cardCharacterTraitsCache.value[key] = []
+    return []
+  }
+
+  /**
+   * 从角色特性或 effectPayload 中解析治疗量
+   */
+  function extractHealAmount(minion: Minion): number {
+    // 优先从 traits 读取 heal_allies（支持 scalingPayload）
+    if (minion.traits && minion.traits.length > 0) {
+      for (const trait of minion.traits) {
+        if (!trait.effectPayload) continue
+        try {
+          const effect = JSON.parse(trait.effectPayload)
+          if (effect.heal_allies) {
+            let healAmount = Number(effect.heal_allies) || 0
+            if (healAmount <= 0) continue
+            if (trait.scalingPayload && minion.stars && minion.stars > 1) {
+              try {
+                const scaling = JSON.parse(trait.scalingPayload)
+                const starKey = String(minion.stars)
+                if (scaling[starKey] && scaling[starKey].heal_allies) {
+                  healAmount = Number(scaling[starKey].heal_allies) || healAmount
+                }
+              } catch {
+                // ignore scaling parse errors
+              }
+            }
+            if (healAmount > 0) return healAmount
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }
+
+    // 兼容：从 effectPayload 读取 heal_allies / heal_amount / heal
+    if (minion.effectPayload) {
+      try {
+        const effect = JSON.parse(minion.effectPayload)
+        const healAmount =
+          Number(effect.heal_allies ?? effect.heal_amount ?? effect.heal ?? 0) || 0
+        if (healAmount > 0) return healAmount
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    return 0
+  }
+
+  /**
+   * 对友方全体进行治疗（如果有可解析的治疗量）
+   */
+  function maybeHealAllies(source: Minion, allies: Minion[], reason: string, isEnemy = false) {
+    const healAmount = extractHealAmount(source)
+    if (healAmount <= 0 || allies.length === 0) return
+    let healedCount = 0
+    allies.forEach(target => {
+      const before = target.health
+      target.health = target.health + healAmount
+      const actual = target.health - before
+      if (actual > 0) healedCount++
+    })
+    if (healedCount > 0) {
+      const side = isEnemy ? '敌方' : '我方'
+      log(`治疗：${side} ${source.name} 在${reason}为全体恢复 ${healAmount} 点生命`)
+    }
+  }
+
   function applyTraitsAtTurnStart() {
     // 我方每回合开始时，根据在场角色的特性结算
     if (board.value.length === 0) return
+    
+    // 处理角色特性治疗效果（基于 effectPayload 中的 heal_allies 字段），在回合开始给予群体治疗
+    board.value.forEach(m => maybeHealAllies(m, board.value, '回合开始'))
+    
+    // 然后处理其他特性（旧系统）
     board.value.forEach(m => {
       const t = charTraits.value[m.name]
       if (!t) return
@@ -248,6 +359,8 @@ export const useGameStore = defineStore('game', () => {
     cardCode?: string
     effect?: 'fireball3' | 'teamBuffAtk1'
     statModifiers?: string
+    effectPayload?: string
+    cardCharacterId?: number | string
   }
 
   interface UserCardCharacterResponse {
@@ -310,7 +423,9 @@ export const useGameStore = defineStore('game', () => {
           cost: 2,
           type: 'character' as CardType,
           attack,
-          health
+          health,
+          // 优先使用后端提供的 cardCharacterId，缺失时退回记录 id
+          cardCharacterId: (char as any).cardCharacterId ?? char.id
         }
       })
   }
@@ -350,11 +465,15 @@ export const useGameStore = defineStore('game', () => {
           type: cardType,
           attack,
           health,
-           // 以 stat_modifiers 作为主来源，统一传递到战斗逻辑
+          // 以 stat_modifiers 作为主来源，统一传递到战斗逻辑
           bonusAttack: atk,
           bonusHp: hp,
           bonusDefense: def,
-          effect
+          effect,
+          effectPayload: card.effectPayload ?? (typeof card.effect === 'string' ? card.effect : undefined),
+          // 优先使用 cardCharacterId 字段，回退记录 id（后端未返回时也能尝试加载特性）
+          cardCharacterId: card.cardCharacterId ?? card.id,
+          unique_play: !!(card as any).unique_play
         }
       })
 
@@ -380,25 +499,114 @@ export const useGameStore = defineStore('game', () => {
 
   // 敌方卡牌接口
   interface EnemyCardResponse {
+    id?: string | number
     name: string
     type: 'character' | 'spell' | 'equipment'
     attack?: number
     health?: number
     effect?: string
+    effectPayload?: string
+    cardCharacterId?: number | string
     unique_play?: boolean
   }
 
   // 从数据库加载敌方手牌（按关卡与难度）
   /**
    * 从后端加载敌人卡牌列表，初始化敌人牌库和手牌
+   * 同时获取敌人面板信息（用于敌人本体攻击）
    */
   async function loadEnemyDeck(stageNum: number) {
     const diff = enemyDifficulty.value
     try {
-      const response: AxiosResponse<ApiResponse<EnemyCardResponse[]>> = await gameApi.getEnemyCards(stageNum, diff)
-      if (response.data.code === 200 && response.data.data) {
+      // 1. 先获取关卡中所有可能的敌人列表
+      let selectedEnemyId: number | null = null
+      try {
+        const enemiesResponse = await gameApi.getStageEnemies(stageNum, diff)
+        console.log('[Game] getStageEnemies 响应:', enemiesResponse.data)
+        if (enemiesResponse.data.code === 200 && enemiesResponse.data.data) {
+          const enemies = enemiesResponse.data.data as Array<{ id: number; name: string; difficulty: string }>
+          console.log('[Game] 获取到敌人列表:', enemies)
+          if (enemies.length > 0) {
+            // 随机选择一个敌人
+            const randomIndex = Math.floor(Math.random() * enemies.length)
+            selectedEnemyId = enemies[randomIndex].id
+            currentEnemyId.value = selectedEnemyId
+            log(`已选择敌人：${enemies[randomIndex].name} (ID: ${selectedEnemyId})`)
+          } else {
+            console.warn('[Game] 敌人列表为空')
+          }
+        } else {
+          console.warn('[Game] getStageEnemies 返回错误:', enemiesResponse.data)
+        }
+      } catch (e) {
+        console.error('[Game] 获取敌人列表失败:', e)
+      }
+      
+      // 2. 获取敌人卡牌（如果已选择敌人ID，则使用ID查询；否则使用原有逻辑）
+      let cardResponse: AxiosResponse<ApiResponse<EnemyCardResponse[]>>
+      if (selectedEnemyId) {
+        console.log('[Game] 使用敌人ID获取卡牌:', selectedEnemyId)
+        cardResponse = await gameApi.getEnemyCards(selectedEnemyId) as any
+      } else {
+        console.log('[Game] 使用关卡和难度获取卡牌:', stageNum, diff)
+        cardResponse = await gameApi.getEnemyCards(stageNum, diff)
+        // 如果使用关卡和难度获取卡牌，尝试再次获取敌人列表以获取敌人ID
+        // 因为后端可能已经选择了敌人，我们需要知道是哪个
+        if (!selectedEnemyId) {
+          try {
+            const retryEnemiesResponse = await gameApi.getStageEnemies(stageNum, diff)
+            if (retryEnemiesResponse.data.code === 200 && retryEnemiesResponse.data.data) {
+              const enemies = retryEnemiesResponse.data.data as Array<{ id: number; name: string; difficulty: string }>
+              if (enemies.length > 0) {
+                // 选择第一个敌人（因为后端可能已经选择了）
+                selectedEnemyId = enemies[0].id
+                currentEnemyId.value = selectedEnemyId
+                console.log('[Game] 重试后获取到敌人ID:', selectedEnemyId)
+              }
+            }
+          } catch (e) {
+            console.warn('[Game] 重试获取敌人列表失败:', e)
+          }
+        }
+      }
+      
+      // 3. 获取敌人面板信息
+      if (selectedEnemyId) {
+        try {
+          console.log('[Game] 正在获取敌人面板信息，敌人ID:', selectedEnemyId)
+          const panelResponse = await gameApi.getEnemyPanel(selectedEnemyId)
+          console.log('[Game] 敌人面板API响应:', panelResponse.data)
+          if (panelResponse.data.code === 200 && panelResponse.data.data) {
+            const panel = panelResponse.data.data as { name?: string; attack?: number; hp?: number; armor?: number; difficulty?: string }
+            enemyPanel.value = panel
+            console.log('[Game] 敌人面板已设置:', enemyPanel.value)
+            
+            // 使用敌人面板的HP值设置敌人初始HP
+            if (panel.hp && panel.hp > 0) {
+              enemyHP.value = panel.hp
+              log(`敌人面板：${panel.name ?? '未知'} - 攻击 ${panel.attack ?? 0}，生命 ${panel.hp}，护甲 ${panel.armor ?? 0}`)
+              log(`敌人初始HP已设置为：${panel.hp}`)
+            } else {
+              // 如果没有HP值，保持默认值100
+              enemyHP.value = 100
+              log(`敌人面板：${panel.name ?? '未知'} - 攻击 ${panel.attack ?? 0}，生命 ${panel.hp ?? 0}，护甲 ${panel.armor ?? 0}`)
+            }
+          } else {
+            console.warn('[Game] 敌人面板API返回错误:', panelResponse.data)
+            enemyPanel.value = null
+          }
+        } catch (e) {
+          console.error('[Game] 获取敌人面板失败:', e)
+          enemyPanel.value = null
+        }
+      } else {
+        console.warn('[Game] 未选择敌人ID，无法获取敌人面板信息')
+        enemyPanel.value = null
+      }
+      
+      if (cardResponse.data.code === 200 && cardResponse.data.data) {
         // 将后端返回的卡牌转换为前端 Card 格式，作为敌人牌库
-        const cards: Card[] = response.data.data.map((r: EnemyCardResponse) => {
+        const cards: Card[] = cardResponse.data.data.map((r: EnemyCardResponse) => {
           // 根据卡牌类型确定费用
           let cost = 2
           if (r.type === 'character') {
@@ -427,17 +635,18 @@ export const useGameStore = defineStore('game', () => {
           }
           
           return {
-            id: uid2(),
-            name: r.name,
+          id: uid2(),
+          name: r.name,
             cost: cost,
-            type: r.type as CardType,
-            attack: r.attack ?? undefined,
-            health: r.health ?? undefined,
-            effect: r.effect ?? undefined,
+          type: r.type as CardType,
+          attack: r.attack ?? undefined,
+          health: r.health ?? undefined,
+          effect: r.effect ?? undefined,
+            effectPayload: r.effectPayload ?? (typeof r.effect === 'string' ? r.effect : undefined),
             bonusAttack: bonusAttack,
             bonusHp: bonusHp,
             bonusDefense: bonusDefense,
-            unique_play: !!r.unique_play
+          unique_play: !!r.unique_play
           } as Card
         })
         
@@ -467,7 +676,7 @@ export const useGameStore = defineStore('game', () => {
       enemyHand.value = []
     }
   }
-  
+
   function uid2() { return Math.random().toString(36).slice(2, 10) }
 
 
@@ -500,7 +709,7 @@ export const useGameStore = defineStore('game', () => {
       return heroHP.value
     } else {
       // 如果没有营地数据，使用默认值
-      heroHP.value = 100
+    heroHP.value = 100
       log('未找到营地数据，使用默认血量：100')
       return 100
     }
@@ -517,9 +726,22 @@ export const useGameStore = defineStore('game', () => {
       // 调用者应该在调用 reset() 之前确保营地数据已加载
     }
     loadPlayerHealthFromCamp()
-    enemyHP.value = 100
-    manaMax.value = 1
-    mana.value = 1
+    // 使用敌人面板的HP值，如果没有面板信息则使用默认值100
+    enemyHP.value = enemyPanel.value?.hp && enemyPanel.value.hp > 0 ? enemyPanel.value.hp : 100
+    
+    // 从营地数据获取行动点作为初始法力值
+    const playerChar = campStore.playerCharacter
+    if (playerChar && playerChar.currentActionPoints !== undefined && playerChar.currentActionPoints !== null) {
+      // 使用当前行动点作为初始法力值，如果没有则使用4
+      manaMax.value = Math.max(4, playerChar.currentActionPoints)
+      mana.value = Math.max(4, playerChar.currentActionPoints)
+      log(`从营地加载初始法力值：${mana.value}（来自行动点：${playerChar.currentActionPoints}）`)
+    } else {
+      // 如果没有行动点数据，使用默认值4
+      manaMax.value = 4
+      mana.value = 4
+      log('使用默认初始法力值：4')
+    }
     turn.value = 'player'
     battleOver.value = false
     winner.value = null
@@ -534,6 +756,8 @@ export const useGameStore = defineStore('game', () => {
     enemyMana.value = enemyManaMax.value
     enemyDeckExhausted.value = false
     hasEnemyPlayedCards.value = false // 重置敌人出牌标记
+    currentEnemyId.value = null // 重置敌人ID
+    enemyPanel.value = null // 重置敌人面板信息
     
     logs.value = []
     deckExhausted.value = false
@@ -542,7 +766,6 @@ export const useGameStore = defineStore('game', () => {
     hasNearDeathTriggered.value = false
     
     // 确保血量不超过最大血量（防止数据不一致）
-    const playerChar = campStore.playerCharacter
     const maxHp = playerChar?.maxHp || 100
     if (heroHP.value > maxHp) {
       log(`警告：当前血量 ${heroHP.value} 超过最大血量 ${maxHp}，已限制为 ${maxHp}`)
@@ -598,7 +821,7 @@ export const useGameStore = defineStore('game', () => {
     applyTraitsAtTurnStart()
   }
 
-  function playCard(id: string) {
+  function playCard(id: string, position?: number) {
     if (turn.value !== 'player') return
     if (battleOver.value) return
     const idx = hand.value.findIndex(c => c.id === id)
@@ -609,27 +832,59 @@ export const useGameStore = defineStore('game', () => {
     mana.value -= card.cost
     // 处理类型
     if (card.type === 'character') {
-      if (board.value.length >= 7) return // 简化随从上限7
-      // 如果已有同名随从，则执行升星（不重复上场）
-      const existIdx = board.value.findIndex(x => x.name === card.name)
-      if (existIdx >= 0) {
-        const t = board.value[existIdx]
-        t.stars = (t.stars ?? 1) + 1
-        t.attack += 1
-        t.health += 1
-        log(`升星：${t.name} 升至 ${t.stars} 星（ATK ${t.attack} / HP ${t.health}）`)
+      // 检查位置是否可用
+      if (position !== undefined) {
+        if (position < 0 || position >= 6) return // 位置必须在 0-5 之间
+        // 检查该位置是否已被占用
+        if (board.value.some(m => m.position === position)) return
       } else {
+        // 如果没有指定位置，自动找到第一个空位
+        const occupiedPositions = new Set(board.value.map(m => m.position).filter(p => p !== undefined))
+        let autoPosition = -1
+        for (let i = 0; i < 6; i++) {
+          if (!occupiedPositions.has(i)) {
+            autoPosition = i
+            break
+          }
+        }
+        if (autoPosition === -1) {
+          log('提示：战场已满（最多6个位置），无法部署更多角色')
+          mana.value += card.cost // 返还法力值
+          return
+        }
+        position = autoPosition
+      }
+      
+      if (board.value.length >= 6) {
+        log('提示：战场已满（最多6个位置），无法部署更多角色')
+        mana.value += card.cost // 返还法力值
+        return
+      }
+      
+      // 不再升星，重复卡牌也直接上场为独立单位
         const m: Minion = {
-          id: card.id,
+        id: uid2(), // 保证同名随从也有唯一ID
           name: card.name,
           attack: card.attack ?? 0,
           health: card.health ?? 1,
           shield: 0,
-          stars: 1,
-          canAttack: false // 召唤疲劳：刚打出的随从本回合不能攻击
+        stars: 1,
+        canAttack: false, // 召唤疲劳：刚打出的随从本回合不能攻击
+        cardCharacterId: card.cardCharacterId,
+        effectPayload: card.effectPayload,
+        traits: [], // 特性列表将在需要时加载
+        position: position
         }
         board.value.push(m)
-        log(`召唤：${card.name}（ATK ${card.attack ?? 0} / HP ${card.health ?? 1}），下回合才能攻击`)
+      // 按位置排序，确保显示顺序正确
+      board.value.sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+      log(`召唤：${card.name}（ATK ${card.attack ?? 0} / HP ${card.health ?? 1}），下回合才能攻击`)
+      // 异步加载角色特性，供后续回合/攻击时使用
+      if (card.cardCharacterId) {
+        loadCardCharacterTraits(card.cardCharacterId).then(traits => {
+          m.traits = traits ?? []
+        }).catch(() => {})
+      }
         // 即时触发一次特性（按星级计算强度），随后每回合开始也会自动结算
         const t = charTraits.value[card.name]
         if (t) {
@@ -646,13 +901,75 @@ export const useGameStore = defineStore('game', () => {
               const target = board.value[idx]
               target.shield = (target.shield ?? 0) + power
               log(`特性：${card.name} 盾卫守护，为 ${target.name} 提供 ${power} 点护盾`)
-            }
           }
         }
       }
       hand.value.splice(idx, 1)
     } else if (card.type === 'spell') {
-      if (card.effect === 'fireball3') {
+      // 检查法术卡是否有治疗效果（基于 effectPayload 字段）
+      let healAmount = 0
+      let isHealSpell = false
+      
+      // 优先从 effectPayload 解析治疗量
+      if (card.effectPayload) {
+        try {
+          const effect = JSON.parse(card.effectPayload)
+          // 检查是否有治疗相关字段
+          if (effect.heal || effect.heal_amount || effect.heal_single) {
+            isHealSpell = true
+            healAmount = effect.heal || effect.heal_amount || effect.heal_single || 0
+          }
+        } catch (e) {
+          // 解析失败
+        }
+      }
+      
+      // 兼容旧逻辑：检查名字是否包含"治疗"
+      if (!isHealSpell && card.name && card.name.includes('治疗')) {
+        isHealSpell = true
+        // 尝试从 effect 字段解析（旧格式）
+        if (card.effect && typeof card.effect === 'string') {
+          try {
+            const effectObj = JSON.parse(card.effect)
+            if (effectObj.heal || effectObj.healAmount) {
+              healAmount = effectObj.heal || effectObj.healAmount
+            }
+          } catch (e) {
+            // 解析失败
+          }
+        }
+        
+        // 如果还是没有，尝试从 bonusHp 获取
+        if (healAmount === 0 && card.bonusHp) {
+          healAmount = card.bonusHp
+        }
+        
+        // 如果还是没有，使用默认治疗量 5
+        if (healAmount === 0) {
+          healAmount = 5
+        }
+      }
+      
+      // 执行治疗效果
+      if (isHealSpell && healAmount > 0) {
+        // 治疗我方所有卡牌
+        let healedCount = 0
+        board.value.forEach(m => {
+          const oldHealth = m.health
+          m.health = m.health + healAmount
+          const actualHeal = m.health - oldHealth
+          if (actualHeal > 0) {
+            healedCount++
+            log(`治疗法术：${card.name} 为 ${m.name} 恢复 ${actualHeal} 点生命（当前HP ${m.health}）`)
+          }
+        })
+        
+        if (healedCount === 0) {
+          log(`治疗法术：${card.name} 使用，但我方没有需要治疗的卡牌`)
+        } else {
+          log(`治疗法术：${card.name} 为我方 ${healedCount} 个卡牌恢复了生命`)
+        }
+      } else if (card.effect === 'fireball3') {
         // 火球优先对敌方角色；若敌方角色已被击败则对敌方HP
         const target = enemyBoard.value[0]
         if (target) {
@@ -738,9 +1055,15 @@ export const useGameStore = defineStore('game', () => {
     if (turn.value !== 'player') return
     if (battleOver.value) return
     // 我方随从攻击阶段（只允许可以攻击的随从攻击）
-    const enemyRole = enemyBoard.value[0]
+    // 按位置排序，前排优先攻击
+    const sortedBoard = [...board.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+    
+    // 找到敌方最前排的角色（position 最小的）
+    const sortedEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+    const enemyRole = sortedEnemyBoard[0]
     let total = 0
-    board.value.forEach(m => {
+    
+    sortedBoard.forEach(m => {
       // 检查是否可以攻击（召唤疲劳机制）
       if (m.canAttack === false) {
         return // 跳过不能攻击的随从
@@ -754,13 +1077,19 @@ export const useGameStore = defineStore('game', () => {
         enemyRole.health = Math.max(0, enemyRole.health - dmg)
         log(`我方随从 ${m.name} 攻击敌方 ${enemyRole.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${enemyRole.health}，盾 ${enemyRole.shield}）`)
         if (enemyRole.health <= 0) {
-          enemyBoard.value.shift()
+          const enemyIndex = enemyBoard.value.findIndex(e => e.id === enemyRole.id)
+          if (enemyIndex >= 0) {
+            enemyBoard.value.splice(enemyIndex, 1)
+          }
           log(`敌方角色 ${enemyRole.name} 被击败！现在可对敌方造成直接伤害。`)
         }
       } else {
         enemyHP.value = Math.max(0, enemyHP.value - m.attack)
         total += m.attack
       }
+
+      // 攻击后触发治疗（如果有 heal_allies）
+      maybeHealAllies(m, board.value, '攻击后')
     })
     if (!enemyRole && total > 0) {
       log(`我方随从合计对敌方造成 ${total} 伤害（敌方HP ${enemyHP.value}）`)
@@ -782,7 +1111,7 @@ export const useGameStore = defineStore('game', () => {
    * 4. 攻击阶段
    */
   function enemyTurn() {
-    if (battleOver.value) return
+              if (battleOver.value) return
     
     // 0. 回合开始：解除已有随从的召唤疲劳（仅对已经在场的随从生效）
     enemyBoard.value.forEach(m => {
@@ -802,8 +1131,8 @@ export const useGameStore = defineStore('game', () => {
             enemyHand.value.push(card)
             log(`敌人抽牌：${card.name}`)
           }
-        }
-      } else {
+            }
+          } else {
         if (!enemyDeckExhausted.value) {
           enemyDeckExhausted.value = true
           log('敌人牌库已耗尽')
@@ -846,18 +1175,22 @@ export const useGameStore = defineStore('game', () => {
       
       // 根据卡牌类型执行不同逻辑
       if (card.type === 'character') {
-        // 角色卡：上场到战场
-        // 检查是否已有同名角色（升星）
-        const existingIndex = enemyBoard.value.findIndex(m => m.name === card.name)
-        if (existingIndex >= 0) {
-          // 升星
-          const existing = enemyBoard.value[existingIndex]
-          existing.stars = (existing.stars ?? 1) + 1
-          existing.attack += 1
-          existing.health += 2
-          log(`敌人升星：${existing.name} 升至 ${existing.stars}★（ATK ${existing.attack} / HP ${existing.health}）`)
-        } else if (enemyBoard.value.length < 7) {
-          // 新角色上场
+        // 角色卡：直接上场为独立单位（不再升星）
+        if (enemyBoard.value.length < 6) {
+          // 敌人自动选择第一个空位
+          const occupiedPositions = new Set(enemyBoard.value.map(m => m.position).filter(p => p !== undefined))
+          let autoPosition = -1
+          for (let i = 0; i < 6; i++) {
+            if (!occupiedPositions.has(i)) {
+              autoPosition = i
+              break
+            }
+          }
+          if (autoPosition === -1) {
+            enemyMana.value += card.cost // 返还法力值
+            continue
+          }
+          
           const minion: Minion = {
             id: uid2(),
             name: card.name,
@@ -865,17 +1198,21 @@ export const useGameStore = defineStore('game', () => {
             health: card.health ?? 20,
             shield: 0,
             stars: 1,
-            canAttack: false // 召唤疲劳：刚打出的随从本回合不能攻击
+            canAttack: false, // 召唤疲劳：刚打出的随从本回合不能攻击
+            effectPayload: card.effectPayload,
+            position: autoPosition
           }
           enemyBoard.value.push(minion)
+          // 按位置排序
+          enemyBoard.value.sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
           hasEnemyPlayedCards.value = true // 标记敌人已经出过牌
           log(`敌人打出角色：${minion.name}（ATK ${minion.attack} / HP ${minion.health}），下回合才能攻击`)
         } else {
           // 战场已满，不出牌
           enemyMana.value += card.cost // 返还法力值
           continue
-        }
-      } else if (card.type === 'spell') {
+          }
+        } else if (card.type === 'spell') {
         // 法术卡：执行效果
         enemyPlaySpell(card)
       } else if (card.type === 'equipment') {
@@ -941,22 +1278,22 @@ export const useGameStore = defineStore('game', () => {
       // 根据效果类型执行
       if (effectObj.type === 'fireball3' || card.effect === 'fireball3') {
         // 火球术：对随机目标造成3点伤害
-        if (board.value.length > 0) {
+            if (board.value.length > 0) {
           const targetIndex = Math.floor(Math.random() * board.value.length)
           const target = board.value[targetIndex]
           const absorb = Math.min(target.shield ?? 0, 3)
           target.shield = Math.max(0, (target.shield ?? 0) - absorb)
-          const dmg = 3 - absorb
+              const dmg = 3 - absorb
           target.health = Math.max(0, target.health - dmg)
           log(`敌方法术：${card.name} 击中 ${target.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
           if (target.health <= 0) {
             board.value.splice(targetIndex, 1)
             log(`我方随从 ${target.name} 倒下。`)
-          }
-        } else {
-          heroHP.value = Math.max(0, heroHP.value - 3)
+              }
+            } else {
+              heroHP.value = Math.max(0, heroHP.value - 3)
           log(`敌方法术：${card.name} 对我方英雄造成 3 伤害（我方HP ${heroHP.value}）`)
-          checkVictory()
+              checkVictory()
         }
       } else if (effectObj.type === 'lightning3' || (typeof card.effect === 'string' && card.effect.includes('lightning3'))) {
         // 雷电之球：对随机目标造成3点伤害
@@ -982,8 +1319,8 @@ export const useGameStore = defineStore('game', () => {
       }
     } catch (e) {
       log(`敌人使用法术：${card.name}（效果解析失败）`)
-    }
-  }
+        }
+      }
 
   /**
    * 敌人攻击阶段
@@ -991,8 +1328,11 @@ export const useGameStore = defineStore('game', () => {
   function enemyAttackPhase() {
     if (battleOver.value) return
     
-    // 敌人战场上的角色攻击（只允许可以攻击的随从攻击）
-    enemyBoard.value.forEach((enemyMinion, index) => {
+    // 1. 敌人战场上的角色攻击（只允许可以攻击的随从攻击）
+    // 按位置排序，前排优先攻击
+    const sortedEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+    
+    sortedEnemyBoard.forEach((enemyMinion, index) => {
       if (battleOver.value) return
       
       // 检查是否可以攻击（召唤疲劳机制）
@@ -1000,10 +1340,12 @@ export const useGameStore = defineStore('game', () => {
         return // 跳过不能攻击的随从
       }
       
-      // 优先攻击我方随从
+      // 优先攻击我方随从（优先攻击前排，position 最小的）
       if (board.value.length > 0) {
-        const targetIndex = Math.floor(Math.random() * board.value.length)
-        const target = board.value[targetIndex]
+        // 按位置排序，找到最前排的角色
+        const sortedBoard = [...board.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+        const target = sortedBoard[0]
+        const targetIndex = board.value.findIndex(m => m.id === target.id)
         
         // 先消耗护盾
         const absorb = Math.min(target.shield ?? 0, enemyMinion.attack)
@@ -1023,7 +1365,39 @@ export const useGameStore = defineStore('game', () => {
         log(`敌人 ${enemyMinion.name} 攻击我方英雄，造成 ${enemyMinion.attack} 伤害（我方HP ${heroHP.value}）`)
         checkVictory()
       }
+
+      // 攻击后触发治疗（如果有 heal_allies）
+      maybeHealAllies(enemyMinion, enemyBoard.value, '攻击后', true)
     })
+    
+    // 2. 敌人本体攻击（如果敌人面板有攻击力）
+    if (!battleOver.value && enemyPanel.value && enemyPanel.value.attack && enemyPanel.value.attack > 0) {
+      const enemyBaseAttack = enemyPanel.value.attack
+      
+      // 优先攻击我方随从
+      if (board.value.length > 0) {
+        const targetIndex = Math.floor(Math.random() * board.value.length)
+        const target = board.value[targetIndex]
+        
+        // 先消耗护盾
+        const absorb = Math.min(target.shield ?? 0, enemyBaseAttack)
+        target.shield = Math.max(0, (target.shield ?? 0) - absorb)
+        const dmg = enemyBaseAttack - absorb
+        
+        target.health = Math.max(0, target.health - dmg)
+        log(`敌人本体发动攻击，对我方 ${target.name} 造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
+        
+        if (target.health <= 0) {
+          board.value.splice(targetIndex, 1)
+          log(`我方随从 ${target.name} 倒下。`)
+        }
+      } else {
+        // 没有随从，直接攻击英雄
+        heroHP.value = Math.max(0, heroHP.value - enemyBaseAttack)
+        log(`敌人本体发动攻击，对我方英雄造成 ${enemyBaseAttack} 伤害（我方HP ${heroHP.value}）`)
+        checkVictory()
+      }
+    }
   }
 
   // 初始化
@@ -1033,6 +1407,7 @@ export const useGameStore = defineStore('game', () => {
     // state
     heroHP, enemyHP, mana, manaMax, deck, hand, board, 
     enemyDeck, enemyHand, enemyBoard, enemyMana, enemyManaMax, enemyDeckExhausted, hasEnemyPlayedCards,
+    currentEnemyId, enemyPanel,
     turn, canPlay, logs, enemyDifficulty, battleOver, winner,
     // actions
     reset, draw, startPlayerTurn, playCard, endTurn, log, configureEncounter, loadUserDeckFromDB, loadEnemyDeck, equipCardToMinion,

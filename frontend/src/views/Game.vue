@@ -26,6 +26,9 @@ const isEndingTurn = ref(false)
 const showExitConfirm = ref(false)
 const draggingEquipCard = ref<Card | null>(null)
 const selectedEquipCard = ref<Card | null>(null)
+const selectedCharacterCard = ref<Card | null>(null)
+const selectedSpellCard = ref<Card | null>(null)
+const draggingCharacterCard = ref<Card | null>(null)
 const remainingDeck = computed(() => deck.value.length)
 
 // 结算画面相关
@@ -75,6 +78,40 @@ function closeEquipDetails() {
   selectedEquipCard.value = null
 }
 
+function showCharacterDetails(card: Card) {
+  if (card.type !== 'character') return
+  selectedCharacterCard.value = card
+}
+
+function closeCharacterDetails() {
+  selectedCharacterCard.value = null
+}
+
+function showSpellDetails(card: Card) {
+  if (card.type !== 'spell') return
+  selectedSpellCard.value = card
+}
+
+function closeSpellDetails() {
+  selectedSpellCard.value = null
+}
+
+function startCharacterDrag(card: Card) {
+  if (card.type !== 'character') return
+  draggingCharacterCard.value = card
+  // 开始拖拽时关闭详情面板，避免遮挡
+  selectedCharacterCard.value = null
+}
+
+function endCharacterDrag() {
+  draggingCharacterCard.value = null
+}
+
+function handleDeployCard(payload: { cardId: string; position: number }) {
+  // 调用 playCard 并传入位置参数
+  game.playCard(payload.cardId, payload.position)
+}
+
 // 退出战斗
 function exitBattle() {
   showExitConfirm.value = true
@@ -114,8 +151,8 @@ onMounted(async () => {
 
   // 从 Spring Boot API 加载用户数据
   await game.loadUserDeckFromDB()
-  await game.loadEnemyDeck(lv)
-  game.reset()
+  game.reset() // 先重置状态
+  await game.loadEnemyDeck(lv) // 再加载敌人数据（包括敌人面板）
 })
 
 // 若关卡参数变化，重新配置并重新加载敌方手牌
@@ -129,8 +166,8 @@ watch(level, async (lv) => {
     await campStore.fetchCampData()
   }
   
-  await game.loadEnemyDeck(lv || 1)
-  game.reset()
+  game.reset() // 先重置状态
+  await game.loadEnemyDeck(lv || 1) // 再加载敌人数据（包括敌人面板）
 })
 
 // 计算奖励（根据关卡难度）
@@ -303,10 +340,11 @@ watch(winner, async (w) => {
 
     <!-- 战斗场地 -->
     <div class="battle-main">
-      <BattleField 
-        :dragging-equip-card="draggingEquipCard"
-        @equip-to-minion="handleEquipToMinion"
-      />
+        <BattleField 
+          :dragging-equip-card="draggingEquipCard"
+          @equip-to-minion="handleEquipToMinion"
+          @deploy-card="handleDeployCard"
+        />
     </div>
 
     <!-- 底部操作区 -->
@@ -317,9 +355,13 @@ watch(winner, async (w) => {
           <div class="hand-title">
             <span class="hand-icon">🃏</span>
             <span>手牌 ({{ hand.length }}/10)</span>
+            <div class="mana-display">
+              <span class="mana-icon">💎</span>
+              <span class="mana-value">{{ mana }}/{{ manaMax }}</span>
+            </div>
           </div>
           <div class="hand-helpers">
-          <div class="hand-hint">点击卡牌打出</div>
+          <div class="hand-hint">点击查看详情，拖拽部署角色</div>
             <div v-if="deckExhausted" class="deck-empty-badge" title="本场战斗无法再抽牌">
               <span class="badge-icon">⚠️</span>
               <span class="badge-text">牌库已耗尽</span>
@@ -334,7 +376,11 @@ watch(winner, async (w) => {
             @play="onPlay"
             @start-equip-drag="startEquipDrag"
             @end-equip-drag="endEquipDrag"
+            @start-character-drag="startCharacterDrag"
+            @end-character-drag="endCharacterDrag"
             @show-equipment="showEquipDetails"
+            @show-character="showCharacterDetails"
+            @show-spell="showSpellDetails"
             :can-afford="mana >= c.cost"
           />
           <div v-if="hand.length === 0" class="empty-hand">
@@ -372,6 +418,54 @@ watch(winner, async (w) => {
             </div>
             <div class="equip-hint">
               提示：按住此装备拖到己方角色卡牌上，即可为该角色穿戴装备。
+            </div>
+          </div>
+        </div>
+
+        <!-- 角色卡详情面板（点击角色卡时展示） -->
+        <div v-if="selectedCharacterCard" class="equip-details character-details">
+          <div class="equip-header">
+            <span class="equip-title">角色详情</span>
+            <button class="equip-close" @click="closeCharacterDetails">✕</button>
+          </div>
+          <div class="equip-body">
+            <div class="equip-name">{{ selectedCharacterCard.name }}</div>
+            <div class="equip-type">类型：角色 · 费用 {{ selectedCharacterCard.cost }}</div>
+            <div class="equip-effects">
+              <span>攻击力：{{ selectedCharacterCard.attack ?? 0 }}</span>
+              <span>生命值：{{ selectedCharacterCard.health ?? 0 }}</span>
+            </div>
+            <div class="equip-hint">
+              提示：按住此角色卡拖到战场位置槽上，即可部署该角色。
+            </div>
+          </div>
+        </div>
+
+        <!-- 法术卡详情面板（点击法术卡时展示） -->
+        <div v-if="selectedSpellCard" class="equip-details spell-details">
+          <div class="equip-header">
+            <span class="equip-title">法术详情</span>
+            <button class="equip-close" @click="closeSpellDetails">✕</button>
+          </div>
+          <div class="equip-body">
+            <div class="equip-name">{{ selectedSpellCard.name }}</div>
+            <div class="equip-type">类型：法术 · 费用 {{ selectedSpellCard.cost }}</div>
+            <div class="equip-effects">
+              <span v-if="selectedSpellCard.effect === 'fireball3'">效果：造成3点伤害</span>
+              <span v-else-if="selectedSpellCard.effect">效果：{{ selectedSpellCard.effect }}</span>
+              <span v-else>效果：法术效果</span>
+            </div>
+            <div class="equip-hint">
+              提示：点击"使用"按钮或直接点击卡牌即可使用此法术。
+            </div>
+            <div class="spell-actions">
+              <button 
+                class="use-spell-btn" 
+                @click="onPlay(selectedSpellCard.id); closeSpellDetails()"
+                :disabled="mana < selectedSpellCard.cost"
+              >
+                使用法术
+              </button>
             </div>
           </div>
         </div>
@@ -672,7 +766,7 @@ watch(winner, async (w) => {
 
 /* 底部操作区 */
 .battle-footer {
-  padding: 12px 24px 18px;
+  padding: 8px 24px 12px;
   background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(148, 163, 184, 0.2);
@@ -691,7 +785,7 @@ watch(winner, async (w) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .hand-title {
@@ -705,6 +799,27 @@ watch(winner, async (w) => {
 
 .hand-icon {
   font-size: 1.125rem;
+}
+
+.mana-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  margin-left: 12px;
+}
+
+.mana-icon {
+  font-size: 0.875rem;
+}
+
+.mana-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #60a5fa;
 }
 
 .hand-hint {
@@ -739,7 +854,7 @@ watch(winner, async (w) => {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  padding: 8px 0;
+  padding: 4px 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
 }
@@ -826,6 +941,54 @@ watch(winner, async (w) => {
   margin-top: 2px;
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+/* 法术卡详情面板 */
+.spell-details {
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.spell-details .equip-effects span {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+}
+
+.spell-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.use-spell-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.use-spell-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+.use-spell-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.use-spell-btn:disabled {
+  background: rgba(71, 85, 105, 0.5);
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
 }
 
 .empty-hand {

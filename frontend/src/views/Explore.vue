@@ -267,7 +267,7 @@ async function upsertProgress(level: number, changes: Partial<{ passed: boolean;
       // 调用后端API保存关卡进度
       try {
         await stageProgressApi.passStage(level)
-        passedLevels.value.push(level)
+      passedLevels.value.push(level)
         passedLevels.value.sort((a, b) => a - b)
         log(`关卡 ${level} 已标记为通过`)
       } catch (error) {
@@ -348,21 +348,6 @@ function getDifficultyIcon(difficulty: Stage['difficulty']): string {
   return '🔴'
 }
 
-function startBattleLog() {
-  const msgs = [
-    '前锋与守门者短兵相接！',
-    '游侠侧袭，造成精准打击。',
-    '法师吟唱完成，火球命中！',
-    '战士格挡成功，反击造成伤害。',
-    '敌方发起冲锋，被阻截！'
-  ]
-  stopBattleLog()
-  battleTimer = setInterval(() => {
-    const i = Math.floor(Math.random() * msgs.length)
-    log('战报：' + msgs[i])
-  }, 1000)
-}
-
 function stopBattleLog() {
   if (battleTimer) { clearInterval(battleTimer); battleTimer = null }
 }
@@ -372,7 +357,6 @@ async function startStage() {
   if (inBattle.value) return
   inBattle.value = true
   log(`进入关卡：${stage.value.name}（难度：${stage.value.difficulty}）`)
-  startBattleLog()
   
   try {
     await ensureStages()
@@ -948,8 +932,10 @@ onUnmounted(() => stopBattleLog())
 }
 
 .level-passed {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(34, 197, 94, 0.8);
+  border-width: 2px;
+  background: rgba(34, 197, 94, 0.15);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
 }
 
 .level-claimed {

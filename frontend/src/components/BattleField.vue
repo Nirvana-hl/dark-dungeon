@@ -7,7 +7,13 @@ import { ref } from 'vue'
 
 const game = useGameStore()
 const campStore = useCampStore()
-const { heroHP, enemyHP, board, enemyBoard, enemyHand, enemyDeck, enemyMana, enemyManaMax, enemyDeckExhausted, hasEnemyPlayedCards, turn, logs, mana, manaMax, hand, deck, deckExhausted } = storeToRefs(game)
+const { heroHP, enemyHP, board, enemyBoard, enemyHand, enemyDeck, enemyMana, enemyManaMax, enemyDeckExhausted, hasEnemyPlayedCards, currentEnemyId, enemyPanel, turn, logs, mana, manaMax, hand, deck, deckExhausted } = storeToRefs(game)
+
+// 调试：监听 enemyPanel 变化
+import { watch } from 'vue'
+watch(enemyPanel, (newVal) => {
+  console.log('[BattleField] enemyPanel 变化:', newVal)
+}, { immediate: true, deep: true })
 
 const props = defineProps<{
   draggingEquipCard: import('@/stores/game').Card | null
@@ -15,14 +21,30 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'equip-to-minion', payload: { minionId: string }): void
+  (e: 'deploy-card', payload: { cardId: string; position: number }): void
 }>()
 
 // 从营地数据获取最大血量，如果没有则使用默认值100
 const heroHPMax = computed(() => campStore.playerCharacter?.maxHp || 100)
-const enemyHPMax = 100
+// 敌人最大HP从敌人面板获取，如果没有则使用默认值100
+const enemyHPMax = computed(() => enemyPanel.value?.hp || 100)
+// 获取玩家角色名称
+const playerCharacterName = computed(() => campStore.playerCharacter?.playerCharacterName || '冒险者')
+// 获取玩家角色图标
+const playerCharacterIcon = computed(() => {
+  const name = playerCharacterName.value
+  return iconFor(name, 'ally')
+})
+// 获取敌方角色名称
+const enemyCharacterName = computed(() => enemyPanel.value?.name || '敌方')
+// 获取敌方角色图标
+const enemyCharacterIcon = computed(() => {
+  const name = enemyCharacterName.value
+  return iconFor(name, 'enemy')
+})
 
 const heroHPPercent = computed(() => Math.max(0, Math.min(100, (heroHP.value / heroHPMax.value) * 100)))
-const enemyHPPercent = computed(() => Math.max(0, Math.min(100, (enemyHP.value / enemyHPMax) * 100)))
+const enemyHPPercent = computed(() => Math.max(0, Math.min(100, (enemyHP.value / enemyHPMax.value) * 100)))
 
 // 简易图标映射（如未引入字体图标，将显示 emoji）
 function iconFor(name: string, side: 'enemy' | 'ally') {
@@ -51,230 +73,366 @@ function getHPColorClass(percent: number) {
   if (percent > 30) return 'hp-warning'
   return 'hp-danger'
 }
+
+// 获取指定位置的角色
+function getMinionAtPosition(position: number) {
+  return board.value.find(m => m.position === position)
+}
+
+// 获取指定位置的敌方角色
+function getEnemyMinionAtPosition(position: number) {
+  return enemyBoard.value.find(m => m.position === position)
+}
+
+// 处理位置槽的拖拽悬停
+function handleSlotDragOver(event: DragEvent, position: number) {
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+// 处理位置槽的拖拽放置
+function handleSlotDrop(event: DragEvent, position: number) {
+  const cardId = event.dataTransfer?.getData('text/plain')
+  if (cardId) {
+    emit('deploy-card', { cardId, position })
+  }
+}
 </script>
 
 <template>
   <main class="battle-field">
-    <!-- 左侧：战斗区域 -->
+    <!-- 左右：战斗区域 -->
     <div class="battle-arena">
-      <!-- 敌方区域 -->
-      <div class="enemy-zone" :class="{ 'enemy-turn-active': turn === 'opponent' }">
-        <div class="zone-header">
-          <div class="zone-title">
-            <span class="title-icon">👹</span>
-            <span class="title-text">敌方</span>
-          </div>
-          <div class="info-row">
-            <div class="hp-display enemy-hp">
-              <div class="hp-bar-container">
-                <div class="hp-bar-bg">
-                  <div 
-                    class="hp-bar-fill"
-                    :class="getHPColorClass(enemyHPPercent)"
-                    :style="{ width: enemyHPPercent + '%' }"
-                  ></div>
-                </div>
-                <div class="hp-text">
-                  <span class="hp-value">{{ enemyHP }}</span>
-                  <span class="hp-separator">/</span>
-                  <span class="hp-max">{{ enemyHPMax }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="stats">
-              <div class="stat-badge" title="敌人法力值">
-                <span class="stat-icon">💎</span>
-                <span class="stat-value">{{ enemyMana }}/{{ enemyManaMax }}</span>
-              </div>
-              <div class="stat-badge" title="敌人手牌">
-                <span class="stat-icon">🃏</span>
-                <span class="stat-value">{{ enemyHand.length }}</span>
-              </div>
-              <div class="stat-badge" title="敌人牌库">
-                <span class="stat-icon">📚</span>
-                <span class="stat-value">{{ enemyDeck.length }}</span>
-              </div>
-              <div v-if="enemyDeckExhausted" class="stat-badge exhausted" title="敌人牌库已耗尽">
-                <span class="stat-icon">⚠️</span>
-                <span class="stat-value">耗尽</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-        <div class="characters-grid">
-          <div 
-            v-for="e in enemyBoard" 
-            :key="e.id" 
-            class="character-card enemy-card"
-          >
-            <div class="character-header">
-              <div class="character-name">{{ e.name }}</div>
-              <div class="header-badges">
-                <div v-if="e.shield && e.shield > 0" class="shield-badge">
-                  <span class="shield-icon">🛡️</span>
-                  <span class="shield-value">{{ e.shield }}</span>
-                </div>
-                <div v-if="e.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
-                  <span class="status-icon">😴</span>
-                  <span class="status-text">准备中</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="character-avatar">
-              <span :class="['avatar-icon', iconFor(e.name, 'enemy').color]">
-                {{ iconFor(e.name, 'enemy').emoji }}
-              </span>
-            </div>
-            
-            <div class="character-stats">
-              <div class="stat-item attack-stat">
-                <span class="stat-icon">⚔️</span>
-                <span class="stat-value">{{ e.attack }}</span>
-              </div>
-              <div class="stat-item hp-stat">
-                <div class="hp-mini-bar">
-                  <div 
-                    class="hp-mini-fill"
-                    :class="getHPColorClass(getHPPercent(e.health, e.health + 10))"
-                    :style="{ width: getHPPercent(e.health, e.health + 10) + '%' }"
-                  ></div>
-                </div>
-                <span class="stat-icon">❤️</span>
-                <span class="stat-value">{{ e.health }}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div v-if="enemyBoard.length === 0" class="empty-zone">
-            <span v-if="!hasEnemyPlayedCards" class="empty-icon">⏳</span>
-            <span v-else class="empty-icon">💀</span>
-            <span v-if="!hasEnemyPlayedCards" class="empty-text">等待敌人出牌</span>
-            <span v-else class="empty-text">敌方角色已被击败</span>
-            <span v-if="hasEnemyPlayedCards" class="empty-hint">可直接对敌方造成伤害</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 战斗分隔线 -->
-      <div class="battle-divider">
-        <div class="divider-line"></div>
-        <div class="divider-icon">⚔️</div>
-        <div class="divider-line"></div>
-      </div>
-
-      <!-- 我方区域 -->
+      <!-- 我方区域（左） -->
       <div class="ally-zone" :class="{ 'ally-turn-active': turn === 'player' }">
-        <div class="zone-header">
-          <div class="zone-title">
-            <span class="title-icon">⚔️</span>
-            <span class="title-text">我方</span>
-          </div>
-          <div class="info-row">
-            <div class="hp-display ally-hp">
-              <div class="hp-bar-container">
-                <div class="hp-bar-bg">
+        <!-- 左侧竖排信息区 -->
+        <div class="vertical-info-panel ally-panel">
+          <div class="vertical-info-content">
+            <!-- 圆形头像框 -->
+            <div class="player-avatar-container">
+              <div class="vertical-name-text">{{ playerCharacterName }}</div>
+              <div class="player-avatar-circle">
+                <span :class="['player-avatar-icon', playerCharacterIcon.color]">
+                  {{ playerCharacterIcon.emoji }}
+                </span>
+              </div>
+            </div>
+            <!-- 血条 -->
+            <div class="hp-display ally-hp horizontal">
+              <div class="hp-bar-container horizontal">
+                <div class="hp-bar-bg horizontal">
                   <div 
                     class="hp-bar-fill"
                     :class="getHPColorClass(heroHPPercent)"
                     :style="{ width: heroHPPercent + '%' }"
                   ></div>
                 </div>
-                <div class="hp-text">
-                  <span class="hp-value">{{ heroHP }}</span>
-                  <span class="hp-separator">/</span>
-                  <span class="hp-max">{{ heroHPMax }}</span>
-                </div>
               </div>
-            </div>
-            <div class="stats">
-              <div class="stat-badge" title="我方法力值">
-                <span class="stat-icon">💎</span>
-                <span class="stat-value">{{ mana }}/{{ manaMax }}</span>
-              </div>
-              <div class="stat-badge" title="我方手牌">
-                <span class="stat-icon">🃏</span>
-                <span class="stat-value">{{ hand.length }}</span>
-              </div>
-              <div class="stat-badge" title="我方牌库">
-                <span class="stat-icon">📚</span>
-                <span class="stat-value">{{ deck.length }}</span>
-              </div>
-              <div v-if="deckExhausted" class="stat-badge exhausted" title="我方牌库已耗尽">
-                <span class="stat-icon">⚠️</span>
-                <span class="stat-value">耗尽</span>
+              <div class="hp-text horizontal">
+                <span class="hp-value">{{ heroHP }}</span>
+                <span class="hp-separator">/</span>
+                <span class="hp-max">{{ heroHPMax }}</span>
               </div>
             </div>
           </div>
         </div>
 
+        <!-- 分隔线 -->
+        <div class="info-divider"></div>
 
-        <div class="characters-grid">
-          <div 
-            v-for="m in board" 
-            :key="m.id" 
-            class="character-card ally-card"
-            @dragover.prevent
-            @drop.prevent="emit('equip-to-minion', { minionId: m.id })"
-          >
-            <div class="character-header">
-              <div class="character-name">{{ m.name }}</div>
-              <div class="header-badges">
-                <div v-if="m.shield && m.shield > 0" class="shield-badge">
-                  <span class="shield-icon">🛡️</span>
-                  <span class="shield-value">{{ m.shield }}</span>
+        <!-- 中间对战区 -->
+        <div class="battle-area">
+          <div class="battle-slots">
+            <!-- 左列：位置 3, 4, 5 -->
+            <div class="battle-column left-column">
+              <div
+                v-for="slotIndex in 3"
+                :key="slotIndex + 2"
+                class="battle-slot"
+                :class="{ 'occupied': getMinionAtPosition(slotIndex + 2) }"
+                @dragover.prevent="handleSlotDragOver($event, slotIndex + 2)"
+                @drop.prevent="handleSlotDrop($event, slotIndex + 2)"
+              >
+              <div 
+                v-if="getMinionAtPosition(slotIndex + 2)"
+                class="character-card ally-card"
+                @dragover.prevent
+                @drop.prevent="emit('equip-to-minion', { minionId: getMinionAtPosition(slotIndex + 2)!.id })"
+              >
+                <div class="character-header">
+                  <div class="character-name">{{ getMinionAtPosition(slotIndex + 2)!.name }}</div>
+                  <div class="header-badges">
+                    <div v-if="getMinionAtPosition(slotIndex + 2)!.shield && getMinionAtPosition(slotIndex + 2)!.shield! > 0" class="shield-badge">
+                      <span class="shield-icon">🛡️</span>
+                      <span class="shield-value">{{ getMinionAtPosition(slotIndex + 2)!.shield }}</span>
+                    </div>
+                    <div v-if="getMinionAtPosition(slotIndex + 2)!.stars" class="star-badge">
+                      <span class="star-icon">⭐</span>
+                      <span class="star-value">{{ getMinionAtPosition(slotIndex + 2)!.stars }}</span>
+                    </div>
+                    <div v-if="getMinionAtPosition(slotIndex + 2)!.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
+                      <span class="status-icon">😴</span>
+                      <span class="status-text">准备中</span>
+                    </div>
+                  </div>
                 </div>
-                <div v-if="m.stars" class="star-badge">
-                  <span class="star-icon">⭐</span>
-                  <span class="star-value">{{ m.stars }}</span>
+                
+                <div class="character-avatar">
+                  <span :class="['avatar-icon', iconFor(getMinionAtPosition(slotIndex + 2)!.name, 'ally').color]">
+                    {{ iconFor(getMinionAtPosition(slotIndex + 2)!.name, 'ally').emoji }}
+                  </span>
                 </div>
-                <div v-if="m.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
-                  <span class="status-icon">😴</span>
-                  <span class="status-text">准备中</span>
+                
+                <div class="character-stats">
+                  <div class="stat-item attack-stat">
+                    <span class="stat-icon">⚔️</span>
+                    <span class="stat-value">{{ getMinionAtPosition(slotIndex + 2)!.attack }}</span>
+                  </div>
+                  <div class="stat-item hp-stat">
+                    <span class="stat-icon">❤️</span>
+                    <span class="stat-value">{{ getMinionAtPosition(slotIndex + 2)!.health }}</span>
+                  </div>
+                </div>
+                <!-- 装备圆形标记 -->
+                <div v-if="getMinionAtPosition(slotIndex + 2)!.equipmentNames && getMinionAtPosition(slotIndex + 2)!.equipmentNames!.length" class="equipment-dots">
+                  <span 
+                    v-for="(eq, idx) in getMinionAtPosition(slotIndex + 2)!.equipmentNames" 
+                    :key="idx" 
+                    class="equipment-dot"
+                    :title="`已装备：${eq}`"
+                  ></span>
                 </div>
               </div>
-            </div>
-            
-            <div class="character-avatar">
-              <span :class="['avatar-icon', iconFor(m.name, 'ally').color]">
-                {{ iconFor(m.name, 'ally').emoji }}
-              </span>
-            </div>
-            
-            <div class="character-stats">
-              <div class="stat-item attack-stat">
-                <span class="stat-icon">⚔️</span>
-                <span class="stat-value">{{ m.attack }}</span>
+              <div v-else class="empty-slot">
+                <span class="slot-hint">位置 {{ slotIndex + 3 }}</span>
               </div>
-              <div class="stat-item hp-stat">
-                <div class="hp-mini-bar">
-                  <div 
-                    class="hp-mini-fill"
-                    :class="getHPColorClass(getHPPercent(m.health, m.health + 10))"
-                    :style="{ width: getHPPercent(m.health, m.health + 10) + '%' }"
-                  ></div>
+              </div>
+            </div>
+            <!-- 右列：位置 0, 1, 2 -->
+            <div class="battle-column right-column">
+              <div
+                v-for="slotIndex in 3"
+                :key="slotIndex - 1"
+                class="battle-slot"
+                :class="{ 'occupied': getMinionAtPosition(slotIndex - 1) }"
+                @dragover.prevent="handleSlotDragOver($event, slotIndex - 1)"
+                @drop.prevent="handleSlotDrop($event, slotIndex - 1)"
+              >
+              <div 
+                v-if="getMinionAtPosition(slotIndex - 1)"
+                class="character-card ally-card"
+                @dragover.prevent
+                @drop.prevent="emit('equip-to-minion', { minionId: getMinionAtPosition(slotIndex - 1)!.id })"
+              >
+                <div class="character-header">
+                  <div class="character-name">{{ getMinionAtPosition(slotIndex - 1)!.name }}</div>
+                  <div class="header-badges">
+                    <div v-if="getMinionAtPosition(slotIndex - 1)!.shield && getMinionAtPosition(slotIndex - 1)!.shield! > 0" class="shield-badge">
+                      <span class="shield-icon">🛡️</span>
+                      <span class="shield-value">{{ getMinionAtPosition(slotIndex - 1)!.shield }}</span>
+                    </div>
+                    <div v-if="getMinionAtPosition(slotIndex - 1)!.stars" class="star-badge">
+                      <span class="star-icon">⭐</span>
+                      <span class="star-value">{{ getMinionAtPosition(slotIndex - 1)!.stars }}</span>
+                    </div>
+                    <div v-if="getMinionAtPosition(slotIndex - 1)!.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
+                      <span class="status-icon">😴</span>
+                      <span class="status-text">准备中</span>
+                    </div>
+                  </div>
                 </div>
-                <span class="stat-icon">❤️</span>
-                <span class="stat-value">{{ m.health }}</span>
+                
+                <div class="character-avatar">
+                  <span :class="['avatar-icon', iconFor(getMinionAtPosition(slotIndex - 1)!.name, 'ally').color]">
+                    {{ iconFor(getMinionAtPosition(slotIndex - 1)!.name, 'ally').emoji }}
+                  </span>
+                </div>
+                
+                <div class="character-stats">
+                  <div class="stat-item attack-stat">
+                    <span class="stat-icon">⚔️</span>
+                    <span class="stat-value">{{ getMinionAtPosition(slotIndex - 1)!.attack }}</span>
+                  </div>
+                  <div class="stat-item hp-stat">
+                    <span class="stat-icon">❤️</span>
+                    <span class="stat-value">{{ getMinionAtPosition(slotIndex - 1)!.health }}</span>
+                  </div>
+                </div>
+                <!-- 装备圆形标记 -->
+                <div v-if="getMinionAtPosition(slotIndex - 1)!.equipmentNames && getMinionAtPosition(slotIndex - 1)!.equipmentNames!.length" class="equipment-dots">
+                  <span 
+                    v-for="(eq, idx) in getMinionAtPosition(slotIndex - 1)!.equipmentNames" 
+                    :key="idx" 
+                    class="equipment-dot"
+                    :title="`已装备：${eq}`"
+                  ></span>
+                </div>
               </div>
-            </div>
-            <!-- 装备圆形标记 -->
-            <div v-if="m.equipmentNames && m.equipmentNames.length" class="equipment-dots">
-              <span 
-                v-for="(eq, idx) in m.equipmentNames" 
-                :key="idx" 
-                class="equipment-dot"
-                :title="`已装备：${eq}`"
-              ></span>
+              <div v-else class="empty-slot">
+                <span class="slot-hint">位置 {{ slotIndex }}</span>
+              </div>
+              </div>
             </div>
           </div>
-          
-          <div v-if="board.length === 0" class="empty-zone">
-            <span class="empty-icon">📭</span>
-            <span class="empty-text">暂无随从</span>
-            <span class="empty-hint">打出手牌召唤角色</span>
+        </div>
+      </div>
+
+      <!-- 中央分割 -->
+      <div class="battle-divider vertical">
+        <div class="divider-line vertical"></div>
+        <div class="divider-icon">⚔️</div>
+        <div class="divider-line vertical"></div>
+      </div>
+
+      <!-- 敌方区域（右） -->
+      <div class="enemy-zone" :class="{ 'enemy-turn-active': turn === 'opponent' }">
+        <!-- 中间对战区 -->
+        <div class="battle-area">
+          <div class="battle-slots">
+            <!-- 左列：位置 0, 1, 2 -->
+            <div class="battle-column left-column">
+              <div
+                v-for="slotIndex in 3"
+                :key="slotIndex - 1"
+                class="battle-slot"
+                :class="{ 'occupied': getEnemyMinionAtPosition(slotIndex - 1) }"
+              >
+                <div 
+                  v-if="getEnemyMinionAtPosition(slotIndex - 1)"
+                  class="character-card enemy-card"
+                >
+                  <div class="character-header">
+                    <div class="character-name">{{ getEnemyMinionAtPosition(slotIndex - 1)!.name }}</div>
+                    <div class="header-badges">
+                      <div v-if="getEnemyMinionAtPosition(slotIndex - 1)!.shield && getEnemyMinionAtPosition(slotIndex - 1)!.shield! > 0" class="shield-badge">
+                        <span class="shield-icon">🛡️</span>
+                        <span class="shield-value">{{ getEnemyMinionAtPosition(slotIndex - 1)!.shield }}</span>
+                      </div>
+                      <div v-if="getEnemyMinionAtPosition(slotIndex - 1)!.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
+                        <span class="status-icon">😴</span>
+                        <span class="status-text">准备中</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="character-avatar">
+                    <span :class="['avatar-icon', iconFor(getEnemyMinionAtPosition(slotIndex - 1)!.name, 'enemy').color]">
+                      {{ iconFor(getEnemyMinionAtPosition(slotIndex - 1)!.name, 'enemy').emoji }}
+                    </span>
+                  </div>
+                  
+                  <div class="character-stats">
+                    <div class="stat-item attack-stat">
+                      <span class="stat-icon">⚔️</span>
+                      <span class="stat-value">{{ getEnemyMinionAtPosition(slotIndex - 1)!.attack }}</span>
+                    </div>
+                    <div class="stat-item hp-stat">
+                      <span class="stat-icon">❤️</span>
+                      <span class="stat-value">{{ getEnemyMinionAtPosition(slotIndex - 1)!.health }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-slot">
+                  <span class="slot-hint">位置 {{ slotIndex }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- 右列：位置 3, 4, 5 -->
+            <div class="battle-column right-column">
+              <div
+                v-for="slotIndex in 3"
+                :key="slotIndex + 2"
+                class="battle-slot"
+                :class="{ 'occupied': getEnemyMinionAtPosition(slotIndex + 2) }"
+              >
+                <div 
+                  v-if="getEnemyMinionAtPosition(slotIndex + 2)"
+                  class="character-card enemy-card"
+                >
+                  <div class="character-header">
+                    <div class="character-name">{{ getEnemyMinionAtPosition(slotIndex + 2)!.name }}</div>
+                    <div class="header-badges">
+                      <div v-if="getEnemyMinionAtPosition(slotIndex + 2)!.shield && getEnemyMinionAtPosition(slotIndex + 2)!.shield! > 0" class="shield-badge">
+                        <span class="shield-icon">🛡️</span>
+                        <span class="shield-value">{{ getEnemyMinionAtPosition(slotIndex + 2)!.shield }}</span>
+                      </div>
+                      <div v-if="getEnemyMinionAtPosition(slotIndex + 2)!.canAttack === false" class="status-badge summoning-sickness" title="召唤疲劳：下回合才能攻击">
+                        <span class="status-icon">😴</span>
+                        <span class="status-text">准备中</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="character-avatar">
+                    <span :class="['avatar-icon', iconFor(getEnemyMinionAtPosition(slotIndex + 2)!.name, 'enemy').color]">
+                      {{ iconFor(getEnemyMinionAtPosition(slotIndex + 2)!.name, 'enemy').emoji }}
+                    </span>
+                  </div>
+                  
+                  <div class="character-stats">
+                    <div class="stat-item attack-stat">
+                      <span class="stat-icon">⚔️</span>
+                      <span class="stat-value">{{ getEnemyMinionAtPosition(slotIndex + 2)!.attack }}</span>
+                    </div>
+                    <div class="stat-item hp-stat">
+                      <span class="stat-icon">❤️</span>
+                      <span class="stat-value">{{ getEnemyMinionAtPosition(slotIndex + 2)!.health }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-slot">
+                  <span class="slot-hint">位置 {{ slotIndex + 3 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分隔线 -->
+        <div class="info-divider"></div>
+        
+        <!-- 右侧竖排信息区 -->
+        <div class="vertical-info-panel enemy-panel">
+          <div class="vertical-info-content">
+            <!-- 圆形头像框 -->
+            <div class="player-avatar-container">
+              <div class="vertical-name-text">{{ enemyCharacterName }}</div>
+              <div class="player-avatar-circle enemy-avatar">
+                <span :class="['player-avatar-icon', enemyCharacterIcon.color]">
+                  {{ enemyCharacterIcon.emoji }}
+                </span>
+              </div>
+            </div>
+            <div class="hp-display enemy-hp horizontal">
+              <div class="hp-bar-container horizontal">
+                <div class="hp-bar-bg horizontal">
+                  <div 
+                    class="hp-bar-fill"
+                    :class="getHPColorClass(enemyHPPercent)"
+                    :style="{ width: enemyHPPercent + '%' }"
+                  ></div>
+                </div>
+              </div>
+              <div class="hp-text horizontal">
+                <span class="hp-value">{{ enemyHP }}</span>
+                <span class="hp-separator">/</span>
+                <span class="hp-max">{{ enemyHPMax }}</span>
+              </div>
+            </div>
+            <div v-if="enemyPanel" class="enemy-panel-info horizontal">
+              <div class="panel-stat">
+                <span class="panel-stat-icon">⚔️</span>
+                <span class="panel-stat-value">{{ enemyPanel.attack ?? 0 }}</span>
+              </div>
+              <div v-if="enemyPanel.armor" class="panel-stat">
+                <span class="panel-stat-icon">🛡️</span>
+                <span class="panel-stat-value">{{ enemyPanel.armor }}</span>
+              </div>
+              <div v-if="enemyPanel.difficulty" class="enemy-difficulty-badge" :class="`difficulty-${enemyPanel.difficulty}`">
+                {{ enemyPanel.difficulty === 'normal' ? '普通' : enemyPanel.difficulty === 'hard' ? '困难' : enemyPanel.difficulty === 'boss' ? '首领' : enemyPanel.difficulty }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -317,11 +475,13 @@ function getHPColorClass(percent: number) {
   overflow: hidden;
 }
 
-/* 战斗区域 */
+/* 战斗区域：左右对称，中间分隔 */
 .battle-arena {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 48px 1fr;
   gap: 16px;
+  align-items: stretch;
+  height: 100%;
 }
 
 /* 区域通用样式 */
@@ -330,8 +490,14 @@ function getHPColorClass(percent: number) {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 16px;
-  padding: 20px;
+  padding: 16px;
   transition: all 0.3s ease;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
 }
 
 .enemy-zone {
@@ -365,25 +531,307 @@ function getHPColorClass(percent: number) {
   }
 }
 
-.zone-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
+/* 移除旧的 zone-header 和 info-row 样式，因为已经移到竖排区域 */
 
 .stats {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* 竖排信息面板 */
+.vertical-info-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 110px;
+  max-width: 130px;
+  width: 110px;
+  padding: 10px 6px;
+}
+
+.vertical-name-text {
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  color: #e2e8f0;
+  padding: 0;
+  white-space: nowrap;
+  text-align: center;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.vertical-info-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 玩家头像容器 */
+.player-avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.player-avatar-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(139, 92, 246, 0.3));
+  border: 3px solid rgba(59, 130, 246, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+}
+
+.player-avatar-circle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+/* 敌方头像框 */
+.player-avatar-circle.enemy-avatar {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.3));
+  border: 3px solid rgba(239, 68, 68, 0.5);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.player-avatar-circle.enemy-avatar:hover {
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+.player-avatar-icon {
+  font-size: 2rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+
+/* 分隔线（不到两头） */
+.info-divider {
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 20px,
+    rgba(148, 163, 184, 0.4) 20px,
+    rgba(148, 163, 184, 0.4) calc(100% - 20px),
+    transparent calc(100% - 20px)
+  );
+  flex-shrink: 0;
+  margin: 0 8px;
+}
+
+/* 竖排布局的HP条 */
+.hp-bar-container.vertical {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.hp-bar-bg.vertical {
+  width: 20px;
+  height: 120px;
+  flex: none;
+  border-radius: 10px;
+}
+
+.hp-bar-container.vertical .hp-bar-bg {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.hp-bar-container.vertical .hp-bar-fill {
+  width: 100%;
+  border-radius: 10px;
+  transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.hp-bar-container.vertical .hp-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer-vertical 2s infinite;
+}
+
+@keyframes shimmer-vertical {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.hp-text.vertical {
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  min-width: auto;
+  text-align: center;
+}
+
+/* 横排布局的HP条 */
+.hp-display.horizontal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.hp-bar-container.horizontal {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.hp-bar-bg.horizontal {
+  width: 100%;
+  max-width: 100%;
+  height: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 7px;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.hp-bar-container.horizontal .hp-bar-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 8px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.hp-bar-container.horizontal .hp-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer-horizontal 2s infinite;
+}
+
+@keyframes shimmer-horizontal {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.hp-text.horizontal {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* 竖排布局的统计信息 */
+.stats.vertical {
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.stat-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 竖排布局的敌人面板信息 */
+.enemy-panel-info.vertical {
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+}
+
+.panel-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+}
+
+.panel-stat-icon {
+  font-size: 1rem;
+}
+
+.panel-stat-label {
+  color: #94a3b8;
+  font-weight: 500;
+  font-size: 0.65rem;
+}
+
+.panel-stat-value {
+  color: #e2e8f0;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+/* 对战区域 */
+.battle-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  overflow: hidden;
 }
 
 .stat-badge {
@@ -418,18 +866,80 @@ function getHPColorClass(percent: number) {
   font-size: 1.125rem;
   font-weight: 700;
   color: #e2e8f0;
+  flex-wrap: wrap;
 }
 
 .title-icon {
   font-size: 1.5rem;
 }
 
+.enemy-difficulty-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.enemy-difficulty-badge.difficulty-normal {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.enemy-difficulty-badge.difficulty-hard {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.enemy-difficulty-badge.difficulty-boss {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.enemy-panel-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.panel-stat {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.875rem;
+}
+
+.panel-stat-icon {
+  font-size: 1rem;
+}
+
+.panel-stat-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.panel-stat-value {
+  color: #e2e8f0;
+  font-weight: 700;
+  min-width: 24px;
+  text-align: right;
+}
+
 .title-text {
   font-size: 1.125rem;
 }
 
-/* HP显示 */
-.hp-display {
+/* HP显示 - 仅用于非horizontal的情况 */
+.hp-display:not(.horizontal) {
   min-width: 200px;
 }
 
@@ -450,40 +960,32 @@ function getHPColorClass(percent: number) {
   position: relative;
 }
 
-.hp-bar-fill {
-  height: 100%;
-  border-radius: 12px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
+/* HP条填充样式已在竖排区域定义 */
 
-.hp-bar-fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.hp-bar-fill.hp-healthy {
+/* 横排 HP 条渐变 */
+.hp-bar-container.horizontal .hp-bar-fill.hp-healthy {
   background: linear-gradient(90deg, #10b981, #059669);
 }
 
-.hp-bar-fill.hp-warning {
+.hp-bar-container.horizontal .hp-bar-fill.hp-warning {
   background: linear-gradient(90deg, #f59e0b, #d97706);
 }
 
-.hp-bar-fill.hp-danger {
+.hp-bar-container.horizontal .hp-bar-fill.hp-danger {
   background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+/* 竖排 HP 条渐变 */
+.hp-bar-container.vertical .hp-bar-fill.hp-healthy {
+  background: linear-gradient(180deg, #10b981, #059669);
+}
+
+.hp-bar-container.vertical .hp-bar-fill.hp-warning {
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+}
+
+.hp-bar-container.vertical .hp-bar-fill.hp-danger {
+  background: linear-gradient(180deg, #ef4444, #dc2626);
 }
 
 .hp-text {
@@ -524,6 +1026,75 @@ function getHPColorClass(percent: number) {
   gap: 16px;
 }
 
+/* 固定位置槽 */
+.battle-slots {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  min-height: 0;
+  flex-wrap: wrap;
+}
+
+.battle-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 左列和右列样式已通过 battle-column 统一设置 */
+
+.battle-slot {
+  width: 140px;
+  height: 180px;
+  min-width: 140px;
+  min-height: 180px;
+  border: 2px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: visible;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.battle-slot.occupied {
+  border: 2px solid rgba(148, 163, 184, 0.5);
+  padding: 0;
+}
+
+.battle-slot:not(.occupied):hover {
+  border-color: rgba(59, 130, 246, 0.6);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.empty-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: rgba(148, 163, 184, 0.5);
+  font-size: 0.75rem;
+}
+
+.slot-hint {
+  opacity: 0.6;
+}
+
 .character-card {
   background: rgba(15, 23, 42, 0.6);
   border: 2px solid rgba(148, 163, 184, 0.2);
@@ -535,6 +1106,11 @@ function getHPColorClass(percent: number) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  width: 140px;
+  height: 180px;
+  min-width: 140px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .equipment-dots {
@@ -608,14 +1184,20 @@ function getHPColorClass(percent: number) {
 }
 
 .character-name {
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: #e2e8f0;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
+  min-height: 2.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .shield-badge, .star-badge, .status-badge {
@@ -657,12 +1239,13 @@ function getHPColorClass(percent: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 60px;
-  margin: 8px 0;
+  height: 40px;
+  margin: 4px 0;
+  flex-shrink: 0;
 }
 
 .avatar-icon {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
   animation: float 3s ease-in-out infinite;
 }
@@ -675,7 +1258,8 @@ function getHPColorClass(percent: number) {
 .character-stats {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .stat-item {
@@ -692,36 +1276,9 @@ function getHPColorClass(percent: number) {
 
 .hp-stat {
   color: #10b981;
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.hp-mini-bar {
-  flex: 1;
-  height: 4px;
-  background: rgba(15, 23, 42, 0.8);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.hp-mini-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.hp-mini-fill.hp-healthy {
-  background: #10b981;
-}
-
-.hp-mini-fill.hp-warning {
-  background: #f59e0b;
-}
-
-.hp-mini-fill.hp-danger {
-  background: #ef4444;
 }
 
 .stat-icon {
@@ -765,7 +1322,13 @@ function getHPColorClass(percent: number) {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 8px 0;
+  margin: 0 8px;
+}
+
+.battle-divider.vertical {
+  flex-direction: column;
+  justify-content: center;
+  min-width: 48px;
 }
 
 .divider-line {
@@ -774,9 +1337,16 @@ function getHPColorClass(percent: number) {
   background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.3), transparent);
 }
 
+.divider-line.vertical {
+  width: 2px;
+  height: 100%;
+  min-height: 200px;
+  background: linear-gradient(180deg, transparent, rgba(148, 163, 184, 0.3), transparent);
+}
+
 .divider-icon {
   font-size: 1.5rem;
-  opacity: 0.5;
+  opacity: 0.6;
   animation: rotate 4s linear infinite;
 }
 
@@ -917,7 +1487,7 @@ function getHPColorClass(percent: number) {
     gap: 12px;
   }
 
-  .hp-display {
+  .hp-display:not(.horizontal) {
     min-width: 150px;
   }
 
@@ -940,8 +1510,9 @@ function getHPColorClass(percent: number) {
     font-size: 2rem;
   }
 
-  .hp-display {
+  .hp-display:not(.horizontal) {
     min-width: 120px;
   }
 }
 </style>
+

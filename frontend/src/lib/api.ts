@@ -139,15 +139,40 @@ export const gameApi = {
     return await apiClient.get('/character/traits')
   },
   
+  // 获取卡牌角色特性
+  async getCardCharacterTraits(cardCharacterId: number | string) {
+    return await apiClient.get(`/card-characters/${cardCharacterId}/traits`)
+  },
+  
   // 获取用户卡牌
   async getUserCards() {
     return await apiClient.get('/card/user-cards')
   },
   
   // 获取敌方卡牌（从后端获取敌人的卡牌列表，包括法术、装备和角色卡）
-  async getEnemyCards(stageNum: number, difficulty: string) {
-    return await apiClient.get(`/game/enemy-cards?stage=${stageNum}&difficulty=${difficulty}`)
-  }
+  // 支持两种方式：1. 通过 enemyId 查询 2. 通过 stage 和 difficulty 查询
+  async getEnemyCards(stageNumOrEnemyId: number, difficulty?: string) {
+    if (difficulty) {
+      // 通过关卡和难度查询
+      return await apiClient.get(`/game/enemy-cards?stage=${stageNumOrEnemyId}&difficulty=${difficulty}`)
+    } else {
+      // 通过敌人ID查询
+      return await apiClient.get(`/game/enemy-cards?enemyId=${stageNumOrEnemyId}`)
+    }
+  },
+  
+  // 获取关卡中所有可能的敌人列表
+  async getStageEnemies(stageNum?: number, difficulty?: string) {
+    const params: any = {}
+    if (stageNum) params.stage = stageNum
+    if (difficulty) params.difficulty = difficulty
+    return await apiClient.get('/game/stage-enemies', { params })
+  },
+  
+  // 获取敌人面板信息
+  async getEnemyPanel(enemyId: number) {
+    return await apiClient.get(`/game/enemy-panel?enemyId=${enemyId}`)
+  },
 }
 
 // 营地相关 API 方法
@@ -317,17 +342,17 @@ export const stressApi = {
 export const achievementApi = {
   // 获取成就列表
   async getAchievements() {
-    return await apiClient.get('/achievement/list')
+    return await apiClient.get('/achievements/list')
   },
   
   // 获取成就进度
   async getAchievementProgress() {
-    return await apiClient.get('/achievement/progress')
+    return await apiClient.get('/achievements/progress')
   },
   
   // 解锁成就
   async unlockAchievement(achievementId: string) {
-    return await apiClient.post('/achievement/unlock', { achievementId })
+    return await apiClient.post('/achievements/unlock', { achievementId })
   }
 }
 
@@ -428,9 +453,9 @@ export const API_ENDPOINTS = {
   },
   // 成就相关
   ACHIEVEMENT: {
-    LIST: '/achievement/list',
-    PROGRESS: '/achievement/progress',
-    UNLOCK: '/achievement/unlock',
+    LIST: '/achievements/list',
+    PROGRESS: '/achievements/progress',
+    UNLOCK: '/achievements/unlock',
   },
   // 统计相关
   STATISTICS: {
