@@ -1,10 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios'
 
 // API 配置
-// 优先使用环境变量，默认指向本地后端
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
-  'http://localhost:8080'
+// 注意：后端 Controller 没有 /api 前缀，所以这里不使用 /api
+const API_BASE_URL = 'http://26.83.153.194:8080'
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
@@ -475,6 +473,14 @@ export const API_ENDPOINTS = {
     ATTEMPT: (stageNumber: number) => `/user-stage-progress/${stageNumber}/attempt`,
     STATS: '/user-stage-progress/stats',
   },
+  // 关卡相关
+  STAGE: {
+    LIST: '/stages',
+    GET_BY_NUMBER: (stageNumber: number) => `/stages/number/${stageNumber}`,
+    GET_BY_CHAPTER: (chapterNumber: number) => `/stages/chapter/${chapterNumber}`,
+    GET_BOSS: '/stages/boss',
+    GET_MAP: (stageNumber: number) => `/stages/${stageNumber}/map`,
+  },
 } as const
 
 export type ApiEndpointKeys = keyof typeof API_ENDPOINTS
@@ -508,4 +514,27 @@ export const stageProgressApi = {
   async getStats() {
     return await apiClient.get(API_ENDPOINTS.STAGE_PROGRESS.STATS)
   },
+}
+
+// 关卡API
+export const stageApi = {
+  async getAllStages() {
+    return await apiClient.get(API_ENDPOINTS.STAGE.LIST)
+  },
+  
+  async getStageByNumber(stageNumber: number) {
+    return await apiClient.get(API_ENDPOINTS.STAGE.GET_BY_NUMBER(stageNumber))
+  },
+  
+  async getStagesByChapter(chapterNumber: number) {
+    return await apiClient.get(API_ENDPOINTS.STAGE.GET_BY_CHAPTER(chapterNumber))
+  },
+  
+  async getBossStages() {
+    return await apiClient.get(API_ENDPOINTS.STAGE.GET_BOSS)
+  },
+  
+  async getStageMap(stageNumber: number) {
+    return await apiClient.get(API_ENDPOINTS.STAGE.GET_MAP(stageNumber))
+  }
 }

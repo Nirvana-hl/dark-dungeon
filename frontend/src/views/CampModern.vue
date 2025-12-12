@@ -21,7 +21,7 @@
       <div v-else class="hero-card">
         <div class="hero-avatar">
           <img 
-            :src="`/api/character/avatar/${playerCharacter?.playerCharacterId || 'default'}`" 
+            src="/touxiang.png" 
             :alt="getPlayerCharacterName()"
             @error="handleImageError"
           />

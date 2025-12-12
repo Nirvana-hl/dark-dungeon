@@ -10,7 +10,7 @@ import { useWalletStore } from '@/stores/wallet'
 import { useCampStore } from '@/stores/camp'
 import apiClient from '@/lib/api'
 import { CurrencyType } from '@/types'
-import { stageProgressApi } from '@/lib/api'
+import { stageProgressApi, stageApi } from '@/lib/api'
 import { soundManager } from '@/utils/soundManager'
 
 const route = useRoute()
@@ -26,6 +26,7 @@ const enemyDifficulty = computed(() => game.enemyDifficulty)
 const isEndingTurn = ref(false)
 const showExitConfirm = ref(false)
 const draggingEquipCard = ref<Card | null>(null)
+const draggingSpellCard = ref<Card | null>(null)
 const selectedEquipCard = ref<Card | null>(null)
 const selectedCharacterCard = ref<Card | null>(null)
 const selectedSpellCard = ref<Card | null>(null)
@@ -108,6 +109,62 @@ function endCharacterDrag() {
   draggingCharacterCard.value = null
 }
 
+function startSpellDrag(card: Card) {
+  if (card.type !== 'spell') return
+  draggingSpellCard.value = card
+  // 开始拖拽时关闭详情面板，避免遮挡
+  selectedSpellCard.value = null
+}
+
+function endSpellDrag(event?: DragEvent) {
+  // 如果法术卡被拖拽离开手牌区，视为打出
+  if (draggingSpellCard.value) {
+    const card = draggingSpellCard.value
+    
+    // 检查拖拽结束时鼠标位置是否在手牌区域外
+    if (event) {
+      const handCardsElement = event.currentTarget?.closest('.hand-cards') as HTMLElement | null
+      if (handCardsElement) {
+        const rect = handCardsElement.getBoundingClientRect()
+        const x = event.clientX
+        const y = event.clientY
+        
+        // 如果鼠标位置在手牌区域外，视为打出
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          // 检查是否有足够的法力值
+          if (mana.value >= card.cost) {
+            game.playCard(card.id)
+            draggingSpellCard.value = null
+            return
+          }
+        }
+      }
+    }
+    
+    // 如果拖拽结束但还在手牌区域内，清除状态
+    draggingSpellCard.value = null
+  }
+}
+
+// 处理手牌区域拖拽离开事件（作为备用检测）
+function handleHandDragLeave(event: DragEvent) {
+  // 检查是否有正在拖拽的法术卡
+  if (draggingSpellCard.value) {
+    const relatedTarget = event.relatedTarget as HTMLElement | null
+    const handCardsElement = event.currentTarget as HTMLElement
+    
+    // 如果 relatedTarget 不在手牌区域内，视为离开
+    if (relatedTarget && !handCardsElement.contains(relatedTarget)) {
+      const card = draggingSpellCard.value
+      // 检查是否有足够的法力值
+      if (mana.value >= card.cost) {
+        game.playCard(card.id)
+        draggingSpellCard.value = null
+      }
+    }
+  }
+}
+
 function handleDeployCard(payload: { cardId: string; position: number }) {
   // 调用 playCard 并传入位置参数
   game.playCard(payload.cardId, payload.position)
@@ -176,17 +233,56 @@ watch(level, async (lv) => {
   await game.loadEnemyDeck(lv || 1) // 再加载敌人数据（包括敌人面板）
 })
 
-// 计算奖励（根据关卡难度）
-function calculateReward() {
+// 计算奖励（从后端数据库获取）
+async function calculateReward() {
   const lv = level.value || 1
-  const diff = enemyDifficulty.value || '普通'
   
-  // 基础奖励
+  try {
+    // 从后端获取关卡信息
+    const response = await stageApi.getStageByNumber(lv)
+    if (response.data.code === 200 && response.data.data) {
+      const stage = response.data.data
+      
+      // 解析奖励池配置（JSON格式）
+      let rewardPool: any = {}
+      if (stage.rewardPool) {
+        try {
+          rewardPool = typeof stage.rewardPool === 'string' 
+            ? JSON.parse(stage.rewardPool) 
+            : stage.rewardPool
+        } catch (e) {
+          console.warn('[Game] 解析奖励池配置失败，使用默认值:', e)
+        }
+      }
+      
+      // 从奖励池获取奖励数据，如果没有则使用默认值
+      const gold = rewardPool.gold || 50
+      const exp = rewardPool.exp || 50
+      // 压力值通常不在奖励池中，使用默认值或根据难度计算
+      const diff = enemyDifficulty.value || '普通'
+      let baseStress = 5
+      if (diff === '困难') {
+        baseStress = 8
+      } else if (diff === '噩梦') {
+        baseStress = 12
+      }
+      const stress = rewardPool.stress || baseStress
+      
+      console.log('[Game] 从后端获取奖励数据:', { gold, exp, stress, stageNumber: lv })
+      return { gold, exp, stress }
+    } else {
+      console.warn('[Game] 获取关卡信息失败，使用默认奖励')
+    }
+  } catch (error) {
+    console.error('[Game] 获取关卡奖励失败，使用默认奖励:', error)
+  }
+  
+  // 降级方案：如果后端获取失败，使用默认计算逻辑
+  const diff = enemyDifficulty.value || '普通'
   let baseGold = 50
   let baseExp = 50
   let baseStress = 5
   
-  // 根据难度调整
   if (diff === '困难') {
     baseGold = 100
     baseExp = 100
@@ -197,7 +293,6 @@ function calculateReward() {
     baseStress = 12
   }
   
-  // 根据关卡数增加奖励
   const levelMultiplier = 1 + (lv - 1) * 0.1
   const gold = Math.floor(baseGold * levelMultiplier)
   const exp = Math.floor(baseExp * levelMultiplier)
@@ -274,8 +369,8 @@ function confirmDefeat() {
 // 监听胜负，显示结算画面
 watch(winner, async (w) => {
   if (w === 'player') {
-    // 计算奖励
-    victoryReward.value = calculateReward()
+    // 从后端获取奖励数据
+    victoryReward.value = await calculateReward()
     // 显示结算画面
     showVictoryModal.value = true
   } else if (w === 'enemy') {
@@ -374,7 +469,10 @@ watch(winner, async (w) => {
             </div>
           </div>
         </div>
-        <div class="hand-cards">
+        <div 
+          class="hand-cards"
+          @dragleave="handleHandDragLeave"
+        >
           <CardItem 
             v-for="c in hand" 
             :key="c.id" 
@@ -384,6 +482,8 @@ watch(winner, async (w) => {
             @end-equip-drag="endEquipDrag"
             @start-character-drag="startCharacterDrag"
             @end-character-drag="endCharacterDrag"
+            @start-spell-drag="startSpellDrag"
+            @end-spell-drag="(e) => endSpellDrag(e)"
             @show-equipment="showEquipDetails"
             @show-character="showCharacterDetails"
             @show-spell="showSpellDetails"

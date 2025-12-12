@@ -7,7 +7,7 @@
           <div class="avatar-glow"></div>
           <img 
             class="character-avatar"
-            :src="`/api/character/avatar/${playerCharacter?.playerCharacterId}`" 
+            src="/touxiang.png" 
             :alt="playerCharacter?.playerCharacterName || playerCharacter?.name"
             @error="handleImageError"
           />

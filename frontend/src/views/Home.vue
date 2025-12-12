@@ -24,26 +24,26 @@
       </RouterLink>
     </div>
     
-    <!-- 右侧功能区 -->
+    <!-- 右侧功能区（成就和设置） -->
     <div class="right-sidebar">
       <RouterLink to="/achievements" class="nav-button achievements-button">
         <div class="button-icon">🏆</div>
         <div class="button-text">
           <h3>成就</h3>
-          <p>查看游戏成就和里程碑</p>
+          <p>查看已解锁的成就</p>
         </div>
       </RouterLink>
       
-      <RouterLink to="/settings" class="nav-button settings-nav-button">
+      <RouterLink to="/settings" class="nav-button settings-button">
         <div class="button-icon">⚙️</div>
         <div class="button-text">
           <h3>设置</h3>
-          <p>调整游戏设置和偏好</p>
+          <p>游戏设置和选项</p>
         </div>
       </RouterLink>
     </div>
     
-    <!-- 中央闯关按钮 -->
+    <!-- 底部中央闯关按钮 -->
     <div class="center-action">
       <button class="explore-button" @click="handleStartExplore">
         <div class="button-content">
@@ -59,6 +59,7 @@
       :show="showStoryModal" 
       @close="handleStoryClose"
       @complete="handleStoryComplete"
+      @skip="handleStorySkip"
     />
 
     <!-- 职业选择弹窗 -->
@@ -70,17 +71,24 @@
     
     <!-- 右上角登录/登出按钮 -->
     <div class="top-right-auth">
-      <div v-if="auth.isAuthenticated" class="auth-info">
-        <span class="user-name">👤 {{ auth.user?.accountName || '已登录' }}</span>
-        <button class="auth-button logout-button" @click="handleLogout">
+      <button 
+        v-if="!auth.isAuthenticated" 
+        class="auth-button login-button"
+        @click="goLogin"
+      >
+        <i class="fas fa-sign-in-alt"></i>
+        登录
+      </button>
+      <div v-else class="auth-info">
+        <span class="account-name">{{ auth.user?.accountName || '用户' }}</span>
+        <button 
+          class="auth-button logout-button"
+          @click="signOut"
+        >
           <i class="fas fa-sign-out-alt"></i>
           登出
         </button>
       </div>
-      <RouterLink v-else to="/login" class="auth-button login-button">
-        <i class="fas fa-sign-in-alt"></i>
-        登录
-      </RouterLink>
     </div>
     
     <!-- 背景装饰 -->
@@ -100,7 +108,6 @@
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-attachment: fixed;
   color: white;
   position: relative;
   overflow: hidden;
@@ -120,22 +127,17 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 1;
-}
-
-/* 确保所有内容在遮罩层之上 */
-.home-container > * {
-  position: relative;
-  z-index: 2;
+  z-index: 0;
 }
 
 /* 游戏标题 */
 .game-title {
   position: absolute;
-  top: 80px;
+  top: 60px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
+  pointer-events: none;
 }
 
 .game-title h1 {
@@ -154,23 +156,23 @@
 .left-sidebar {
   position: absolute;
   left: 60px;
-  top: 45%;
+  top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 30px;
   z-index: 10;
 }
 
-/* 右侧功能区 */
+/* 右侧功能区（成就和设置） */
 .right-sidebar {
   position: absolute;
   right: 60px;
-  top: 45%;
+  top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 30px;
   z-index: 10;
 }
 
@@ -178,7 +180,7 @@
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 22px 24px;
+  padding: 20px;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -226,22 +228,12 @@
 .achievements-button:hover {
   background: linear-gradient(135deg, rgba(255, 193, 7, 0.3), rgba(255, 193, 7, 0.1));
   border-color: #ffc107;
+  transform: translateX(-10px);
 }
 
-.settings-nav-button:hover {
-  background: linear-gradient(135deg, rgba(156, 39, 176, 0.3), rgba(156, 39, 176, 0.1));
-  border-color: #9c27b0;
-}
-
-.nav-button:hover {
-  transform: translateX(0);
-}
-
-.left-sidebar .nav-button:hover {
-  transform: translateX(10px);
-}
-
-.right-sidebar .nav-button:hover {
+.settings-button:hover {
+  background: linear-gradient(135deg, rgba(158, 158, 158, 0.3), rgba(158, 158, 158, 0.1));
+  border-color: #9e9e9e;
   transform: translateX(-10px);
 }
 
@@ -271,10 +263,10 @@
   line-height: 1.4;
 }
 
-/* 中央闯关按钮 */
+/* 底部中央闯关按钮 */
 .center-action {
   position: absolute;
-  bottom: 40px;
+  bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
@@ -292,12 +284,12 @@
 }
 
 .button-content {
-  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
-  padding: 32px 50px;
-  border-radius: 25px;
+  background: linear-gradient(135deg, #4a1a1a, #2d1b1b);
+  padding: 24px 40px;
+  border-radius: 20px;
   text-align: center;
-  box-shadow: 0 20px 40px rgba(255, 107, 107, 0.3);
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(139, 69, 19, 0.6);
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
@@ -310,34 +302,103 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  animation: shine 3s infinite;
+  background: linear-gradient(45deg, transparent, rgba(139, 69, 19, 0.2), transparent);
+  animation: shine 4s infinite;
 }
 
 .button-content:hover {
-  transform: scale(1.05);
-  box-shadow: 0 25px 50px rgba(255, 107, 107, 0.4);
+  transform: scale(1.03);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(160, 82, 45, 0.8);
+  background: linear-gradient(135deg, #5a2a2a, #3d2b2b);
 }
 
 .explore-icon {
-  font-size: 3.5rem;
-  margin-bottom: 12px;
-  animation: rotate 4s linear infinite;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  animation: rotate 6s linear infinite;
+  opacity: 0.8;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
 .button-content h2 {
   margin: 0 0 8px 0;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   font-weight: bold;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: #d4a574;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 4px rgba(139, 69, 19, 0.5);
 }
 
 .button-content p {
   margin: 0;
-  font-size: 1rem;
-  opacity: 0.95;
+  font-size: 0.9rem;
+  color: #b8a082;
+  opacity: 0.85;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
+/* 右上角登录/登出按钮 */
+.top-right-auth {
+  position: absolute;
+  top: 40px;
+  right: 40px;
+  z-index: 10;
+}
+
+.auth-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-name {
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 25px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.auth-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 25px;
+  color: white;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.auth-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.login-button:hover {
+  border-color: #4caf50;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.3), rgba(76, 175, 80, 0.1));
+}
+
+.logout-button:hover {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.1));
+}
+
+.auth-button i {
+  font-size: 1rem;
+}
 
 /* 背景装饰元素 */
 .background-elements {
@@ -348,7 +409,6 @@
   height: 100%;
   pointer-events: none;
   z-index: 1;
-  opacity: 0.3; /* 降低装饰元素的不透明度，让背景图更突出 */
 }
 
 .floating-element {
@@ -423,62 +483,6 @@
   100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
 }
 
-/* 右上角登录/登出按钮 */
-.top-right-auth {
-  position: absolute;
-  top: 40px;
-  right: 40px;
-  z-index: 10;
-}
-
-.auth-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-name {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.auth-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 25px;
-  color: white;
-  text-decoration: none;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.auth-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-}
-
-.login-button:hover {
-  border-color: rgba(76, 175, 80, 0.5);
-}
-
-.logout-button:hover {
-  border-color: rgba(244, 67, 54, 0.5);
-}
-
-.auth-button i {
-  font-size: 0.9rem;
-}
-
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .game-title h1 {
@@ -505,11 +509,19 @@
   }
   
   .button-content {
-    padding: 30px 45px;
+    padding: 20px 35px;
+  }
+  
+  .button-content h2 {
+    font-size: 1.3rem;
+  }
+  
+  .button-content p {
+    font-size: 0.85rem;
   }
   
   .explore-icon {
-    font-size: 3rem;
+    font-size: 2rem;
   }
 }
 
@@ -555,24 +567,24 @@
   }
   
   .center-action {
-    bottom: 30px;
-    transform: translateX(-50%);
+    bottom: 60px;
   }
   
   .button-content {
-    padding: 22px 30px;
-  }
-  
-  .explore-icon {
-    font-size: 2.2rem;
+    padding: 18px 28px;
   }
   
   .button-content h2 {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
   }
   
   .button-content p {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
+  }
+  
+  .explore-icon {
+    font-size: 1.8rem;
+    margin-bottom: 8px;
   }
   
   .top-right-auth {
@@ -580,13 +592,20 @@
     right: 20px;
   }
   
-  .user-name {
-    display: none; /* 移动端隐藏用户名 */
+  .auth-info {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  
+  .account-name {
+    padding: 8px 16px;
+    font-size: 0.8rem;
   }
   
   .auth-button {
-    padding: 8px 16px;
-    font-size: 0.8rem;
+    padding: 10px 16px;
+    font-size: 0.85rem;
   }
 }
 </style>
@@ -596,40 +615,176 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCharactersStore } from '@/stores/characters'
 import { useAuthStore } from '@/stores/auth'
+import { useCampStore } from '@/stores/camp'
+import { userCardCharacterApi } from '@/lib/api'
 import StoryModal from '@/components/StoryModal.vue'
 import ClassSelectionModal from '@/components/ClassSelectionModal.vue'
 
 const router = useRouter()
 const charactersStore = useCharactersStore()
 const auth = useAuthStore()
+const campStore = useCampStore()
 
 // 弹窗状态
 const showStoryModal = ref(false)
 const showClassModal = ref(false)
 
+// 获取背景故事已显示标记的key
+function getStoryShownKey(): string | null {
+  const userId = auth.user?.id
+  if (!userId) return null
+  return `storyShown_${userId}`
+}
+
+// 检查背景故事是否已经显示过
+function hasStoryBeenShown(): boolean {
+  const key = getStoryShownKey()
+  if (!key) return false
+  const shown = localStorage.getItem(key)
+  return shown === 'true'
+}
+
+// 标记背景故事已显示
+function markStoryAsShown(): void {
+  const key = getStoryShownKey()
+  if (key) {
+    localStorage.setItem(key, 'true')
+    console.log('[Home] 已标记背景故事为已显示，用户ID:', auth.user?.id)
+  }
+}
+
 // 处理开始闯关
-function handleStartExplore() {
-  // 检查是否已有角色（包括模拟数据）
-  const hasCharacter = charactersStore.playerCharacter || 
-                       localStorage.getItem('mockPlayerCharacter')
-  
-  if (hasCharacter) {
-    // 已有角色，直接跳转到探索页面
-    router.push('/explore')
-  } else {
-    // 没有角色，先显示背景故事
-    showStoryModal.value = true
+async function handleStartExplore() {
+  try {
+    // 首先强制刷新营地数据，确保数据是最新的
+    console.log('[Home] 开始检查角色状态，先刷新营地数据...')
+    try {
+      await campStore.fetchCampData()
+      console.log('[Home] 营地数据刷新完成')
+    } catch (error) {
+      console.warn('[Home] 加载营地数据失败:', error)
+    }
+    
+    // 检查是否在营地选择了角色（已上阵的角色）
+    // 使用更宽松的检查条件：isDeployed 为 true、1 或非空字符串都视为已上阵
+    const checkIsDeployed = (char: any): boolean => {
+      if (char.isDeployed === true || char.isDeployed === 1 || char.isDeployed === 'true') {
+        return true
+      }
+      // 也检查 Boolean 转换
+      return Boolean(char.isDeployed) === true
+    }
+    
+    // 方法1：从campStore中检查是否有已上阵的角色
+    let hasDeployedCharacter = false
+    const userCardCharacters = campStore.userCardCharacters || []
+    
+    console.log('[Home] 检查角色数据:', {
+      totalCharacters: userCardCharacters.length,
+      characters: userCardCharacters.map((char: any) => ({
+        id: char.id,
+        name: char.characterName || char.name,
+        isDeployed: char.isDeployed,
+        isDeployedType: typeof char.isDeployed
+      }))
+    })
+    
+    if (userCardCharacters.length > 0) {
+      // 如果store中有数据，直接检查
+      hasDeployedCharacter = userCardCharacters.some(checkIsDeployed)
+      const deployedChars = userCardCharacters.filter(checkIsDeployed)
+      console.log('[Home] 从store检查上阵角色:', {
+        totalCharacters: userCardCharacters.length,
+        hasDeployed: hasDeployedCharacter,
+        deployedCount: deployedChars.length,
+        deployedChars: deployedChars.map((char: any) => ({
+          id: char.id,
+          name: char.characterName || char.name,
+          isDeployed: char.isDeployed
+        }))
+      })
+    }
+    
+    // 方法2：如果store中没有已上阵角色，调用API再次确认
+    if (!hasDeployedCharacter) {
+      try {
+        console.log('[Home] store中未找到上阵角色，调用API确认...')
+        const response = await userCardCharacterApi.getDeployedCardCharacters()
+        if (response.data?.code === 200) {
+          const deployedChars = response.data.data || []
+          hasDeployedCharacter = Array.isArray(deployedChars) && deployedChars.length > 0
+          console.log('[Home] API返回已上阵角色数量:', deployedChars.length, {
+            chars: deployedChars.map((char: any) => ({
+              id: char.id,
+              name: char.characterName || char.name,
+              isDeployed: char.isDeployed
+            }))
+          })
+        }
+      } catch (error) {
+        console.warn('[Home] 获取已上阵角色失败:', error)
+        // API调用失败时，如果store中有角色数据，使用store的判断结果
+        // 如果store中也没有数据，则认为没有上阵角色
+      }
+    }
+    
+    if (hasDeployedCharacter) {
+      // 已有上阵角色，营地已选择完毕，直接跳转到探索页面
+      console.log('[Home] ✅ 检测到已上阵角色，直接跳转到探索页面')
+      router.push('/explore')
+    } else {
+      // 没有上阵角色，检查是否已经显示过背景故事
+      const storyShown = hasStoryBeenShown()
+      if (storyShown) {
+        // 已经显示过背景故事，直接跳转到探索页面
+        console.log('[Home] 背景故事已显示过，直接跳转到探索页面')
+        router.push('/explore')
+      } else {
+        // 没有显示过背景故事，显示背景故事
+        console.log('[Home] ❌ 未检测到已上阵角色且未显示过背景故事，显示背景故事')
+        showStoryModal.value = true
+      }
+    }
+  } catch (error) {
+    console.error('[Home] 检查角色状态失败:', error)
+    // 出错时，如果没有主角，也显示背景故事
+    const hasPlayerCharacter = charactersStore.playerCharacter || 
+                               localStorage.getItem('mockPlayerCharacter')
+    if (hasPlayerCharacter) {
+      router.push('/explore')
+    } else {
+      // 检查是否已经显示过背景故事
+      const storyShown = hasStoryBeenShown()
+      if (storyShown) {
+        router.push('/explore')
+      } else {
+        showStoryModal.value = true
+      }
+    }
   }
 }
 
 // 背景故事关闭
 function handleStoryClose() {
   showStoryModal.value = false
+  // 标记背景故事已显示（即使关闭也算看过）
+  markStoryAsShown()
+}
+
+// 背景故事跳过 - 直接跳转到探索界面
+function handleStorySkip() {
+  showStoryModal.value = false
+  // 标记背景故事已显示
+  markStoryAsShown()
+  // 直接跳转到探索页面
+  router.push('/explore')
 }
 
 // 背景故事完成
 function handleStoryComplete() {
   showStoryModal.value = false
+  // 标记背景故事已显示
+  markStoryAsShown()
   // 显示职业选择
   showClassModal.value = true
 }
@@ -646,10 +801,15 @@ async function handleClassComplete() {
   router.push('/explore')
 }
 
-// 处理登出
-async function handleLogout() {
+// 跳转到登录页
+function goLogin() {
+  router.push('/login')
+}
+
+// 登出
+async function signOut() {
   await auth.logout()
-  // 登出后可以刷新页面或显示提示
+  // 登出后跳转到登录页
   router.push('/login')
 }
 </script>

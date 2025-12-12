@@ -16,8 +16,8 @@ export enum SoundType {
 
 // 音效配置
 const soundConfig: Record<SoundType, { path: string; volume: number }> = {
-  [SoundType.DRAW_CARD]: { path: '/sounds/draw-card.mp3', volume: 0.5 },
-  [SoundType.PLAY_CARD]: { path: '/sounds/play-card.mp3', volume: 0.6 },
+  [SoundType.DRAW_CARD]: { path: '/sounds/draw_card.mp3', volume: 0.5 },
+  [SoundType.PLAY_CARD]: { path: '/sounds/play_card.mp3', volume: 0.6 },
   [SoundType.ATTACK]: { path: '/sounds/attack.mp3', volume: 0.7 },
   [SoundType.HIT]: { path: '/sounds/hit.mp3', volume: 0.8 },
   [SoundType.HEAL]: { path: '/sounds/heal.mp3', volume: 0.5 },

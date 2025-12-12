@@ -11,7 +11,7 @@
       <div class="character-info">
         <div class="character-avatar">
           <img 
-            :src="`/api/character/avatar/${playerCharacter?.playerCharacterId || 'default'}`" 
+            src="/touxiang.png" 
             :alt="getPlayerClassName()"
             @error="handleImageError"
           />

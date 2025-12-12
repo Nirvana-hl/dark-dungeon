@@ -190,11 +190,25 @@
                   <div class="character-stats">
                     <span>
                       <i class="fas fa-heart"></i>
-                      {{ character.baseHp ?? character.currentHp ?? '-' }}
+                      <!-- 优先显示升星后的血量（currentHp），如果没有再显示基础血量 -->
+                      {{ character.currentHp ?? character.baseHp ?? '-' }}
+                      <!-- 如果升星后血量有提升，显示提升提示 -->
+                      <span v-if="character.currentHp && character.baseHp && character.currentHp > character.baseHp" 
+                            class="stat-bonus" 
+                            :title="`基础: ${character.baseHp} → 升星后: ${character.currentHp}`">
+                        (+{{ character.currentHp - character.baseHp }})
+                      </span>
                     </span>
                     <span>
                       <i class="fas fa-sword"></i>
+                      <!-- 显示基础攻击力，如果升星了则显示星级提示 -->
                       {{ character.baseAttack ?? '-' }}
+                      <!-- 如果升星了，显示星级加成提示（攻击力在战斗时动态计算） -->
+                      <span v-if="character.currentStarLevel && character.currentStarLevel > 1" 
+                            class="stat-bonus" 
+                            title="攻击力在战斗时会根据星级提升">
+                        ({{ character.currentStarLevel }})
+                      </span>
                     </span>
                     <span>
                       <i class="fas fa-shield-alt"></i>
@@ -417,127 +431,6 @@
           />
         </div>
 
-        <!-- 任务与事件 -->
-        <div v-if="activeTab === 'events'" class="module-card">
-          <div class="module-header">
-            <div class="header-left">
-              <h3>
-                <i class="fas fa-scroll"></i>
-                任务中心
-              </h3>
-              <p class="module-description">完成挑战获取丰厚奖励</p>
-            </div>
-            <!-- 已完成计数已隐藏，不显示在界面中
-            <div class="event-stats">
-              <span class="completed-count">{{ completedEventsCount }}/{{ availableEvents.length }} 已完成</span>
-            </div>
-            -->
-          </div>
-          
-          <!-- 任务进度条 -->
-          <div class="quest-progress">
-            <div class="progress-track">
-              <div class="progress-fill" :style="{ width: eventProgressPercentage + '%' }"></div>
-            </div>
-            <span class="progress-label">完成度: {{ eventProgressPercentage }}%</span>
-          </div>
-          
-          <!-- 任务列表 -->
-          <div class="quests-enhanced-list">
-            <div 
-              v-for="(event, index) in availableEvents" 
-              :key="event.id"
-              class="quest-card"
-              :class="{ 
-                completed: event.completed,
-                featured: (event as any).featured
-              }"
-              @click="handleEvent(event)"
-              :style="{ '--delay': index * 0.06 + 's' }"
-            >
-              <div class="quest-visual">
-                <div class="quest-icon-bg" :class="(event as any).type || 'default'">
-                  <i :class="getEventIcon((event as any).type || 'default')"></i>
-                </div>
-                <div v-if="(event as any).featured" class="featured-badge">
-                  <i class="fas fa-crown"></i>
-                </div>
-              </div>
-              
-              <div class="quest-content">
-                <div class="quest-header">
-                  <h4 class="quest-title">{{ event.name || (event as any).title || '任务' }}</h4>
-                  <div class="quest-difficulty" :class="(event as any).difficulty || 'normal'">
-                    {{ getDifficultyLabel((event as any).difficulty || 'normal') }}
-                  </div>
-                </div>
-                
-                <p class="quest-description">{{ event.description }}</p>
-                
-                <!-- 任务目标 -->
-                <div class="quest-objectives">
-                  <h5>任务目标</h5>
-                  <div class="objectives-list">
-                    <div 
-                      v-for="objective in ((event as any).objectives || [])" 
-                      :key="objective.id || objective"
-                      class="objective-item"
-                      :class="{ completed: objective.completed }"
-                    >
-                      <div class="objective-icon">
-                        <i :class="objective.completed ? 'fas fa-check-circle' : 'far fa-circle'"></i>
-                      </div>
-                      <span class="objective-text">{{ objective.description }}</span>
-                      <div class="objective-progress-bar">
-                        <div class="progress-fill" :style="{ width: (objective.current / objective.target * 100) + '%' }"></div>
-                      </div>
-                      <span class="objective-progress-text">{{ objective.current }}/{{ objective.target }}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- 任务奖励 -->
-                <div class="quest-rewards">
-                  <h5>奖励</h5>
-                  <div class="reward-items">
-                    <template v-if="event.rewards">
-                      <div 
-                        v-for="(reward, idx) in (Array.isArray(event.rewards) ? event.rewards : [event.rewards])" 
-                        :key="idx"
-                        class="reward-item-enhanced"
-                      >
-                        <template v-if="typeof reward === 'object' && reward !== null">
-                          <i :class="getRewardIcon((reward as any).type || 'gold')"></i>
-                          <span>{{ (reward as any).value || reward }} {{ getRewardName((reward as any).type || 'gold') }}</span>
-                        </template>
-                        <template v-else>
-                          <i :class="getRewardIcon('gold')"></i>
-                          <span>{{ reward }}</span>
-                        </template>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="quest-action">
-                <button 
-                  v-if="!event.completed" 
-                  class="start-quest-btn"
-                  @click.stop="startEvent(event)"
-                >
-                  <i class="fas fa-play"></i>
-                  开始任务
-                </button>
-                <div v-else class="quest-completed">
-                  <i class="fas fa-check-double"></i>
-                  已完成
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- AI助手 -->
         <div v-if="activeTab === 'ai'" class="module-card">
           <div class="module-header">
@@ -740,7 +633,6 @@ const isUpgradingStar = ref<Record<string | number, boolean>>({})
 const userCards = ref<any[]>([])
 const equippedCards = ref<any[]>([])
 const inventory = ref<any[]>([])
-const availableEvents = ref<any[]>([])
 const aiSuggestions = ref<any[]>([])
 const gameMetrics = ref<any[]>([])
 const activeTab = ref('cards')
@@ -770,7 +662,6 @@ const functionTabs = ref([
   { id: 'cards', name: '卡组管理', icon: 'fas fa-layer-group', count: 0 },
   { id: 'inventory', name: '背包道具', icon: 'fas fa-shopping-bag', count: 0 },
   { id: 'shop', name: '商城&货币', icon: 'fas fa-store', count: 0 },
-  { id: 'events', name: '任务事件', icon: 'fas fa-scroll', count: 0 },
   { id: 'ai', name: 'AI助手', icon: 'fas fa-robot', count: 0 }
 ])
 
@@ -799,7 +690,7 @@ const inventoryCategories = ref([
 
 // 计算属性
 const hasUnclaimedRewards = computed(() => {
-  return userWallets.value.some(w => w.balance > 0) || availableEvents.value.some(e => e.completed)
+  return userWallets.value.some(w => w.balance > 0)
 })
 
 const hpPercentage = computed(() => {
@@ -1226,43 +1117,6 @@ function mapDebuffDTOToConfig(dto: any, level: number, index: number): StressDeb
   }
 }
 
-function getEventIcon(type: string) {
-  const icons: { [key: string]: string } = {
-    daily: 'fas fa-calendar-day',
-    weekly: 'fas fa-calendar-week',
-    special: 'fas fa-star'
-  }
-  return icons[type] || 'fas fa-scroll'
-}
-
-async function handleEvent(event: any) {
-  try {
-    const response = await campApi.completeEvent(event.id)
-    if (response.data.code === 200) {
-      showNotification('success', response.data.message || '完成任务成功', 'fas fa-check-circle')
-      // 刷新事件列表
-      await loadEventsData()
-      updateTabCounts()
-    }
-  } catch (error) {
-    console.error('完成任务失败:', error)
-    showNotification('error', '完成任务失败', 'fas fa-exclamation-triangle')
-  }
-}
-
-function startEvent(event: any) {
-  showNotification('info', `开始任务: ${event.name || event.title}`, 'fas fa-play-circle')
-}
-
-function getRewardIcon(type: string) {
-  const icons: { [key: string]: string } = {
-    gold: 'fas fa-coins gold',
-    exp: 'fas fa-star blue',
-    item: 'fas fa-gift green'
-  }
-  return icons[type] || 'fas fa-gift'
-}
-
 function getSuggestionIcon(type: string) {
   const icons: { [key: string]: string } = {
     combat: 'fas fa-sword',
@@ -1626,15 +1480,6 @@ function handleInventoryCategoryChange(category: string) {
 
 // 精品商城已删除，handleShopCategoryChange 函数已移除
 
-function completedEventsCount(): number {
-  return availableEvents.value.filter(e => e.completed).length
-}
-
-const eventProgressPercentage = computed(() => {
-  const completed = completedEventsCount()
-  return availableEvents.value.length > 0 ? (completed / availableEvents.value.length) * 100 : 0
-})
-
 function getDifficultyLabel(difficulty: string): string {
   const labels: { [key: string]: string } = {
     easy: '简单',
@@ -1699,7 +1544,6 @@ onMounted(async () => {
       loadWalletData(),
       loadInventoryData(),
       loadShopData(),
-      loadEventsData(),
       loadAISuggestions()
     ])
     
@@ -1710,7 +1554,6 @@ onMounted(async () => {
       userCards: userCards.value.length,
       inventory: inventory.value.length,
       shopOffers: shopStore.offers.length,
-      events: availableEvents.value.length,
       wallets: userWallets.value.length,
       aiSuggestions: aiSuggestions.value.length
     })
@@ -2018,26 +1861,6 @@ async function loadShopData() {
   }
 }
 
-// 加载事件数据
-async function loadEventsData() {
-  try {
-    console.log('[CampOfficial] 开始加载事件数据...')
-    const response = await campApi.getEvents()
-    if (response.data.code === 200) {
-      availableEvents.value = response.data.data || []
-      console.log('[CampOfficial] 事件数据加载完成:', {
-        count: availableEvents.value.length,
-        events: availableEvents.value
-      })
-    } else {
-      console.warn('[CampOfficial] 事件数据加载失败:', response.data.message)
-    }
-  } catch (error) {
-    console.error('[CampOfficial] 加载事件数据失败:', error)
-    showNotification('error', '加载事件数据失败', 'fas fa-exclamation-triangle')
-  }
-}
-
 // 加载AI建议
 async function loadAISuggestions() {
   try {
@@ -2053,8 +1876,8 @@ async function loadAISuggestions() {
       console.warn('[CampOfficial] AI建议加载失败:', response.data.message)
     }
   } catch (error) {
+    // 静默处理错误，不显示错误提示
     console.error('[CampOfficial] 加载AI建议失败:', error)
-    showNotification('error', '加载AI建议失败', 'fas fa-exclamation-triangle')
   }
 }
 
@@ -2071,9 +1894,6 @@ function updateTabCounts() {
       case 'shop':
         tab.count = shopStore.offers.length
         break
-      case 'events':
-        tab.count = availableEvents.value.length
-        break
       case 'ai':
         tab.count = aiSuggestions.value.filter(s => s.priority === 5).length
         break
@@ -2087,8 +1907,7 @@ function updateTabCounts() {
   display: grid;
   grid-template-rows: auto 1fr;
   height: 100vh;
-  background: linear-gradient(135deg, rgba(5, 5, 10, 0.35), rgba(15, 35, 60, 0.45)),
-    url('/yingdi.png') center / cover no-repeat fixed;
+  background: url('/yingdi.png') center / cover no-repeat fixed;
   color: #ffffff;
   overflow: hidden;
   position: relative;
@@ -2128,9 +1947,7 @@ function updateTabCounts() {
 /* 顶部导航栏 */
 .main-header {
   grid-row: 1;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  /* 删除背景和边框，让背景图直接显示 */
   padding: 1rem 2rem;
   z-index: 100;
 }
@@ -2325,8 +2142,7 @@ function updateTabCounts() {
 }
 
 .create-character-prompt {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  /* 删除背景和边框，让背景图直接显示 */
   border-radius: 16px;
   padding: 3rem 2rem;
   text-align: center;
@@ -2389,9 +2205,7 @@ function updateTabCounts() {
 }
 
 .character-sidebar {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  /* 删除背景和边框，让背景图直接显示 */
   padding: 1rem;
   overflow-y: auto;
   display: flex;
@@ -2412,8 +2226,7 @@ function updateTabCounts() {
 
 /* 角色卡片 */
 .character-card {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  /* 删除背景和边框，让背景图直接显示 */
   border-radius: 16px;
   padding: 1.5rem;
   position: relative;
@@ -3027,9 +2840,7 @@ function updateTabCounts() {
 }
 
 .module-card {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 删除背景和边框，让背景图直接显示 */
   border-radius: 16px;
   padding: 1.5rem;
   animation: fadeInUp 0.6s ease;
@@ -3041,7 +2852,7 @@ function updateTabCounts() {
   align-items: flex-start;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  /* 删除边框，让背景图直接显示 */
 }
 
 .module-header h3 {
@@ -3375,10 +3186,8 @@ section {
 .card-characters-section {
   margin-top: 2rem;
   padding: 1.5rem;
-  background: rgba(13, 17, 23, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* 删除背景和边框，让背景图直接显示 */
   border-radius: 16px;
-  backdrop-filter: blur(10px);
 }
 
 .section-header.compact {
@@ -3565,6 +3374,7 @@ section {
 }
 
 .character-stats {
+  position: relative;
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
@@ -3575,6 +3385,28 @@ section {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+/* 升星提升提示样式 */
+.character-stats .stat-bonus {
+  font-size: 0.7rem;
+  color: #4caf50;
+  font-weight: 600;
+  margin-left: 0.2rem;
+  text-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
+  }
+  50% {
+    opacity: 0.8;
+    text-shadow: 0 0 8px rgba(76, 175, 80, 0.8);
+  }
 }
 
 .character-description {

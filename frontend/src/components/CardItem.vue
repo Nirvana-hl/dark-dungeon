@@ -13,6 +13,8 @@ const emit = defineEmits<{
   (e: 'end-equip-drag'): void
   (e: 'start-character-drag', card: Card): void
   (e: 'end-character-drag'): void
+  (e: 'start-spell-drag', card: Card): void
+  (e: 'end-spell-drag', event?: DragEvent): void
   // 装备点击时，仅查看详情，不直接打出
   (e: 'show-equipment', card: Card): void
   // 角色卡点击时，仅查看详情，不直接打出
@@ -95,7 +97,7 @@ function handleClick() {
 }
 
 function handleDragStart(e: DragEvent) {
-  // 支持装备卡和角色卡的拖拽
+  // 支持装备卡、角色卡和法术卡的拖拽
   if (props.card.type === 'equipment') {
     try {
       e.dataTransfer?.setData('text/plain', String(props.card.id))
@@ -112,14 +114,24 @@ function handleDragStart(e: DragEvent) {
       }
     } catch {}
     emit('start-character-drag', props.card)
+  } else if (props.card.type === 'spell') {
+    try {
+      e.dataTransfer?.setData('text/plain', String(props.card.id))
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+      }
+    } catch {}
+    emit('start-spell-drag', props.card)
   }
 }
 
-function handleDragEnd() {
+function handleDragEnd(e: DragEvent) {
   if (props.card.type === 'equipment') {
     emit('end-equip-drag')
   } else if (props.card.type === 'character') {
     emit('end-character-drag')
+  } else if (props.card.type === 'spell') {
+    emit('end-spell-drag', e)
   }
 }
 </script>
@@ -137,7 +149,7 @@ function handleDragEnd() {
         'playing': isPlaying
       }
     ]"
-    :draggable="card.type === 'equipment' || card.type === 'character'"
+    :draggable="card.type === 'equipment' || card.type === 'character' || card.type === 'spell'"
     @click="handleClick"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"

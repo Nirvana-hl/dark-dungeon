@@ -52,6 +52,8 @@ export interface Minion {
   // 攻击动画状态
   attackState?: 'idle' | 'attacking' | 'returning'
   attackTargetId?: string // 攻击目标ID
+  // 打出时间戳（用于判断攻击优先级）
+  createdAt?: number
 }
 
 function uid() {
@@ -533,8 +535,26 @@ export const useGameStore = defineStore('game', () => {
         const enemiesResponse = await gameApi.getStageEnemies(stageNum, diff)
         console.log('[Game] getStageEnemies 响应:', enemiesResponse.data)
         if (enemiesResponse.data.code === 200 && enemiesResponse.data.data) {
-          const enemies = enemiesResponse.data.data as Array<{ id: number; name: string; difficulty: string }>
+          let enemies = enemiesResponse.data.data as Array<{ id: number; name: string; difficulty: string }>
           console.log('[Game] 获取到敌人列表:', enemies)
+          
+          // 检查关卡号是否是5的倍数，如果不是则过滤掉首领敌人
+          const isBossStage = stageNum % 5 === 0
+          if (!isBossStage) {
+            const beforeFilter = enemies.length
+            enemies = enemies.filter(enemy => {
+              const difficulty = (enemy.difficulty || '').toLowerCase()
+              const isBoss = difficulty === 'boss' || difficulty === '首领' || difficulty.includes('boss')
+              if (isBoss) {
+                console.log(`[Game] 关卡 ${stageNum} 不是5的倍数，过滤掉首领敌人: ${enemy.name} (difficulty: ${enemy.difficulty})`)
+              }
+              return !isBoss
+            })
+            console.log(`[Game] 过滤首领敌人: ${beforeFilter} -> ${enemies.length} (关卡 ${stageNum} 不是Boss关卡)`)
+          } else {
+            console.log(`[Game] 关卡 ${stageNum} 是Boss关卡，允许出现首领敌人`)
+          }
+          
           if (enemies.length > 0) {
             // 随机选择一个敌人
             const randomIndex = Math.floor(Math.random() * enemies.length)
@@ -542,7 +562,7 @@ export const useGameStore = defineStore('game', () => {
             currentEnemyId.value = selectedEnemyId
             log(`已选择敌人：${enemies[randomIndex].name} (ID: ${selectedEnemyId})`)
           } else {
-            console.warn('[Game] 敌人列表为空')
+            console.warn('[Game] 敌人列表为空（可能所有敌人都是首领且当前不是Boss关卡）')
           }
         } else {
           console.warn('[Game] getStageEnemies 返回错误:', enemiesResponse.data)
@@ -891,7 +911,8 @@ export const useGameStore = defineStore('game', () => {
         effectPayload: card.effectPayload,
         traits: [], // 特性列表将在需要时加载
         position: position,
-        attackState: 'idle' // 初始化攻击状态
+        attackState: 'idle', // 初始化攻击状态
+        createdAt: Date.now() // 记录打出时间，用于攻击优先级判断
         }
         board.value.push(m)
       // 按位置排序，确保显示顺序正确
@@ -1075,6 +1096,80 @@ export const useGameStore = defineStore('game', () => {
   /**
    * 执行单个随从的攻击（带动画和延迟）
    */
+  /**
+   * 选择攻击目标
+   * 优先级：
+   * 1. 优先攻击位置 0, 1, 2（前排）
+   * 2. 如果同一列有多张卡牌，攻击最早打出的（createdAt 最小）
+   * 
+   * 列的定义：
+   * - 第1列：位置 0, 3
+   * - 第2列：位置 1, 4
+   * - 第3列：位置 2, 5
+   */
+  function selectAttackTarget(targetBoard: Minion[]): Minion | null {
+    if (targetBoard.length === 0) return null
+    
+    // 优先选择位置 0, 1, 2（前排）的卡牌
+    const frontRow = targetBoard.filter(m => m.position !== undefined && m.position < 3)
+    
+    if (frontRow.length > 0) {
+      // 如果前排有卡牌，按列分组，每列选择最早打出的
+      // 列0: 位置0, 列1: 位置1, 列2: 位置2
+      const byColumn: Minion[][] = [[], [], []]
+      
+      for (const minion of frontRow) {
+        if (minion.position !== undefined && minion.position < 3) {
+          byColumn[minion.position].push(minion)
+        }
+      }
+      
+      // 找到第一个有卡牌的列
+      for (let col = 0; col < 3; col++) {
+        if (byColumn[col].length > 0) {
+          // 如果该列有多张卡牌，选择最早打出的（createdAt 最小）
+          byColumn[col].sort((a, b) => {
+            const timeA = a.createdAt ?? 0
+            const timeB = b.createdAt ?? 0
+            return timeA - timeB
+          })
+          return byColumn[col][0]
+        }
+      }
+    }
+    
+    // 如果前排没有卡牌，选择后排（位置 3, 4, 5）
+    const backRow = targetBoard.filter(m => m.position !== undefined && m.position >= 3)
+    
+    if (backRow.length > 0) {
+      // 按列分组，每列选择最早打出的
+      // 列0: 位置3, 列1: 位置4, 列2: 位置5
+      const byColumn: Minion[][] = [[], [], []]
+      
+      for (const minion of backRow) {
+        if (minion.position !== undefined && minion.position >= 3) {
+          byColumn[minion.position - 3].push(minion)
+        }
+      }
+      
+      // 找到第一个有卡牌的列
+      for (let col = 0; col < 3; col++) {
+        if (byColumn[col].length > 0) {
+          // 如果该列有多张卡牌，选择最早打出的（createdAt 最小）
+          byColumn[col].sort((a, b) => {
+            const timeA = a.createdAt ?? 0
+            const timeB = b.createdAt ?? 0
+            return timeA - timeB
+          })
+          return byColumn[col][0]
+        }
+      }
+    }
+    
+    // 如果都没有，返回第一个（降级方案）
+    return targetBoard[0]
+  }
+
   async function executeAttack(attacker: Minion, target: Minion | null, isBoss: boolean): Promise<void> {
     return new Promise((resolve) => {
       // 1. 设置攻击状态 - 开始攻击
@@ -1172,8 +1267,8 @@ export const useGameStore = defineStore('game', () => {
       if (m.canAttack === false) continue
 
       // 每次攻击前重新确定当前目标
-      const currentEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
-      const currentEnemyRole = currentEnemyBoard[0]
+      // 优先攻击位置 0, 1, 2（前排），如果同一列有多张卡牌，攻击最早打出的
+      const currentEnemyRole = selectAttackTarget(enemyBoard.value)
 
       if (currentEnemyRole) {
         await executeAttack(m, currentEnemyRole, false)
@@ -1297,7 +1392,8 @@ export const useGameStore = defineStore('game', () => {
             canAttack: false, // 召唤疲劳：刚打出的随从本回合不能攻击
             effectPayload: card.effectPayload,
             position: autoPosition,
-            attackState: 'idle' // 初始化攻击状态
+            attackState: 'idle', // 初始化攻击状态
+            createdAt: Date.now() // 记录打出时间，用于攻击优先级判断
           }
           enemyBoard.value.push(minion)
           // 按位置排序
@@ -1345,10 +1441,11 @@ export const useGameStore = defineStore('game', () => {
     }
     
     // 4. 攻击阶段：敌人战场上的角色攻击（仅攻击已解除召唤疲劳的随从）
-    enemyAttackPhase()
-    
-    // 回到玩家回合
-    startPlayerTurn()
+    // 使用异步执行，确保攻击动画逐个完成
+    enemyAttackPhase().then(() => {
+      // 回到玩家回合
+      startPlayerTurn()
+    })
   }
 
   /**
@@ -1419,69 +1516,78 @@ export const useGameStore = defineStore('game', () => {
         }
       }
 
-  /**
-   * 敌人攻击阶段
-   */
-  function enemyAttackPhase() {
-    if (battleOver.value) return
-    
-    // 1. 敌人战场上的角色攻击（只允许可以攻击的随从攻击）
-    // 每次攻击前重新获取当前我方前排，确保目标存在并能显示受击效果
-    const sortedEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
-    
-    for (const enemyMinion of sortedEnemyBoard) {
-      if (battleOver.value) break
-      if (enemyMinion.canAttack === false) continue
-      
-      const currentBoard = [...board.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
-      const target = currentBoard[0]
-      
-      if (target) {
-        const targetIndex = board.value.findIndex(m => m.id === target.id)
-        
-        const absorb = Math.min(target.shield ?? 0, enemyMinion.attack)
-        target.shield = Math.max(0, (target.shield ?? 0) - absorb)
-        const dmg = enemyMinion.attack - absorb
-        
-        target.health = Math.max(0, target.health - dmg)
-        
-        soundManager.playSound(SoundType.ATTACK, { volume: 0.5 })
-        setTimeout(() => {
-          soundManager.playSound(SoundType.HIT, { volume: 0.6 })
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('ally-hit', { 
-              detail: { minionId: target.id, damage: dmg } 
-            }))
-          }
-        }, 200)
-        
-        log(`敌人 ${enemyMinion.name} 攻击我方 ${target.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
-        
-        if (target.health <= 0 && targetIndex >= 0) {
-          board.value.splice(targetIndex, 1)
-          log(`我方随从 ${target.name} 倒下。`)
-        }
-      } else {
-        soundManager.playSound(SoundType.ATTACK, { volume: 0.5 })
-        setTimeout(() => {
-          soundManager.playSound(SoundType.HIT, { volume: 0.6 })
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('player-hit', { 
-              detail: { damage: enemyMinion.attack } 
-            }))
-          }
-        }, 200)
-        
-        heroHP.value = Math.max(0, heroHP.value - enemyMinion.attack)
-        log(`敌人 ${enemyMinion.name} 攻击我方英雄，造成 ${enemyMinion.attack} 伤害（我方HP ${heroHP.value}）`)
-        checkVictory()
-      }
+  // 敌人攻击阶段锁，防止并发执行
+  let isEnemyAttacking = false
+  // 当前正在执行的敌人攻击 Promise，用于确保攻击按顺序执行
+  let currentEnemyAttackPromise: Promise<void> | null = null
 
-      // 攻击后触发治疗（如果有 heal_allies）
-      maybeHealAllies(enemyMinion, enemyBoard.value, '攻击后', true)
+  /**
+   * 敌人攻击阶段 - 逐个执行攻击动画
+   */
+  async function enemyAttackPhase() {
+    if (battleOver.value) return
+    if (isEnemyAttacking) {
+      console.warn('[EnemyAttackPhase] 警告：敌人攻击阶段已在执行中，跳过重复调用')
+      return
     }
     
-    // 2. 敌人本体攻击（如果敌人面板有攻击力）
+    isEnemyAttacking = true
+    const phaseStartTime = Date.now()
+    console.log(`[EnemyAttackPhase] 开始敌人攻击阶段，时间: ${phaseStartTime}`)
+    
+    try {
+      // 1. 敌人战场上的角色攻击（只允许可以攻击的随从攻击）
+      // 每次攻击前重新获取当前我方前排，确保目标存在并能显示受击效果
+      const sortedEnemyBoard = [...enemyBoard.value].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+      
+      // 逐个执行攻击，确保动画逐个显示
+      for (let i = 0; i < sortedEnemyBoard.length; i++) {
+        const enemyMinion = sortedEnemyBoard[i]
+        if (battleOver.value) break
+        if (enemyMinion.canAttack === false) continue
+        
+        // 优先攻击位置 0, 1, 2（前排），如果同一列有多张卡牌，攻击最早打出的
+        const target = selectAttackTarget(board.value)
+        
+        const loopIterationStart = Date.now()
+        console.log(`[EnemyAttackPhase] [${i + 1}/${sortedEnemyBoard.length}] 循环迭代开始，准备执行攻击: ${enemyMinion.name} (ID: ${enemyMinion.id}), 目标: ${target?.name || '英雄'}, 时间: ${loopIterationStart}`)
+        
+        // 等待前一个攻击完全完成（如果有）
+        // 必须在调用 executeEnemyAttack 之前等待，确保前一个攻击完全结束
+        if (currentEnemyAttackPromise) {
+          console.log(`[EnemyAttackPhase] [${i + 1}/${sortedEnemyBoard.length}] 等待前一个攻击完成...`)
+          await currentEnemyAttackPromise
+          console.log(`[EnemyAttackPhase] [${i + 1}/${sortedEnemyBoard.length}] 前一个攻击已完成，开始新的攻击`)
+        }
+        
+        const beforeAttack = Date.now()
+        
+        // 执行单个敌人卡牌攻击（等待完成）
+        // 将 Promise 保存到 currentEnemyAttackPromise，确保下一个攻击等待
+        // 注意：必须在 await 之前调用 executeEnemyAttack，但要在前一个攻击完成后
+        currentEnemyAttackPromise = executeEnemyAttack(enemyMinion, target)
+        console.log(`[EnemyAttackPhase] [${i + 1}/${sortedEnemyBoard.length}] 已调用 executeEnemyAttack，等待 Promise resolve...`)
+        await currentEnemyAttackPromise
+        // 攻击完成后，清除 Promise 引用，让下一个攻击可以开始
+        currentEnemyAttackPromise = null
+        
+        const afterAttack = Date.now()
+        const waitDuration = afterAttack - beforeAttack
+        console.log(`[EnemyAttackPhase] [${i + 1}/${sortedEnemyBoard.length}] await 完成，等待了 ${waitDuration}ms，准备下一个攻击`)
+        
+        // 攻击后触发治疗（如果有 heal_allies）
+        maybeHealAllies(enemyMinion, enemyBoard.value, '攻击后', true)
+      }
+      
+      const phaseEndTime = Date.now()
+      const totalDuration = phaseEndTime - phaseStartTime
+      console.log(`[EnemyAttackPhase] 敌人攻击阶段完成，总耗时: ${totalDuration}ms`)
+    } finally {
+      isEnemyAttacking = false
+      currentEnemyAttackPromise = null // 确保清理
+    }
+    
+    // 2. 敌人本体攻击（如果敌人面板有攻击力）- 在所有卡牌攻击完成后执行
     if (!battleOver.value && enemyPanel.value && enemyPanel.value.attack && enemyPanel.value.attack > 0) {
       const enemyBaseAttack = enemyPanel.value.attack
       
@@ -1490,12 +1596,24 @@ export const useGameStore = defineStore('game', () => {
         const targetIndex = Math.floor(Math.random() * board.value.length)
         const target = board.value[targetIndex]
         
+        // 敌人本体攻击不需要动画，直接执行伤害
         // 先消耗护盾
         const absorb = Math.min(target.shield ?? 0, enemyBaseAttack)
         target.shield = Math.max(0, (target.shield ?? 0) - absorb)
         const dmg = enemyBaseAttack - absorb
         
         target.health = Math.max(0, target.health - dmg)
+        
+        soundManager.playSound(SoundType.ATTACK, { volume: 0.6 })
+        setTimeout(() => {
+          soundManager.playSound(SoundType.HIT, { volume: 0.7 })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ally-hit', { 
+              detail: { minionId: target.id, damage: dmg } 
+            }))
+          }
+        }, 120)
+        
         log(`敌人本体发动攻击，对我方 ${target.name} 造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
         
         if (target.health <= 0) {
@@ -1513,13 +1631,115 @@ export const useGameStore = defineStore('game', () => {
               detail: { damage: enemyBaseAttack } 
             }))
           }
-        }, 200)
+        }, 120)
         
         heroHP.value = Math.max(0, heroHP.value - enemyBaseAttack)
         log(`敌人本体发动攻击，对我方英雄造成 ${enemyBaseAttack} 伤害（我方HP ${heroHP.value}）`)
         checkVictory()
       }
     }
+  }
+
+  /**
+   * 执行单个敌人卡牌攻击（带动画）
+   */
+  async function executeEnemyAttack(enemyMinion: Minion, target: Minion | null): Promise<void> {
+    // 关键修复：在创建 Promise 之前，先等待前一个攻击完成
+    // 这样可以确保在开始计时前，前一个攻击已经完全结束
+    const previousPromise = currentEnemyAttackPromise
+    if (previousPromise) {
+      console.log(`[EnemyAttack] 等待前一个攻击完成: ${enemyMinion.name} (ID: ${enemyMinion.id})`)
+      await previousPromise
+      console.log(`[EnemyAttack] 前一个攻击已完成，开始新攻击: ${enemyMinion.name} (ID: ${enemyMinion.id})`)
+    }
+    
+    // 现在前一个攻击已经完成，创建新的 Promise 并开始计时
+    return new Promise((resolve) => {
+      const attackStartTime = Date.now()
+      console.log(`[EnemyAttack] 开始攻击: ${enemyMinion.name} (ID: ${enemyMinion.id}) 在 ${attackStartTime}`)
+      
+      // 触发攻击开始事件
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('attack-start', {
+          detail: { attackerId: enemyMinion.id, targetId: target?.id, isBoss: false }
+        }))
+      }
+      
+      // 使用和我方攻击相同的时间间隔，但需要等待完整的 CSS 动画（900ms）
+      // CSS 动画 attack-move-clone 总时长为 900ms
+      // 时间线：
+      // 0ms: 触发攻击开始事件，开始动画
+      // 350ms: 播放攻击音效，执行伤害计算（动画进行到约 39%）
+      // 470ms: 播放受击音效（350 + 120）
+      // 900ms: 动画完成，触发攻击结束事件，resolve Promise
+      
+      // 1. 等待角色移动到目标位置（350ms）
+      setTimeout(() => {
+        // 2. 播放攻击音效（角色到达目标位置时）
+        soundManager.playSound(SoundType.ATTACK, { volume: 0.5 })
+        
+        // 3. 等待攻击动作（120ms，让音效和动画同步更快）
+        setTimeout(() => {
+          // 4. 计算伤害
+          if (target) {
+            const targetIndex = board.value.findIndex(m => m.id === target.id)
+            
+            const absorb = Math.min(target.shield ?? 0, enemyMinion.attack)
+            target.shield = Math.max(0, (target.shield ?? 0) - absorb)
+            const dmg = enemyMinion.attack - absorb
+            
+            target.health = Math.max(0, target.health - dmg)
+            
+            // 5. 立即播放受击音效和触发受击反馈（显示扣血）
+            soundManager.playSound(SoundType.HIT, { volume: 0.6 })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('ally-hit', { 
+                detail: { minionId: target.id, damage: dmg } 
+              }))
+            }
+            
+            log(`敌人 ${enemyMinion.name} 攻击我方 ${target.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
+            
+            if (target.health <= 0 && targetIndex >= 0) {
+              board.value.splice(targetIndex, 1)
+              log(`我方随从 ${target.name} 倒下。`)
+            }
+          } else {
+            soundManager.playSound(SoundType.HIT, { volume: 0.6 })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('player-hit', { 
+                detail: { damage: enemyMinion.attack } 
+              }))
+            }
+            
+            heroHP.value = Math.max(0, heroHP.value - enemyMinion.attack)
+            log(`敌人 ${enemyMinion.name} 攻击我方英雄，造成 ${enemyMinion.attack} 伤害（我方HP ${heroHP.value}）`)
+            checkVictory()
+          }
+        }, 120) // 攻击动作延迟（减少延迟，让音效更快响应）
+      }, 350) // 移动到目标位置延迟
+      
+      // 6. 等待完整动画完成（900ms）后再触发结束事件并 resolve
+      // 确保下一个攻击在前一个动画完全结束后才开始
+      setTimeout(() => {
+        const attackEndTime = Date.now()
+        const actualDuration = attackEndTime - attackStartTime
+        console.log(`[EnemyAttack] 攻击完成: ${enemyMinion.name} (ID: ${enemyMinion.id}) 在 ${attackEndTime}, 实际耗时: ${actualDuration}ms`)
+        
+        // 7. 触发攻击结束事件
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('attack-end', {
+            detail: { attackerId: enemyMinion.id }
+          }))
+        }
+        
+        // 8. 完成攻击，resolve Promise
+        // 确保在动画完全结束后才 resolve，让下一个攻击等待
+        console.log(`[EnemyAttack] Promise 准备 resolve: ${enemyMinion.name} (ID: ${enemyMinion.id})`)
+        resolve()
+        console.log(`[EnemyAttack] Promise 已 resolve: ${enemyMinion.name} (ID: ${enemyMinion.id})`)
+      }, 900) // 等待完整的 CSS 动画时长（900ms）
+    })
   }
 
   // 初始化

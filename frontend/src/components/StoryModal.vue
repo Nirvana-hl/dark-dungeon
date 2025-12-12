@@ -77,6 +77,7 @@ const props = defineProps<Props>()
 interface Emits {
   (e: 'close'): void
   (e: 'complete'): void
+  (e: 'skip'): void
 }
 
 const emit = defineEmits<Emits>()
@@ -138,7 +139,7 @@ function handleStart() {
 }
 
 function handleSkip() {
-  emit('close')
+  emit('skip')
 }
 
 onMounted(() => {
