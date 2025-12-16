@@ -132,9 +132,10 @@ onShow(() => {
   console.log('[Home] 页面显示')
 })
 
-// 处理开始闯关
+// 处理开始挑战：从首页进入营地页面
 function handleStartExplore() {
-  console.log('[Home] 点击进入游戏按钮')
-  uni.navigateTo({ url: '/pages/explore/explore' })
+  console.log('[Home] 点击开始挑战按钮，跳转到营地')
+  // 进入营地（营地里再通过底部导航进入闯关等功能）
+  uni.navigateTo({ url: '/pages/camp/camp' })
 }
 </script>

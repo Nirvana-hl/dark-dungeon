@@ -47,6 +47,11 @@ watch(() => auth.isAuthenticated, (isAuthenticated) => {
 })
 
 async function submit() {
+  console.log('[Login] 点击登录/注册按钮', {
+    mode: isRegister.value ? 'register' : 'login',
+    email: email.value,
+    hasPassword: !!password.value
+  })
   // 基础验证
   if (!password.value) {
     auth.setError('请输入密码')
@@ -112,7 +117,8 @@ async function submit() {
         <text class="game-subtitle">{{ isRegister ? '创建账户，开启冒险' : '欢迎回来，勇士' }}</text>
       </view>
 
-      <form @submit.prevent="submit" class="form-section">
+      <!-- 注意：在小程序端，不使用原生 form 提交，直接用按钮点击触发 submit 方法 -->
+      <view class="form-section">
         <!-- 注册模式显示额外字段 -->
         <view v-if="isRegister" class="form-item">
           <text class="form-label">账户名称</text>
@@ -166,11 +172,12 @@ async function submit() {
           <text>{{ auth.errorMsg }}</text>
         </view>
 
-        <!-- 提交按钮 -->
+        <!-- 提交按钮：直接点击触发 submit 方法 -->
         <button 
-          type="submit"
+          type="button"
           class="submit-button" 
           :disabled="auth.loading"
+          @click="submit"
         >
           <view v-if="auth.loading" class="loading-content">
             <text class="loading-text">{{ isRegister ? '注册中...' : '登录中...' }}</text>
@@ -188,7 +195,7 @@ async function submit() {
             <text>{{ isRegister ? '已有账户？去登录' : '没有账户？去注册' }}</text>
           </button>
         </view>
-      </form>
+      </view>
 
       <!-- 使用说明 -->
       <view class="help-section">
