@@ -323,15 +323,39 @@ public class DungeonService {
             throw new RuntimeException("角色不存在");
         }
 
-        BattleResultDTO battleResult = simulateBattle(hero, enemy, request != null ? request.getStrategy() : null);
+        // 由前端战斗过程决定结果（不再在后端随机模拟）
+        BattleResultDTO battleResult = new BattleResultDTO();
+        battleResult.setEnemyName(enemy.getName());
+        String outcome = (request != null && StringUtils.hasText(request.getOutcome()))
+                ? request.getOutcome()
+                : "defeat";
+        battleResult.setOutcome(outcome);
 
-        // 更新角色血量/压力
+        int heroRemainingHp = request != null && request.getHeroRemainingHp() != null
+                ? request.getHeroRemainingHp()
+                : (hero.getCurrentHp() != null ? hero.getCurrentHp() : hero.getMaxHp());
+        int enemyRemainingHp = request != null && request.getEnemyRemainingHp() != null
+                ? request.getEnemyRemainingHp()
+                : 0;
+        battleResult.setHeroRemainingHp(Math.max(heroRemainingHp, 0));
+        battleResult.setEnemyRemainingHp(Math.max(enemyRemainingHp, 0));
+
+        if (request != null && request.getBattleLog() != null) {
+            battleResult.setBattleLog(new ArrayList<>(request.getBattleLog()));
+        } else {
+            battleResult.setBattleLog(new ArrayList<>());
+        }
+
+        int stressDelta = request != null && request.getStressDelta() != null ? request.getStressDelta() : 3;
+        int updatedStress = Math.min(hero.getCurrentStress() + Math.max(stressDelta, 0), 100);
+
+        // 更新角色血量/压力（以前端回传为准）
         userPlayerCharacterService.updateUserPlayerCharacter(
                 run.getUserPlayerCharacterId(),
                 userId,
-                Math.max(battleResult.getHeroRemainingHp(), 0),
+                Math.max(heroRemainingHp, 0),
                 null,
-                Math.min(hero.getCurrentStress() + 3, 100));
+                updatedStress);
 
         state.getBattleLog().addAll(battleResult.getBattleLog());
 

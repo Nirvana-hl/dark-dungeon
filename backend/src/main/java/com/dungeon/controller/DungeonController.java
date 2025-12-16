@@ -3,6 +3,7 @@ package com.dungeon.controller;
 import com.dungeon.common.Result;
 import com.dungeon.dto.*;
 import com.dungeon.service.DungeonService;
+import com.dungeon.service.StageService;
 import com.dungeon.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,9 @@ public class DungeonController {
     private DungeonService dungeonService;
 
     @Autowired
+    private StageService stageService;
+
+    @Autowired
     private JwtUtil jwtUtil;
 
     /**
@@ -32,6 +36,22 @@ public class DungeonController {
             return Result.success(dungeonService.getAllDungeons());
         } catch (Exception e) {
             return Result.error("获取地牢列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取关卡地图配置
+     */
+    @GetMapping("/stages/{stageNumber}/map")
+    public Result<StageMapDTO> getStageMap(@PathVariable Integer stageNumber) {
+        try {
+            StageMapDTO map = stageService.getStageMap(stageNumber);
+            if (map == null) {
+                return Result.error("关卡不存在或未配置地图");
+            }
+            return Result.success(map);
+        } catch (Exception e) {
+            return Result.error("获取关卡地图失败: " + e.getMessage());
         }
     }
 
