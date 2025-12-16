@@ -3,15 +3,33 @@
     "target": "ES2020",
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "moduleResolution": "Bundler",
+    "moduleResolution": "bundler",
     "jsx": "preserve",
     "strict": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
-    "types": ["node", "vite/client"]
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "types": ["node"],
+    "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": [
+    "pages/**/*",
+    "components/**/*",
+    "api/**/*",
+    "stores/**/*",
+    "utils/**/*",
+    "types/**/*",
+    "plugins/**/*",
+    "styles/**/*",
+    "manifest.json",
+    "pages.json",
+    "*.ts",
+    "*.vue"
+  ]
 }

@@ -1,0 +1,16 @@
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { fileURLToPath, URL } from 'node:url'
+
+export default defineConfig({
+  plugins: [vue()],
+  resolve: {
+    // For migrated uni-app structure, map '@' to project root (frontend)
+    // Provide a stub for @dcloudio/uni-app so Vite/H5 can build without the package.
+    alias: {
+      '@': fileURLToPath(new URL('./', import.meta.url)),
+      '@dcloudio/uni-app': fileURLToPath(new URL('./uni-app-stub.ts', import.meta.url))
+    }
+  },
+  server: { port: 5180, open: true }
+})

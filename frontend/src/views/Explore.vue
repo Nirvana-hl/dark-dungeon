@@ -933,7 +933,8 @@ onUnmounted(() => stopBattleLog())
   position: relative;
 }
 
-.explore-container > * {
+/* 微信小程序 WXSS 不支持 * 选择器，改为具体选择器 */
+.explore-container > view {
   position: relative;
   z-index: 1;
 }
@@ -1106,19 +1107,20 @@ onUnmounted(() => stopBattleLog())
   font-size: 0.875rem;
 }
 
-.difficulty-普通 {
+/* 微信小程序 WXSS 不支持类名中包含中文字符，改为英文 */
+.difficulty-normal {
   background: rgba(76, 175, 80, 0.2);
   border: 1px solid rgba(76, 175, 80, 0.4);
   color: #4caf50;
 }
 
-.difficulty-困难 {
+.difficulty-hard {
   background: rgba(255, 152, 0, 0.2);
   border: 1px solid rgba(255, 152, 0, 0.4);
   color: #ff9800;
 }
 
-.difficulty-噩梦 {
+.difficulty-nightmare {
   background: rgba(244, 67, 54, 0.2);
   border: 1px solid rgba(244, 67, 54, 0.4);
   color: #f44336;
