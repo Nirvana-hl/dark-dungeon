@@ -153,135 +153,100 @@ public class DungeonService {
             throw new RuntimeException("仍有未处理的战斗，请先解决战斗");
         }
 
+        // 仅支持基于地图的移动探索，不再支持线性随机探索
         String action = request != null && StringUtils.hasText(request.getAction())
-                ? request.getAction() : "explore";
+                ? request.getAction()
+                : "move";
 
         String message;
         String eventSummary = null;
         Integer targetRoomId = request != null ? request.getTargetRoomId() : null;
 
-        // 解析地图配置
+        if (targetRoomId == null) {
+            throw new RuntimeException("探索操作必须指定目标房间（targetRoomId）");
+        }
+
+        // 解析地图配置（房间 + 路径）
         Map<String, Object> mapConfig = parseMapConfig(stage.getExplorationMap());
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rooms = (List<Map<String, Object>>) mapConfig.get("rooms");
         @SuppressWarnings("unchecked")
         List<List<Integer>> paths = (List<List<Integer>>) mapConfig.get("paths");
 
-        // 如果指定了目标房间ID，进行移动探索
-        if (targetRoomId != null && "move".equalsIgnoreCase(action)) {
-            // 验证路径是否可达
-            Integer currentRoomId = state.getCurrentRoomId();
-            if (currentRoomId == null) {
-                // 如果没有当前房间，找到起始房间
-                currentRoomId = findStartRoom(rooms);
-                state.setCurrentRoomId(currentRoomId);
-            }
+        // 仅支持基于地图的移动探索
+        if (!"move".equalsIgnoreCase(action)) {
+            throw new RuntimeException("当前仅支持基于地图的移动探索（action=move）");
+        }
 
-            if (!isPathReachable(paths, currentRoomId, targetRoomId)) {
-                throw new RuntimeException("无法到达目标房间，路径不存在");
-            }
+        // 验证路径是否可达
+        Integer currentRoomId = state.getCurrentRoomId();
+        if (currentRoomId == null) {
+            // 如果没有当前房间，找到起始房间
+            currentRoomId = findStartRoom(rooms);
+            state.setCurrentRoomId(currentRoomId);
+        }
 
-            // 移动到目标房间
-            state.setCurrentRoomId(targetRoomId);
-            state.setExploredRooms(state.getExploredRooms() + 1);
-            
-            // 添加到已访问列表
-            if (!state.getVisitedRooms().contains(targetRoomId)) {
-                state.getVisitedRooms().add(targetRoomId);
-            }
+        if (!isPathReachable(paths, currentRoomId, targetRoomId)) {
+            throw new RuntimeException("无法到达目标房间，路径不存在");
+        }
 
-            // 获取目标房间信息
-            Map<String, Object> targetRoom = findRoomById(rooms, targetRoomId);
-            if (targetRoom != null) {
-                String roomType = (String) targetRoom.get("type");
-                String roomName = (String) targetRoom.get("name");
-                state.setCurrentRoom(roomName != null ? roomName : "Room-" + targetRoomId);
+        // 移动到目标房间
+        state.setCurrentRoomId(targetRoomId);
+        state.setExploredRooms(state.getExploredRooms() + 1);
 
-                // 根据房间类型决定触发内容
-                if ("start".equalsIgnoreCase(roomType)) {
-                    message = "到达入口：" + roomName;
-                } else if ("end".equalsIgnoreCase(roomType)) {
-                    // 到达出口，完成探索
-                    state.setStatus("completed");
-                    message = "到达出口：" + roomName + "，探索完成！";
-                } else if ("boss".equalsIgnoreCase(roomType)) {
-                    // Boss房间，必定触发Boss战斗
-                    Enemy enemy = selectStageEnemy(stage);
-                    if (enemy != null) {
-                        state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
-                        message = "遭遇Boss：" + enemy.getName();
-                    } else {
-                        message = "Boss房间，但未找到Boss敌人";
-                    }
-                } else if ("event".equalsIgnoreCase(roomType)) {
-                    // 事件房间，必定触发事件
-                    Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
-                    if (event != null) {
-                        eventSummary = buildEventSummary(event);
-                        state.getEventLog().add(eventSummary);
-                        message = "触发事件：" + event.getName();
-                    } else {
-                        message = "事件房间，但未触发事件";
-                    }
+        // 添加到已访问列表
+        if (!state.getVisitedRooms().contains(targetRoomId)) {
+            state.getVisitedRooms().add(targetRoomId);
+        }
+
+        // 获取目标房间信息
+        Map<String, Object> targetRoom = findRoomById(rooms, targetRoomId);
+        if (targetRoom != null) {
+            String roomType = (String) targetRoom.get("type");
+            String roomName = (String) targetRoom.get("name");
+            state.setCurrentRoom(roomName != null ? roomName : "Room-" + targetRoomId);
+
+            // 根据房间类型决定触发内容（不再随机）
+            if ("start".equalsIgnoreCase(roomType)) {
+                message = "到达入口：" + roomName;
+            } else if ("end".equalsIgnoreCase(roomType)) {
+                // 到达出口，完成探索
+                state.setStatus("completed");
+                message = "到达出口：" + roomName + "，探索完成！";
+            } else if ("boss".equalsIgnoreCase(roomType)) {
+                // Boss房间，必定触发Boss战斗
+                Enemy enemy = selectStageEnemy(stage);
+                if (enemy != null) {
+                    state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
+                    message = "遭遇Boss：" + enemy.getName();
                 } else {
-                    // normal房间，随机触发事件或敌人
-                    if (RANDOM.nextBoolean()) {
-                        Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
-                        if (event != null) {
-                            eventSummary = buildEventSummary(event);
-                            state.getEventLog().add(eventSummary);
-                            message = "触发事件：" + event.getName();
-                        } else {
-                            message = "空房间，未发现异常";
-                        }
-                    } else {
-                        Enemy enemy = selectStageEnemy(stage);
-                        if (enemy != null) {
-                            state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
-                            message = "遭遇敌人：" + enemy.getName();
-                        } else {
-                            message = "暂未发现敌人";
-                        }
-                    }
+                    message = "Boss房间，但未找到Boss敌人";
                 }
-            } else {
-                message = "移动到房间 " + targetRoomId;
-            }
-        } else {
-            // 兼容旧版线性探索逻辑
-            state.setExploredRooms(state.getExploredRooms() + 1);
-            state.setCurrentRoom("Room-" + state.getExploredRooms());
-
-            if ("event".equalsIgnoreCase(action)) {
+            } else if ("event".equalsIgnoreCase(roomType)) {
+                // 事件房间，必定触发事件（不再随机是否触发）
                 Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
                 if (event != null) {
                     eventSummary = buildEventSummary(event);
                     state.getEventLog().add(eventSummary);
                     message = "触发事件：" + event.getName();
                 } else {
-                    message = "未触发事件，继续探索";
+                    message = "事件房间，但未触发事件";
+                }
+            } else if ("enemy".equalsIgnoreCase(roomType)) {
+                // 敌人房间，必定遭遇敌人
+                Enemy enemy = selectStageEnemy(stage);
+                if (enemy != null) {
+                    state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
+                    message = "遭遇敌人：" + enemy.getName();
+                } else {
+                    message = "敌人房间，但未找到敌人";
                 }
             } else {
-                // 随机决定事件或战斗
-                if (RANDOM.nextBoolean()) {
-                    Event event = eventService.triggerRandomDungeonEvent(stage.getStageNumber(), stage.getChapterNumber());
-                    if (event != null) {
-                        eventSummary = buildEventSummary(event);
-                        state.getEventLog().add(eventSummary);
-                        message = "触发事件：" + event.getName();
-                    } else {
-                        message = "空房间，未发现异常";
-                    }
-                } else {
-                    Enemy enemy = selectStageEnemy(stage);
-                    if (enemy != null) {
-                        state.prepareBattle(enemy, enemyService.getEnemyCardsByEnemyId(enemy.getId()));
-                        message = "遭遇敌人：" + enemy.getName();
-                    } else {
-                        message = "暂未发现敌人";
-                    }
-                }
+                // 其他类型（normal等）视为纯空房间，不再随机触发
+                message = "探索房间：" + state.getCurrentRoom() + "，一切风平浪静。";
             }
+        } else {
+            message = "移动到房间 " + targetRoomId;
         }
 
         run.setCurrentStageProgress(JSON.toJSONString(state));
