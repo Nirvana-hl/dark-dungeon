@@ -4,6 +4,7 @@
     "postcss": false,
     "compileWorklet": false,
     "minified": false,
+    "urlCheck": false,
     "uglifyFileName": false,
     "uploadWithSourceMap": true,
     "enhance": false,

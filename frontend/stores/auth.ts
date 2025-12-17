@@ -104,38 +104,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (error: any) {
       console.error('Login error:', error)
-      // 针对微信小程序 / 开发环境，后端连不通或域名未配置时，启用“本地演示登录”
+      // 不再使用 demo-token，所有环境统一要求真实后端登录
       const networkMsg: string | undefined =
         error?.userMessage ||
         error?.response?.data?.message ||
         error?.errMsg ||
         error?.message
-
-      // 常见小程序错误：
-      // - “not in domain list” 域名未配置
-      // - “fail” / “timeout” / “connect” 等网络问题
-      const msgLower = (networkMsg || '').toLowerCase()
-      const isNetworkOrDomainError =
-        msgLower.includes('not in domain') ||
-        msgLower.includes('fail') ||
-        msgLower.includes('timeout') ||
-        msgLower.includes('connect') ||
-        msgLower.includes('ssl') ||
-        msgLower.includes('无法连接') ||
-        msgLower.includes('网络')
-
-      if (isNetworkOrDomainError) {
-        console.warn('[Auth] 后端不可用或域名未配置，启用本地演示登录（仅开发/调试使用）')
-        const demoAuth: AuthResponse = {
-          token: 'demo-token',
-          userId: 'demo-user',
-          accountName: payload.accountName || payload.email || 'demo',
-          email: payload.email || 'demo@example.com'
-        }
-        saveAuth(demoAuth)
-        errorMsg.value = null
-        return true
-      }
 
       errorMsg.value = networkMsg || '登录失败'
       return false
