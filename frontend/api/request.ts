@@ -1,5 +1,4 @@
 // uni-app API 请求封装
-// 注意：后端 Controller 没有 /api 前缀，所以这里不使用 /api
 
 // uni-app 类型声明（如果未安装 @dcloudio/types，可以使用此声明）
 declare const uni: {
@@ -18,6 +17,7 @@ declare const uni: {
   reLaunch: (options: { url: string }) => void
 }
 
+// 微信小程序本地调试：不要用 localhost，改用 127.0.0.1（或你后端所在局域网 IP）
 const API_BASE_URL = 'http://26.83.153.194:8080'
 
 // 请求配置接口

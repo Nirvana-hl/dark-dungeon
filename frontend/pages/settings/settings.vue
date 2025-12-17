@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { useAuthStore } from '@/stores/auth'
 
 // uni-app 类型声明
 declare const uni: {
   navigateTo: (options: { url: string }) => void
   navigateBack: (options?: { delta?: number }) => void
+  reLaunch: (options: { url: string }) => void
   showToast: (options: { title: string; icon?: string; duration?: number }) => void
 }
+
+const auth = useAuthStore()
 
 /**
  * 设置页面
  * - 声音开关
  * - 特效开关
  * - 重置为默认
+ * - 一键登出（清 token 并回登录页）
  */
 const soundOn = ref(true)
 const fxOn = ref(true)
@@ -62,6 +67,16 @@ function saveAndBack() {
   uni.navigateBack()
 }
 
+async function handleLogout() {
+  try {
+    await auth.logout()
+  } finally {
+    uni.showToast({ title: '已退出登录', icon: 'success', duration: 1500 })
+    // 直接回登录页，方便重新获取后端签发的 token
+    uni.reLaunch({ url: '/pages/login/login' })
+  }
+}
+
 function goToHome() {
   uni.navigateTo({ url: '/pages/home/home' })
 }
@@ -93,6 +108,7 @@ function goToHome() {
         <view class="button-group">
           <button class="action-button" @click="resetAll">恢复默认</button>
           <button class="action-button" @click="saveAndBack">保存并返回</button>
+          <button class="action-button logout-button" @click="handleLogout">退出登录</button>
         </view>
       </view>
     </view>

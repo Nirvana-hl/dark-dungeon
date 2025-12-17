@@ -7,9 +7,11 @@
     <view class="background-overlay"></view>
     
     <!-- 游戏标题 -->
-    <view class="game-title">
-      <text class="title-text">🎮 暗黑地牢肉鸽</text>
-    </view>
+  <view class="game-title">
+    <text class="title-text">🎮 暗黑地牢肉鸽</text>
+    <!-- 右上角隐蔽的退出按钮，不影响主视觉 -->
+    <button class="logout-btn" @click="handleLogout">退出登录</button>
+  </view>
     
     <!-- 底部中央开始挑战按钮 -->
     <view class="center-action">
@@ -73,6 +75,24 @@
   text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
 }
 
+/* 右上角退出按钮：小巧半透明，不抢主视觉 */
+.logout-btn {
+  position: absolute;
+  top: -10px;
+  right: 20px;
+  padding: 8px 14px;
+  font-size: 14px;
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 215, 0, 0.6);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  z-index: 11;
+}
+.logout-btn:active {
+  background: rgba(0, 0, 0, 0.5);
+}
+
 /* 底部中央进入游戏按钮 */
 .center-action {
   position: absolute;
@@ -116,11 +136,16 @@
 
 <script setup lang="ts">
 import { onLoad, onShow } from '@dcloudio/uni-app'
+import { useAuthStore } from '@/stores/auth'
 
-// uni-app 类型声明
+// uni-app 类型声明（注意：tabBar 页面必须用 switchTab 打开）
 declare const uni: {
   navigateTo: (options: { url: string }) => void
+  switchTab: (options: { url: string }) => void
+  reLaunch: (options: { url: string }) => void
 }
+
+const auth = useAuthStore()
 
 // 页面加载时初始化
 onLoad(() => {
@@ -132,10 +157,19 @@ onShow(() => {
   console.log('[Home] 页面显示')
 })
 
-// 处理开始挑战：从首页进入营地页面
+// 处理开始挑战：从首页进入“营地”（tabBar 页面）
 function handleStartExplore() {
   console.log('[Home] 点击开始挑战按钮，跳转到营地')
-  // 进入营地（营地里再通过底部导航进入闯关等功能）
-  uni.navigateTo({ url: '/pages/camp/camp' })
+  // 营地是 tabBar 页面，必须使用 switchTab 跳转
+  uni.switchTab({ url: '/pages/camp/camp' })
+}
+
+// 退出登录：清 token 并回登录页
+async function handleLogout() {
+  try {
+    await auth.logout()
+  } finally {
+    uni.reLaunch({ url: '/pages/login/login' })
+  }
 }
 </script>
