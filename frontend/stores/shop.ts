@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { campApi } from '@/api/request'
+import { shopApi } from '@/api/request'
 import type { ApiResponse } from '@/api/request'
 
 // 商品接口定义
@@ -80,7 +80,7 @@ export const useShopStore = defineStore('shop', () => {
       loading.value = true
       error.value = null
       
-      const response = await campApi.getShopOffers()
+      const response = await shopApi.getAllOffers()
       
       if (response.data.code === 200) {
         // 将后端返回的 ShopOfferDetailDTO 转换为前端的 ShopOffer 格式
@@ -161,8 +161,20 @@ export const useShopStore = defineStore('shop', () => {
       purchasing.value = true
       error.value = null
       
-      console.log('[ShopStore] 调用 campApi.purchaseItem...')
-      const response = await campApi.purchaseItem(offerId, quantity)
+      console.log('[ShopStore] 调用 shopApi.purchaseItem...')
+
+      // 通过当前 offers 列表找到对应商品，构造购买参数
+      const offer = offers.value.find(o => o.id === offerId)
+      if (!offer) {
+        throw new Error('未找到要购买的商品')
+      }
+
+      const rawOffer: any = offer as any
+      const response = await shopApi.purchaseItem({
+        offerType: rawOffer.offerType || 'item',
+        targetId: Number(rawOffer.targetId || offerId),
+        quantity,
+      })
       
       console.log('[ShopStore] 购买API响应:', {
         code: response.data.code,

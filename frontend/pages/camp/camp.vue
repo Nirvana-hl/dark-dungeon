@@ -1,82 +1,60 @@
 <template>
   <view class="camp-official">
-    <!-- 返回首页按钮 -->
-    <view class="back-to-home" @click="goToHome">
-      <text class="back-icon">🏠</text>
-      <text class="back-text">返回首页</text>
-    </view>
+    <!-- 背景图片 -->
+    <image class="camp-background" src="/static/yingdi.png" mode="aspectFill"></image>
     
-    <!-- 顶部导航栏 -->
-    <header class="main-header">
-      <view class="header-content">
-        <view class="logo-section">
-          <h1 class="camp-title">⚔️ 黑暗地城营地</h1>
-          <p class="camp-subtitle">战略指挥中心</p>
+    <!-- 左上角角色信息卡片（固定定位，不随滚动） -->
+    <view class="character-info-card">
+      <view v-if="playerCharacter" class="character-content">
+        <!-- 角色头像（左侧） -->
+        <view class="character-avatar-container">
+          <view class="character-avatar-frame">
+            <image 
+              :src="avatarImageSrc" 
+              mode="aspectFill" 
+              class="avatar-image"
+              @error="handleAvatarError"
+            ></image>
+          </view>
         </view>
         
-        <!-- 货币和状态栏 -->
-        <view class="status-bar">
-          <view class="currencies-compact">
-            <view class="currency-compact" v-for="wallet in userWallets" :key="wallet.currencyType">
-              <i :class="getCurrencyIcon(wallet.currencyType)"></i>
-              <text class="amount">{{ formatNumber(Number(wallet.balance)) }}</text>
+        <!-- 角色信息（头像右侧） -->
+        <view class="character-info">
+          <!-- 属性文本 -->
+          <view class="stat-row">
+            <text class="stat-label">生命:</text>
+            <text class="stat-value">{{ (playerCharacter.currentHp ?? playerCharacter.maxHp ?? 0) }}/{{ playerCharacter.maxHp ?? 0 }}</text>
+          </view>
+          <view class="stat-row">
+            <text class="stat-label">等级:</text>
+            <text class="stat-value">{{ playerCharacter.level ?? 1 }}</text>
+          </view>
+          <view class="stat-row">
+            <text class="stat-label">经验值:</text>
+            <text class="stat-value">{{ getCurrentExp() }}/{{ getMaxExp() }}</text>
+          </view>
+          
+          <!-- 生命值进度条 -->
+          <view class="progress-bar-container">
+            <view class="progress-bar-bg hp-bar-bg">
+              <view class="progress-bar-fill hp-bar-fill" :style="{ width: hpPercentage + '%' }"></view>
             </view>
           </view>
           
-          <view class="quick-stats">
-            <view class="stat-compact" :class="stressLevelClass">
-              <i class="fas fa-brain"></i>
-              <text>{{ playerCharacter?.currentStress || 0 }}%</text>
+          <!-- 经验值进度条 -->
+          <view class="progress-bar-container">
+            <view class="star-icon">⭐</view>
+            <view class="progress-bar-bg exp-bar-bg">
+              <view class="progress-bar-fill exp-bar-fill" :style="{ width: expValuePercentage + '%' }"></view>
             </view>
-          </view>
-          
-          <view class="notifications-bell" :class="{ active: hasUnclaimedRewards }">
-            <i class="fas fa-bell"></i>
-            <text class="notification-dot"></text>
           </view>
         </view>
       </view>
-    </header>
+    </view>
 
     <!-- 主内容区域 -->
     <view class="main-content">
-      <!-- 左侧角色信息面板 -->
-      <aside class="character-sidebar">
-        <!-- 调试信息（开发时可见） -->
-        <view v-if="false" style="background: rgba(255,0,0,0.1); padding: 20rpx; margin-bottom: 20rpx; font-size: 24rpx;">
-          <view>playerCharacter: {{ playerCharacter ? '存在' : 'null' }}</view>
-          <view v-if="playerCharacter">ID: {{ playerCharacter.id }}</view>
-          <view v-if="playerCharacter">Name: {{ playerCharacter.playerCharacterName }}</view>
-          <view>campStore.playerCharacter: {{ campStore.playerCharacter ? '存在' : 'null' }}</view>
-        </view>
-        <!-- 如果没有角色，显示创建角色提示 -->
-        <view v-if="!playerCharacter" class="create-character-prompt">
-          <view class="prompt-content">
-            <view class="prompt-icon">
-              <i class="fas fa-user-plus"></i>
-            </view>
-            <h2>您还没有创建角色</h2>
-            <p>创建您的第一个角色，开始冒险之旅！</p>
-            <button class="create-character-btn" @click="showClassModal = true">
-              <i class="fas fa-plus"></i>
-              创建角色
-            </button>
-          </view>
-        </view>
-        
-        <!-- 如果有角色，显示角色面板 -->
-        <CharacterPanel 
-          v-else
-          :player-character="playerCharacter"
-          :unlocked-skills="unlockedSkills"
-          :equipped-cards="equippedCards"
-          :total-skills="totalSkills"
-          @manage-cards="activeTab = 'cards'"
-          @show-stress-details="openStressDetails"
-        />
-      </aside>
-
-      <!-- 右侧功能区 -->
+      <!-- 功能区 -->
       <main class="function-area">
       <!-- 导航选项卡 -->
       <nav class="modern-tabs">
@@ -703,8 +681,55 @@ const hasUnclaimedRewards = computed(() => {
 
 const hpPercentage = computed(() => {
   if (!playerCharacter.value?.maxHp) return 0
-  return (playerCharacter.value.currentHp / playerCharacter.value.maxHp) * 100
+  const currentHp = playerCharacter.value.currentHp ?? playerCharacter.value.maxHp ?? 0
+  return Math.min(100, Math.max(0, (currentHp / playerCharacter.value.maxHp) * 100))
 })
+
+const levelPercentage = computed(() => {
+  if (!playerCharacter.value?.level) return 0
+  // 假设每级需要100经验，这里可以根据实际情况调整
+  const currentLevel = playerCharacter.value.level ?? 1
+  const maxLevel = 100 // 假设最大等级为100
+  return Math.min(100, (currentLevel / maxLevel) * 100)
+})
+
+// 经验值百分比（独立进度条）
+const expValuePercentage = computed(() => {
+  if (!playerCharacter.value) return 0
+  const exp = Number(playerCharacter.value.exp ?? playerCharacter.value.experience ?? 0)
+  const expPerLevel = 100
+  const currentLevelExp = exp % expPerLevel
+  return Math.min(100, (currentLevelExp / expPerLevel) * 100)
+})
+
+// 头像路径计算属性
+const avatarImageSrc = computed(() => {
+  if (!playerCharacter.value) return 'static/default-avatar.png'
+  const code = playerCharacter.value.playerCharacterCode || playerCharacter.value.playerCharacterId
+  const path = getCharacterAvatar(code)
+  // 在小程序中，路径可能需要去掉前导斜杠
+  const finalPath = path.startsWith('/') ? path.substring(1) : path
+  console.log('[Camp] 计算头像路径:', { 
+    code, 
+    originalPath: path,
+    finalPath,
+    playerCharacter: playerCharacter.value 
+  })
+  return finalPath
+})
+
+// 获取当前经验值
+function getCurrentExp() {
+  if (!playerCharacter.value) return 0
+  const exp = Number(playerCharacter.value.exp ?? playerCharacter.value.experience ?? 0)
+  const expPerLevel = 100
+  return exp % expPerLevel
+}
+
+// 获取最大经验值（每级所需经验）
+function getMaxExp() {
+  return 100 // 假设每级需要100经验
+}
 
 const apPercentage = computed(() => {
   if (!playerCharacter.value?.maxActionPoints) return 0
@@ -800,6 +825,59 @@ const filteredInventory = computed(() => {
 // 精品商城已删除，相关计算属性已移除
 
 // 方法
+function getCharacterClassIcon(code?: string | number) {
+  // 支持字符串和数字类型
+  const codeStr = String(code || '')
+  const iconMap: Record<string, string> = {
+    '1': 'fas fa-shield-alt', // 守望者
+    '2': 'fas fa-magic', // 秘术师
+    '3': 'fas fa-bow-arrow', // 游侠
+    '4': 'fas fa-sword', // 战士
+  }
+  return iconMap[codeStr] || 'fas fa-user'
+}
+
+function getCharacterAvatar(code?: string | number) {
+  const codeStr = String(code || '')
+  // 在小程序中，使用不带前导斜杠的路径
+  const basePath = 'static/touxiang.png'
+  const avatarMap: Record<string, string> = {
+    '1': basePath, // 守望者 (warden)
+    'warden': basePath,
+    '2': basePath, // 秘术师 (occultist) - 暂时使用相同头像
+    'occultist': basePath,
+    '3': basePath, // 游侠 (ranger) - 暂时使用相同头像
+    'ranger': basePath,
+    '4': basePath, // 战士 (warrior) - 暂时使用相同头像
+    'warrior': basePath,
+  }
+  // 如果找不到对应的头像，使用默认头像
+  const avatarPath = avatarMap[codeStr] || basePath
+  console.log('[Camp] 获取角色头像:', { 
+    code: codeStr, 
+    path: avatarPath,
+    playerCharacterCode: code,
+    playerCharacterId: code
+  })
+  return avatarPath
+}
+
+// 处理头像加载错误
+function handleAvatarError(event: any) {
+  console.error('[Camp] 头像加载失败:', event)
+  // 在小程序中，image标签的error事件处理方式可能不同
+  // 尝试重新设置src
+  const target = event.target || event.detail?.target || event.currentTarget
+  if (target) {
+    console.log('[Camp] 尝试重新加载头像，当前src:', target.src)
+    // 尝试使用不带前导斜杠的路径
+    target.src = 'static/touxiang.png'
+    console.log('[Camp] 已设置新的头像路径:', target.src)
+  } else {
+    console.warn('[Camp] 无法获取image元素，无法重新加载头像')
+  }
+}
+
 function getCurrencyIcon(type: string) {
   const icons: { [key: string]: string } = {
     gold: 'fas fa-coins gold',
@@ -1922,11 +2000,21 @@ function updateTabCounts() {
 .camp-official {
   display: grid;
   grid-template-rows: auto 1fr;
-  height: 100vh;
-  background: url('/static/yingdi.png') center / cover no-repeat;
+  min-height: 100vh;
   color: #ffffff;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.camp-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  object-fit: cover;
 }
 
 /* 返回首页按钮 - rpx & 非 fixed */
@@ -1934,7 +2022,7 @@ function updateTabCounts() {
   position: absolute;
   top: 40rpx;
   left: 40rpx;
-  z-index: 1000;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 16rpx;
@@ -1947,21 +2035,202 @@ function updateTabCounts() {
   font-weight: 600;
 }
 
-/* 顶部导航栏 */
-.main-header {
-  grid-row: 1;
-  padding: 40rpx 32rpx;
+/* 左上角角色信息卡片（固定定位，不随滚动） */
+.character-info-card {
+  position: fixed;
+  top: 20rpx;
+  left: 20rpx;
   z-index: 100;
+  padding: 16rpx;
+  display: flex;
+  align-items: flex-start;
+  min-width: 300rpx;
+  max-width: 360rpx;
 }
 
-/* 主内容区域 */
-.main-content {
-  grid-row: 2;
-  display: grid;
-  grid-template-columns: 700rpx 1fr;
-  height: 100%;
+.character-content {
+  display: flex;
+  gap: 20rpx;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.no-character-content {
+  display: flex;
+  gap: 20rpx;
+  width: 100%;
+  align-items: center;
+}
+
+/* 头像容器 */
+.character-avatar-container {
+  flex-shrink: 0;
+  position: relative;
+}
+
+.character-avatar-frame {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  border: 4rpx solid #4a4a4a;
+  padding: 3rpx;
+  background: #2a2a2a;
+  position: relative;
   overflow: hidden;
 }
+
+/* 金属边框上的铆钉效果 */
+.character-avatar-frame::before {
+  content: '';
+  position: absolute;
+  top: 8rpx;
+  left: 8rpx;
+  width: 6rpx;
+  height: 6rpx;
+  background: #5a5a5a;
+  border-radius: 50%;
+  box-shadow: 
+    70rpx 0 0 #5a5a5a,
+    0 70rpx 0 #5a5a5a,
+    70rpx 70rpx 0 #5a5a5a,
+    35rpx 0 0 #5a5a5a,
+    0 35rpx 0 #5a5a5a,
+    35rpx 35rpx 0 #5a5a5a,
+    70rpx 35rpx 0 #5a5a5a,
+    35rpx 70rpx 0 #5a5a5a;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 角色信息区域 */
+.character-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+/* 属性行 */
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 26rpx;
+  line-height: 1.4;
+}
+
+.stat-label {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.stat-value {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* 进度条容器 */
+.progress-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  width: 100%;
+}
+
+.star-icon {
+  font-size: 28rpx;
+  color: #ffd700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.progress-bar-bg {
+  flex: 1;
+  height: 18rpx;
+  background: #1a1a1a;
+  border-radius: 9rpx;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 9rpx;
+  transition: width 0.3s ease;
+}
+
+.hp-bar-fill {
+  background: linear-gradient(90deg, #8b0000 0%, #d32f2f 50%, #ff4444 100%);
+}
+
+.exp-bar-fill {
+  background: linear-gradient(90deg, #1b5e20 0%, #4caf50 50%, #66bb6a 100%);
+}
+
+/* 未创建角色状态 */
+.no-character-text {
+  font-size: 26rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.create-btn {
+  padding: 8rpx 16rpx;
+  background: #4caf50;
+  color: #ffffff;
+  border: none;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  margin-top: 8rpx;
+}
+
+.character-wallet {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.wallet-item {
+  display: flex;
+  align-items: center;
+}
+
+.wallet-amount {
+  font-size: 32rpx;
+  color: #ffd700;
+  font-weight: 700;
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.5);
+}
+
+.wallet-empty {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 8rpx 0;
+}
+
+.create-btn-small {
+  padding: 12rpx 24rpx;
+  background: linear-gradient(135deg, #d4af37, #ffd700);
+  color: #1a1a2e;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8rpx;
+}
+
+/* 主内容区域（已合并到上面的定义） */
 
 .header-content {
   display: flex;
@@ -2101,16 +2370,7 @@ function updateTabCounts() {
   animation: pulse-green 2s infinite;
 }
 
-/* 布局结构 - 优化空间分配 */
-.camp-official {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  height: 100vh;
-  background: linear-gradient(135deg, rgba(5, 5, 10, 0.35), rgba(15, 35, 60, 0.45)),
-    url('/static/yingdi.png') center / cover no-repeat; /* 进一步降低遮罩透明度，让篝火背景更清晰 */
-  color: #ffffff;
-  overflow: hidden;
-}
+/* 布局结构 - 优化空间分配（已合并到上面的定义） */
 
 .main-header {
   grid-row: 1;
@@ -2123,10 +2383,15 @@ function updateTabCounts() {
 
 .main-content {
   grid-row: 2;
-  display: grid;
-  grid-template-columns: minmax(560rpx, 700rpx) 1fr;
-  height: 100%;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 200rpx);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 40rpx; /* 为左上角固定卡片留出空间 */
+  padding-bottom: 40rpx;
+  position: relative;
+  z-index: 1;
 }
 
 .create-character-prompt {
@@ -2192,24 +2457,14 @@ function updateTabCounts() {
   font-size: 1.2rem;
 }
 
-.character-sidebar {
-  padding: 32rpx;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-  min-width: 280rpx;
-  max-width: 360rpx;
-}
-
 .function-area {
   padding: 32rpx;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 24rpx;
-  min-width: 0; /* 允许收缩 */
-  max-height: calc(100vh - 160rpx);
+  flex: 1;
+  min-width: 0;
 }
 
 /* 角色卡片 */
@@ -2859,8 +3114,8 @@ function updateTabCounts() {
   margin: 0;
 }
 
-/* 区域通用样式 */
-section {
+/* 区域通用样式 - 使用类选择器替代标签选择器 */
+.section-container {
   background: var(--secondary-bg);
   border: 2rpx solid var(--border-color);
   border-radius: 24rpx;

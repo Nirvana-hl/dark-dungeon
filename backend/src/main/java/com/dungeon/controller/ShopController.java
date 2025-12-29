@@ -26,10 +26,10 @@ public class ShopController {
     private JwtUtil jwtUtil;
 
     /**
-     * 获取商城商品列表
-     * GET /api/shop/offers
+     * 获取商城商品列表（所有商品）
+     * GET /shop/offers
      * 
-     * @return 商品列表（按displayOrder排序）
+     * @return 商品列表
      */
     @GetMapping("/offers")
     public Result<List<ShopOfferDetailDTO>> getShopOffers() {
@@ -42,10 +42,69 @@ public class ShopController {
     }
 
     /**
-     * 购买商品
-     * POST /api/shop/purchase
+     * 获取指定商店类型的商品列表（直接从模板表查询）
+     * GET /shop/offers/{shopType}
      * 
-     * @param purchaseRequest 购买请求（包含商品ID和数量）
+     * @param shopType 商店类型：item-道具商店, card_character-角色商店, spell-法术商店, equipment-装备商店
+     * @return 商品列表（只返回有shopPrice的商品）
+     */
+    @GetMapping("/offers/{shopType}")
+    public Result<List<ShopOfferDetailDTO>> getShopOffersByType(@PathVariable("shopType") String shopType) {
+        try {
+            if (shopType == null || shopType.trim().isEmpty()) {
+                return Result.error(400, "商店类型不能为空");
+            }
+            shopType = shopType.trim();
+            // 支持新的商店类型：item, card_character, spell, equipment
+            if (!"item".equals(shopType) && !"card_character".equals(shopType) 
+                    && !"spell".equals(shopType) && !"equipment".equals(shopType)) {
+                return Result.error(400, "不支持的商店类型: " + shopType + "，支持的类型: item, card_character, spell, equipment");
+            }
+            List<ShopOfferDetailDTO> offers = shopService.getShopOffersByType(shopType);
+            return Result.success(offers);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.error("获取商店商品列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 刷新指定商店类型的商品（随机打乱顺序）
+     * POST /shop/refresh/{shopType}
+     * 
+     * @param shopType 商店类型：item-道具商店, card_character-角色商店, spell-法术商店, equipment-装备商店
+     * @param request HTTP请求（用于获取当前用户）
+     * @return 刷新后的商品列表（随机排序）
+     */
+    @PostMapping("/refresh/{shopType}")
+    public Result<List<ShopOfferDetailDTO>> refreshShop(@PathVariable("shopType") String shopType,
+                                                         HttpServletRequest request) {
+        try {
+            // 验证用户登录
+            getUserIdFromRequest(request);
+            if (shopType == null || shopType.trim().isEmpty()) {
+                return Result.error(400, "商店类型不能为空");
+            }
+            shopType = shopType.trim();
+            // 支持新的商店类型：item, card_character, spell, equipment
+            if (!"item".equals(shopType) && !"card_character".equals(shopType) 
+                    && !"spell".equals(shopType) && !"equipment".equals(shopType)) {
+                return Result.error(400, "不支持的商店类型: " + shopType);
+            }
+            List<ShopOfferDetailDTO> offers = shopService.refreshShop(shopType);
+            return Result.success(offers);
+        } catch (RuntimeException e) {
+            return Result.error(400, e.getMessage());
+        } catch (Exception e) {
+            return Result.error("刷新商店失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 购买商品（支持新版本：直接使用模板表ID和类型）
+     * POST /shop/purchase
+     * 
+     * @param purchaseRequest 购买请求（支持新版本：offerType + targetId，或旧版本：shopOfferId）
      * @param request HTTP请求（用于获取当前用户）
      * @return 购买结果信息
      */
@@ -55,9 +114,17 @@ public class ShopController {
         try {
             Long userId = getUserIdFromRequest(request);
             
-            // 验证请求参数
-            if (purchaseRequest == null || purchaseRequest.getShopOfferId() == null) {
-                return Result.error(400, "商品ID不能为空");
+            // 验证请求参数（支持新版本：直接使用模板表ID和类型）
+            if (purchaseRequest == null) {
+                return Result.error(400, "购买请求不能为空");
+            }
+            // 新版本：使用 offerType 和 targetId
+            if (purchaseRequest.getOfferType() != null && purchaseRequest.getTargetId() != null) {
+                // 参数验证通过，继续处理
+            } 
+            // 兼容旧版本：使用 shopOfferId
+            else if (purchaseRequest.getShopOfferId() == null) {
+                return Result.error(400, "商品ID或商品类型和目标ID不能为空");
             }
 
             String message = shopService.purchaseItem(userId, purchaseRequest);

@@ -11,7 +11,7 @@
  Target Server Version : 80040 (8.0.40)
  File Encoding         : 65001
 
- Date: 26/11/2025 16:00:13
+ Date: 26/12/2025 10:51:58
 */
 
 SET NAMES utf8mb4;
@@ -81,13 +81,14 @@ CREATE TABLE `card_character_traits`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `fk_traits_card_character`(`card_character_id` ASC) USING BTREE,
   CONSTRAINT `fk_traits_card_character` FOREIGN KEY (`card_character_id`) REFERENCES `card_characters` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of card_character_traits
 -- ----------------------------
 INSERT INTO `card_character_traits` VALUES (1, 1, '星辉祝福', 'positive', '{\"heal_allies\": 2}', '{\"2\": {\"heal_allies\": 3}, \"3\": {\"heal_allies\": 4}, \"4\": {\"heal_allies\": 5}}', '提升全队治疗量');
 INSERT INTO `card_character_traits` VALUES (2, 2, '钢铁护盾', 'positive', '{\"armor_bonus\": 3}', '{\"2\": {\"armor_bonus\": 5}, \"3\": {\"armor_bonus\": 8}}', '提供额外护甲');
+INSERT INTO `card_character_traits` VALUES (3, 13, '神圣治疗', 'positive', '{\"heal_allies\": 30}', '{\"2\": {\"heal_allies\": 35}, \"3\": {\"heal_allies\": 40}, \"4\": {\"heal_allies\": 50}}', '给团队大额回血');
 
 -- ----------------------------
 -- Table structure for card_characters
@@ -120,15 +121,15 @@ INSERT INTO `card_characters` VALUES (1, 'priestess', '星辉祭司', 'support',
 INSERT INTO `card_characters` VALUES (2, 'shield_guard', '重甲盾卫', 'protector', 'human', 'common', 55, 6, 1, 1, 5, '{\"stats\": {\"hp\": 15, \"armor\": 3}}', '[{\"name\": \"护盾\", \"value\": 3}]', 160, '坚不可摧的防御者');
 INSERT INTO `card_characters` VALUES (3, 'fire_mage', '火焰法师', 'mage', 'human', 'epic', 35, 25, 3, 1, 5, '{\"stats\": {\"hp\": 8, \"attack\": 5}, \"traits\": {\"fire_damage\": {\"2\": 5, \"3\": 10}}}', '[{\"name\": \"火焰冲击\", \"value\": 25}]', 500, '掌控火焰的毁灭法师');
 INSERT INTO `card_characters` VALUES (4, 'shadow_assassin', '暗影刺客', 'assassin', 'occult', 'epic', 30, 30, 2, 1, 5, '{\"stats\": {\"hp\": 5, \"attack\": 8}, \"traits\": {\"critical_chance\": {\"2\": 0.1, \"3\": 0.2}}}', '[{\"name\": \"致命一击\", \"value\": 30}]', 600, '暗影中的致命杀手');
-INSERT INTO `card_characters` VALUES (6, 'warrior_common', '新兵战士', 'warrior', 'human', 'common', 80, 15, 2, 1, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}}', '[]', 300, '一名训练有素的新兵，擅长近战。');
+INSERT INTO `card_characters` VALUES (6, 'warrior_common', '新兵战士', 'warrior', 'human', 'common', 70, 5, 0, 1, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}}', '[]', 300, '一名训练有素的新兵，擅长近战。');
 INSERT INTO `card_characters` VALUES (7, 'ranger_common', '见习游侠', 'ranger', 'human', 'common', 70, 18, 2, 1, 5, '{\"stats\": {\"hp\": 8, \"attack\": 4}}', '[]', 300, '年轻的游侠，擅长远程攻击。');
 INSERT INTO `card_characters` VALUES (8, 'priest_common', '初级祭司', 'priest', 'human', 'common', 60, 10, 2, 1, 5, '{\"stats\": {\"hp\": 6, \"attack\": 2}}', '[]', 300, '初出茅庐的祭司，能够治疗队友。');
-INSERT INTO `card_characters` VALUES (9, 'warrior_rare', '精英战士', 'warrior', 'human', 'rare', 100, 20, 2, 2, 5, '{\"stats\": {\"hp\": 12, \"attack\": 4}, \"traits\": {\"shield_bash\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"盾击\", \"type\": \"positive\", \"effect_payload\": {\"stun_chance\": 0.2}}]', 800, '经验丰富的战士，能够使用盾击。');
+INSERT INTO `card_characters` VALUES (9, 'warrior_rare', '精英战士', 'warrior', 'human', 'rare', 100, 10, 2, 2, 5, '{\"stats\": {\"hp\": 12, \"attack\": 4}, \"traits\": {\"shield_bash\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"盾击\", \"type\": \"positive\", \"effect_payload\": {\"stun_chance\": 0.2}}]', 800, '经验丰富的战士，能够使用盾击。');
 INSERT INTO `card_characters` VALUES (10, 'occultist_rare', '神秘学者', 'occultist', 'occult', 'rare', 65, 25, 3, 2, 5, '{\"stats\": {\"hp\": 7, \"attack\": 5}, \"traits\": {\"dark_bolt\": {\"2\": 2, \"3\": 3}}}', '[{\"name\": \"暗影箭\", \"type\": \"positive\", \"effect_payload\": {\"damage_multiplier\": 1.2}}]', 800, '掌握黑暗魔法的学者。');
 INSERT INTO `card_characters` VALUES (11, 'ranger_rare', '资深游侠', 'ranger', 'human', 'rare', 85, 22, 2, 2, 5, '{\"stats\": {\"hp\": 9, \"attack\": 5}, \"traits\": {\"multi_shot\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"多重射击\", \"type\": \"positive\", \"effect_payload\": {\"targets\": 2}}]', 800, '技艺精湛的游侠，能够同时攻击多个目标。');
 INSERT INTO `card_characters` VALUES (12, 'warrior_epic', '传奇战士', 'warrior', 'human', 'epic', 120, 25, 2, 3, 5, '{\"stats\": {\"hp\": 15, \"attack\": 6}, \"traits\": {\"berserker_rage\": {\"2\": 1, \"3\": 2, \"4\": 3}}}', '[{\"name\": \"狂战士之怒\", \"type\": \"positive\", \"effect_payload\": {\"duration\": 3, \"attack_bonus\": 10}}]', 2000, '传说中的战士，拥有强大的战斗意志。');
 INSERT INTO `card_characters` VALUES (13, 'priest_epic', '大祭司', 'priest', 'divine', 'epic', 90, 15, 2, 3, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}, \"traits\": {\"divine_heal\": {\"2\": 2, \"3\": 3, \"4\": 4}}}', '[{\"name\": \"神圣治疗\", \"type\": \"positive\", \"effect_payload\": {\"heal_all\": 30}}]', 2000, '受到神祇祝福的大祭司，能够治愈所有队友。');
-INSERT INTO `card_characters` VALUES (14, 'dragon_knight', '龙骑士', 'warrior', 'divine', 'legendary', 150, 30, 3, 3, 5, '{\"stats\": {\"hp\": 20, \"attack\": 8}, \"traits\": {\"dragon_breath\": {\"2\": 1, \"3\": 2, \"4\": 3, \"5\": 4}}}', '[{\"name\": \"龙息\", \"type\": \"positive\", \"effect_payload\": {\"aoe_damage\": 50, \"burn_chance\": 0.5}}]', 5000, '传说中的龙骑士，能够驾驭巨龙的力量。');
+INSERT INTO `card_characters` VALUES (14, 'dragon_knight', '龙骑士', 'warrior', 'divine', 'legendary', 150, 10, 3, 3, 5, '{\"stats\": {\"hp\": 20, \"attack\": 8}, \"traits\": {\"dragon_breath\": {\"2\": 1, \"3\": 2, \"4\": 3, \"5\": 4}}}', '[{\"name\": \"龙息\", \"type\": \"positive\", \"effect_payload\": {\"aoe_damage\": 50, \"burn_chance\": 0.5}}]', 5000, '传说中的龙骑士，能够驾驭巨龙的力量。');
 
 -- ----------------------------
 -- Table structure for cards
@@ -215,7 +216,7 @@ CREATE TABLE `enemies`  (
   `base_stats` json NOT NULL,
   `behavior_script` json NOT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of enemies
@@ -223,6 +224,35 @@ CREATE TABLE `enemies`  (
 INSERT INTO `enemies` VALUES (1, '暗影猎手', 'normal', '{\"hp\": 120, \"armor\": 5, \"attack\": 18}', '{\"pattern\": \"strike_poison\", \"priority\": \"low_hp\"}');
 INSERT INTO `enemies` VALUES (2, '虚空之手', 'boss', '{\"hp\": 320, \"armor\": 10, \"attack\": 28}', '{\"pattern\": \"aoe_then_shield\", \"priority\": \"all\"}');
 INSERT INTO `enemies` VALUES (3, '灰烬骑士', 'normal', '{\"hp\": 100, \"armor\": 8, \"attack\": 20}', '{\"pattern\": \"fire_attack\", \"priority\": \"front\"}');
+INSERT INTO `enemies` VALUES (4, '幽影潜行者', 'normal', '{\"hp\": 90, \"armor\": 3, \"attack\": 22}', '{\"pattern\": \"backstab\", \"priority\": \"back_row\"}');
+INSERT INTO `enemies` VALUES (5, '腐坏守卫', 'normal', '{\"hp\": 140, \"armor\": 12, \"attack\": 15}', '{\"pattern\": \"defend_then_attack\", \"priority\": \"high_dps\"}');
+INSERT INTO `enemies` VALUES (6, '奥术学徒', 'normal', '{\"hp\": 85, \"armor\": 2, \"attack\": 25}', '{\"pattern\": \"arcane_bolt\", \"priority\": \"low_mana\"}');
+INSERT INTO `enemies` VALUES (7, '血爪狼人', 'elite', '{\"hp\": 180, \"armor\": 7, \"attack\": 26}', '{\"pattern\": \"berserk_rage\", \"priority\": \"closest\"}');
+INSERT INTO `enemies` VALUES (8, '寒冰巫妖', 'elite', '{\"hp\": 150, \"armor\": 4, \"attack\": 30}', '{\"pattern\": \"frost_nova\", \"priority\": \"most_allies\"}');
+INSERT INTO `enemies` VALUES (9, '破城巨像', 'elite', '{\"hp\": 250, \"armor\": 18, \"attack\": 22}', '{\"pattern\": \"smash_aoe\", \"priority\": \"tank\"}');
+INSERT INTO `enemies` VALUES (10, '深渊督军', 'boss', '{\"hp\": 450, \"armor\": 15, \"attack\": 35}', '{\"pattern\": \"cleave_then_heal\", \"priority\": \"low_armor\"}');
+INSERT INTO `enemies` VALUES (11, '永恒巫后', 'boss', '{\"hp\": 380, \"armor\": 8, \"attack\": 40}', '{\"pattern\": \"curse_then_summon\", \"priority\": \"healer\"}');
+INSERT INTO `enemies` VALUES (12, '熔岩巨兽', 'boss', '{\"hp\": 500, \"armor\": 20, \"attack\": 32}', '{\"pattern\": \"magma_eruption\", \"priority\": \"random\"}');
+
+-- ----------------------------
+-- Table structure for enemy_card_characters
+-- ----------------------------
+DROP TABLE IF EXISTS `enemy_card_characters`;
+CREATE TABLE `enemy_card_characters`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `enemy_id` bigint NOT NULL COMMENT '敌人ID',
+  `card_character_id` bigint NOT NULL COMMENT '角色卡ID',
+  `weight` int NOT NULL DEFAULT 1 COMMENT '权重（用于随机抽取）',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_enemy_card_characters_enemy`(`enemy_id` ASC) USING BTREE,
+  INDEX `idx_enemy_card_characters_character`(`card_character_id` ASC) USING BTREE,
+  CONSTRAINT `fk_enemy_card_characters_character` FOREIGN KEY (`card_character_id`) REFERENCES `card_characters` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
+  CONSTRAINT `fk_enemy_card_characters_enemy` FOREIGN KEY (`enemy_id`) REFERENCES `enemies` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
+) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '敌人角色卡关联表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of enemy_card_characters
+-- ----------------------------
 
 -- ----------------------------
 -- Table structure for enemy_cards
@@ -243,7 +273,6 @@ CREATE TABLE `enemy_cards`  (
 -- ----------------------------
 -- Records of enemy_cards
 -- ----------------------------
-INSERT INTO `enemy_cards` VALUES (1, 1, 2, 2);
 
 -- ----------------------------
 -- Table structure for events
@@ -288,7 +317,7 @@ CREATE TABLE `inventory`  (
   INDEX `fk_inventory_item`(`item_id` ASC) USING BTREE,
   CONSTRAINT `fk_inventory_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_inventory_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of inventory
@@ -415,22 +444,12 @@ CREATE TABLE `shop_offers`  (
   `display_order` int NOT NULL DEFAULT 0,
   `refresh_rule` json NOT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 43 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 99 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of shop_offers
 -- ----------------------------
 INSERT INTO `shop_offers` VALUES (1, 'card', 1, 180, 1, '{\"weight\": 30, \"limit_per_day\": 1}');
-INSERT INTO `shop_offers` VALUES (2, 'item', 1, 150, 2, '{\"limit_per_day\": 2}');
-INSERT INTO `shop_offers` VALUES (3, 'card_character', 1, 300, 1, '{\"refresh_type\": \"daily\", \"limit_per_user\": 10}');
-INSERT INTO `shop_offers` VALUES (4, 'card_character', 2, 300, 2, '{\"refresh_type\": \"daily\", \"limit_per_user\": 10}');
-INSERT INTO `shop_offers` VALUES (5, 'card_character', 3, 300, 3, '{\"refresh_type\": \"daily\", \"limit_per_user\": 10}');
-INSERT INTO `shop_offers` VALUES (6, 'card_character', 4, 800, 4, '{\"refresh_type\": \"daily\", \"limit_per_user\": 5}');
-INSERT INTO `shop_offers` VALUES (7, 'card_character', 5, 800, 5, '{\"refresh_type\": \"daily\", \"limit_per_user\": 5}');
-INSERT INTO `shop_offers` VALUES (8, 'card_character', 6, 800, 6, '{\"refresh_type\": \"daily\", \"limit_per_user\": 5}');
-INSERT INTO `shop_offers` VALUES (9, 'card_character', 7, 2000, 7, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 2}');
-INSERT INTO `shop_offers` VALUES (10, 'card_character', 8, 2000, 8, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 2}');
-INSERT INTO `shop_offers` VALUES (11, 'card_character', 9, 5000, 9, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 1}');
 INSERT INTO `shop_offers` VALUES (12, 'card', 1, 200, 10, '{\"refresh_type\": \"daily\", \"limit_per_user\": 20}');
 INSERT INTO `shop_offers` VALUES (13, 'card', 2, 200, 11, '{\"refresh_type\": \"daily\", \"limit_per_user\": 20}');
 INSERT INTO `shop_offers` VALUES (14, 'card', 3, 200, 12, '{\"refresh_type\": \"daily\", \"limit_per_user\": 20}');
@@ -450,18 +469,22 @@ INSERT INTO `shop_offers` VALUES (27, 'card', 16, 2500, 25, '{\"refresh_type\": 
 INSERT INTO `shop_offers` VALUES (28, 'card', 17, 400, 26, '{\"refresh_type\": \"daily\", \"limit_per_user\": 5}');
 INSERT INTO `shop_offers` VALUES (29, 'card', 18, 1200, 27, '{\"refresh_type\": \"daily\", \"limit_per_user\": 3}');
 INSERT INTO `shop_offers` VALUES (30, 'card', 19, 3000, 28, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 1}');
-INSERT INTO `shop_offers` VALUES (31, 'item', 1, 50, 29, '{\"refresh_type\": \"daily\", \"limit_per_user\": 99}');
-INSERT INTO `shop_offers` VALUES (32, 'item', 2, 120, 30, '{\"refresh_type\": \"daily\", \"limit_per_user\": 50}');
-INSERT INTO `shop_offers` VALUES (33, 'item', 3, 250, 31, '{\"refresh_type\": \"daily\", \"limit_per_user\": 20}');
-INSERT INTO `shop_offers` VALUES (34, 'item', 4, 80, 32, '{\"refresh_type\": \"daily\", \"limit_per_user\": 99}');
-INSERT INTO `shop_offers` VALUES (35, 'item', 5, 200, 33, '{\"refresh_type\": \"daily\", \"limit_per_user\": 30}');
-INSERT INTO `shop_offers` VALUES (36, 'item', 6, 500, 34, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 10}');
-INSERT INTO `shop_offers` VALUES (37, 'item', 7, 10, 35, '{\"refresh_type\": \"daily\", \"limit_per_user\": 999}');
-INSERT INTO `shop_offers` VALUES (38, 'item', 8, 50, 36, '{\"refresh_type\": \"daily\", \"limit_per_user\": 200}');
-INSERT INTO `shop_offers` VALUES (39, 'item', 9, 200, 37, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 50}');
-INSERT INTO `shop_offers` VALUES (40, 'item', 10, 100, 38, '{\"refresh_type\": \"daily\", \"limit_per_user\": 10}');
-INSERT INTO `shop_offers` VALUES (41, 'item', 11, 300, 39, '{\"refresh_type\": \"daily\", \"limit_per_user\": 5}');
-INSERT INTO `shop_offers` VALUES (42, 'item', 12, 1000, 40, '{\"refresh_type\": \"weekly\", \"limit_per_user\": 3}');
+INSERT INTO `shop_offers` VALUES (59, 'item', 82, 100, 1, '{}');
+INSERT INTO `shop_offers` VALUES (60, 'item', 83, 300, 2, '{}');
+INSERT INTO `shop_offers` VALUES (61, 'item', 84, 1000, 3, '{}');
+INSERT INTO `shop_offers` VALUES (62, 'item', 1, 150, 4, '{}');
+INSERT INTO `shop_offers` VALUES (63, 'item', 2, 50, 5, '{}');
+INSERT INTO `shop_offers` VALUES (64, 'item', 50, 50, 6, '{}');
+INSERT INTO `shop_offers` VALUES (65, 'item', 81, 500, 7, '{}');
+INSERT INTO `shop_offers` VALUES (66, 'item', 4, 200, 8, '{}');
+INSERT INTO `shop_offers` VALUES (91, 'card_character', 3, 500, 1, '{}');
+INSERT INTO `shop_offers` VALUES (92, 'card_character', 8, 300, 2, '{}');
+INSERT INTO `shop_offers` VALUES (93, 'card_character', 13, 2000, 3, '{}');
+INSERT INTO `shop_offers` VALUES (94, 'card_character', 14, 5000, 4, '{}');
+INSERT INTO `shop_offers` VALUES (95, 'card_character', 7, 300, 5, '{}');
+INSERT INTO `shop_offers` VALUES (96, 'card_character', 4, 600, 6, '{}');
+INSERT INTO `shop_offers` VALUES (97, 'card_character', 12, 2000, 7, '{}');
+INSERT INTO `shop_offers` VALUES (98, 'card_character', 9, 800, 8, '{}');
 
 -- ----------------------------
 -- Table structure for skills
@@ -482,8 +505,8 @@ CREATE TABLE `skills`  (
 -- ----------------------------
 -- Records of skills
 -- ----------------------------
-INSERT INTO `skills` VALUES (1, 'warden', 'god', 'test', '{}', 0, '1', '0');
-INSERT INTO `skills` VALUES (2, 'warden', 'god', 'test', '{}', 0, '1', '0');
+INSERT INTO `skills` VALUES (1, 'warden', '暗影毒镖', '对敌人造成10点毒属性伤害，并且每回合持续扣血', '{}', 3, '1', '0');
+INSERT INTO `skills` VALUES (2, 'warden', '刀扇', '向前排所有目标投掷匕首，造成20点伤害', '{}', 5, '1', '0');
 
 -- ----------------------------
 -- Table structure for stages
@@ -590,7 +613,7 @@ CREATE TABLE `user_card_characters`  (
   INDEX `fk_ucc_card_character`(`card_character_id` ASC) USING BTREE,
   CONSTRAINT `fk_ucc_card_character` FOREIGN KEY (`card_character_id`) REFERENCES `card_characters` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_ucc_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 35 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_card_characters
@@ -598,6 +621,28 @@ CREATE TABLE `user_card_characters`  (
 INSERT INTO `user_card_characters` VALUES (1, 3, 1, 2, 40, 0, 1, 0, 1);
 INSERT INTO `user_card_characters` VALUES (2, 1, 2, 1, 55, 0, 0, 0, 1);
 INSERT INTO `user_card_characters` VALUES (3, 3, 2, 1, 45, 10, 1, 2, 3);
+INSERT INTO `user_card_characters` VALUES (7, 6, 2, 2, 55, 0, 1, 0, 2);
+INSERT INTO `user_card_characters` VALUES (8, 6, 1, 0, 40, 0, 0, 0, 3);
+INSERT INTO `user_card_characters` VALUES (9, 6, 3, 1, 35, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (11, 7, 2, 1, 70, 0, 1, 0, 2);
+INSERT INTO `user_card_characters` VALUES (12, 7, 2, 2, 55, 0, 0, 0, 1);
+INSERT INTO `user_card_characters` VALUES (14, 6, 6, 2, 1000, 0, 1, 0, 2);
+INSERT INTO `user_card_characters` VALUES (15, 6, 6, 1, 70, 0, 0, 0, 1);
+INSERT INTO `user_card_characters` VALUES (17, 7, 14, 1, 150, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (18, 7, 13, 2, 90, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (19, 7, 3, 1, 35, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (20, 7, 1, 2, 40, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (21, 6, 2, 1, 55, 0, 0, 0, 1);
+INSERT INTO `user_card_characters` VALUES (22, 6, 3, 1, 43, 0, 0, 0, 2);
+INSERT INTO `user_card_characters` VALUES (23, 8, 6, 1, 70, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (25, 8, 2, 1, 70, 0, 1, 0, 2);
+INSERT INTO `user_card_characters` VALUES (26, 6, 13, 1, 90, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (27, 6, 14, 1, 150, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (29, 13, 8, 1, 60, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (30, 13, 2, 1, 70, 0, 1, 0, 2);
+INSERT INTO `user_card_characters` VALUES (31, 14, 4, 1, 30, 0, 1, 0, 1);
+INSERT INTO `user_card_characters` VALUES (33, 14, 14, 1, 150, 0, 0, 0, 1);
+INSERT INTO `user_card_characters` VALUES (34, 14, 2, 1, 70, 0, 1, 0, 2);
 
 -- ----------------------------
 -- Table structure for user_cards
@@ -619,13 +664,22 @@ CREATE TABLE `user_cards`  (
   INDEX `fk_user_cards_card`(`card_id` ASC) USING BTREE,
   CONSTRAINT `fk_user_cards_card` FOREIGN KEY (`card_id`) REFERENCES `cards` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_user_cards_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_cards
 -- ----------------------------
 INSERT INTO `user_cards` VALUES (1, 1, 1, 2, 1, NULL, NULL, '2025-11-18 10:23:15', 'camp_shop', NULL);
 INSERT INTO `user_cards` VALUES (2, 3, 3, 1, 1, NULL, NULL, '2025-11-18 10:23:15', 'quest_reward', NULL);
+INSERT INTO `user_cards` VALUES (4, 6, 1, 2, 1, 1, NULL, '2025-12-04 09:15:59', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (5, 6, 4, 1, 1, 1, NULL, '2025-12-04 09:16:01', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (6, 6, 2, 3, 1, 1, NULL, '2025-12-05 10:53:10', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (7, 7, 4, 1, 1, 1, NULL, '2025-12-11 11:02:31', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (8, 7, 2, 1, 1, 1, NULL, '2025-12-11 11:02:32', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (9, 13, 2, 1, 1, 1, NULL, '2025-12-11 11:51:46', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (10, 13, 4, 2, 1, 1, NULL, '2025-12-11 11:51:53', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (11, 14, 4, 1, 1, 1, NULL, '2025-12-15 21:39:21', 'shop', NULL);
+INSERT INTO `user_cards` VALUES (12, 14, 2, 2, 1, 1, NULL, '2025-12-15 21:39:24', 'shop', NULL);
 
 -- ----------------------------
 -- Table structure for user_player_character_skills
@@ -645,13 +699,15 @@ CREATE TABLE `user_player_character_skills`  (
   CONSTRAINT `fk_ups_character` FOREIGN KEY (`player_character_id`) REFERENCES `player_characters` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `fk_ups_skill` FOREIGN KEY (`skill_id`) REFERENCES `skills` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `fk_ups_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户职业技能解锁记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户职业技能解锁记录表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_player_character_skills
 -- ----------------------------
 INSERT INTO `user_player_character_skills` VALUES (1, 3, 1, 1, '2025-11-21 10:17:29');
 INSERT INTO `user_player_character_skills` VALUES (3, 3, 1, 2, '2025-11-21 10:42:11');
+INSERT INTO `user_player_character_skills` VALUES (4, 6, 1, 1, '2025-12-05 10:14:15');
+INSERT INTO `user_player_character_skills` VALUES (5, 6, 1, 2, '2025-12-05 10:14:17');
 
 -- ----------------------------
 -- Table structure for user_player_characters
@@ -673,13 +729,19 @@ CREATE TABLE `user_player_characters`  (
   INDEX `fk_upc_template`(`player_character_id` ASC) USING BTREE,
   CONSTRAINT `fk_upc_template` FOREIGN KEY (`player_character_id`) REFERENCES `player_characters` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_upc_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_player_characters
 -- ----------------------------
 INSERT INTO `user_player_characters` VALUES (1, 1, 1, 128, 120, 8, 8, 15, 1, '[]');
 INSERT INTO `user_player_characters` VALUES (2, 3, 1, 78, 60, 6, 6, 30, 2, '[]');
+INSERT INTO `user_player_characters` VALUES (6, 6, 1, 80, 40, 4, 4, 100, 4, '[\"精神崩溃\"]');
+INSERT INTO `user_player_characters` VALUES (8, 7, 1, 80, 40, 4, 4, 72, 3, '[]');
+INSERT INTO `user_player_characters` VALUES (9, 8, 1, 80, 80, 4, 4, 0, 1, '[]');
+INSERT INTO `user_player_characters` VALUES (13, 12, 1, 80, 80, 4, 4, 0, 1, '[]');
+INSERT INTO `user_player_characters` VALUES (14, 13, 1, 80, 40, 4, 4, 50, 2, '[\"惊惧低语\", \"注意力分散\"]');
+INSERT INTO `user_player_characters` VALUES (15, 14, 1, 80, 40, 4, 4, 100, 4, '[]');
 
 -- ----------------------------
 -- Table structure for user_stage_progress
@@ -699,7 +761,7 @@ CREATE TABLE `user_stage_progress`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_user_stage`(`user_id` ASC, `stage_number` ASC) USING BTREE,
   CONSTRAINT `fk_user_stage_progress_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 16 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_stage_progress
@@ -707,6 +769,16 @@ CREATE TABLE `user_stage_progress`  (
 INSERT INTO `user_stage_progress` VALUES (1, 1, 1, 1, 0, 1, NULL, NULL, 0, NULL);
 INSERT INTO `user_stage_progress` VALUES (2, 3, 1, 1, 1, 1, 'victory', '2025-11-25 14:54:20', 2, NULL);
 INSERT INTO `user_stage_progress` VALUES (5, 3, 2, 1, 0, 1, NULL, NULL, 0, NULL);
+INSERT INTO `user_stage_progress` VALUES (6, 6, 1, 1, 1, 1, 'victory', '2025-12-05 09:03:33', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (7, 6, 2, 1, 1, 1, 'victory', '2025-12-05 09:19:35', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (8, 6, 3, 1, 1, 1, 'victory', '2025-12-05 11:09:47', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (9, 6, 4, 1, 1, 1, 'victory', '2025-12-08 15:23:10', 2, NULL);
+INSERT INTO `user_stage_progress` VALUES (10, 6, 5, 1, 0, 1, NULL, NULL, 0, NULL);
+INSERT INTO `user_stage_progress` VALUES (11, 7, 1, 1, 1, 1, 'victory', '2025-12-09 11:13:27', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (12, 7, 2, 1, 1, 1, 'victory', '2025-12-09 11:16:11', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (13, 7, 3, 1, 1, 1, 'victory', '2025-12-09 11:42:44', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (14, 7, 4, 1, 1, 1, 'victory', '2025-12-09 15:20:51', 1, NULL);
+INSERT INTO `user_stage_progress` VALUES (15, 7, 5, 1, 0, 1, NULL, NULL, 0, NULL);
 
 -- ----------------------------
 -- Table structure for user_wallets
@@ -721,7 +793,7 @@ CREATE TABLE `user_wallets`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_wallet_user_currency`(`user_id` ASC, `currency_type` ASC) USING BTREE,
   CONSTRAINT `fk_wallet_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_wallets
@@ -729,6 +801,12 @@ CREATE TABLE `user_wallets`  (
 INSERT INTO `user_wallets` VALUES (1, 1, 'gold', 5000, '2025-11-18 10:23:15');
 INSERT INTO `user_wallets` VALUES (2, 1, 'soulstone', 100, '2025-11-18 10:23:15');
 INSERT INTO `user_wallets` VALUES (3, 3, 'gold', 50, '2025-11-21 11:45:44');
+INSERT INTO `user_wallets` VALUES (4, 6, 'gold', 84579, '2025-12-11 10:15:21');
+INSERT INTO `user_wallets` VALUES (5, 7, 'gold', 58569, '2025-12-11 11:02:32');
+INSERT INTO `user_wallets` VALUES (6, 8, 'gold', 220, '2025-12-11 10:03:50');
+INSERT INTO `user_wallets` VALUES (10, 12, 'gold', 1000, '2025-12-11 10:41:00');
+INSERT INTO `user_wallets` VALUES (11, 13, 'gold', 7420, '2025-12-11 11:53:01');
+INSERT INTO `user_wallets` VALUES (12, 14, 'gold', 12720, '2025-12-15 21:39:59');
 
 -- ----------------------------
 -- Table structure for users
@@ -745,7 +823,7 @@ CREATE TABLE `users`  (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_users_email`(`email` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of users
@@ -753,5 +831,11 @@ CREATE TABLE `users`  (
 INSERT INTO `users` VALUES (1, '测试玩家1', 'test1@example.com', '', 5, 4500, 'active', '2025-11-18 10:23:15');
 INSERT INTO `users` VALUES (2, '测试玩家2', 'test2@example.com', NULL, 3, 2000, 'active', '2025-11-18 10:23:15');
 INSERT INTO `users` VALUES (3, 'xiaosheng', '1982415487@qq.com', '$2a$10$AWEyl0VWvG9Fxpbl83/oQOrsjhhmMItCQ8/Gll/ub75rUR860eZ/C', 1, 0, 'active', '2025-11-18 15:16:39');
+INSERT INTO `users` VALUES (6, '123', '3657267209@qq.com', '$2a$10$Y8RU3veRg7cq3LCORdGjF.rPN9sO/gX9Q3EZs.9gq6z.wUPYwIK4u', 1, 0, 'active', '2025-12-04 09:14:52');
+INSERT INTO `users` VALUES (7, '内侧玩家', 'admin@example.com', '$2a$10$Ij.I0cUritCGVPXsDvHxnO2wwdjRUQdSc35MMZNM1m5vQdObXre9m', 1, 0, 'active', '2025-12-04 09:37:10');
+INSERT INTO `users` VALUES (8, 'show', '3045771329@qq.com', '$2a$10$pXMIU/Ug2sfiw2h.d3S4G.VY5vmo9Cxiv1w/S9ApiO4l792vUiiOa', 1, 0, 'active', '2025-12-10 14:33:45');
+INSERT INTO `users` VALUES (12, 'last test', '3838229363@qq.com', '$2a$10$CVQ.sEJT24eyhUEd6Ui8b.oqMSnKGHJ/NdAzmv6JV7kS0Xnk24AW.', 1, 0, 'active', '2025-12-11 10:40:59');
+INSERT INTO `users` VALUES (13, 'test', '18833112536@163.com', '$2a$10$pAPao0FE8xnzHEQK.Xb9Dujn/ntZvbfiVpsofqeTYVDttXA.q4YS2', 1, 0, 'active', '2025-12-11 11:50:01');
+INSERT INTO `users` VALUES (14, 'test3', '3892738457@qq.com', '$2a$10$neb16ayKTaCuX2/8PUYDsOv8CFDg5rFPrV7ana6mDRHSuDn1AO29a', 1, 0, 'active', '2025-12-15 21:38:33');
 
 SET FOREIGN_KEY_CHECKS = 1;

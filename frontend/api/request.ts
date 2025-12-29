@@ -18,7 +18,21 @@ declare const uni: {
 }
 
 // 微信小程序本地调试：不要用 localhost，改用 127.0.0.1（或你后端所在局域网 IP）
-const API_BASE_URL = 'http://26.83.153.194:8080'
+// 提供可切换的地址，便于本机调试（127）和局域网联调（LAN_IP）
+const LOCAL_BASE = 'http://127.0.0.1:8080'          // 仅本机
+const LAN_BASE = 'http://26.83.153.194:8080'        // 你的局域网 IP（队友用这个）
+
+// 允许在本地存储里手动覆盖（如在调试面板执行 uni.setStorageSync('apiBaseUrl', LAN_BASE)）
+const storedBase = (() => {
+  try {
+    return uni.getStorageSync('apiBaseUrl')
+  } catch {
+    return ''
+  }
+})()
+
+// 默认优先使用存储值，其次用 127，本机/微信开发者工具最稳；队友改成 LAN_BASE 即可
+const API_BASE_URL = storedBase || LOCAL_BASE
 
 // 请求配置接口
 interface RequestConfig {
@@ -125,8 +139,21 @@ function requestInterceptor(config: RequestConfig): RequestConfig {
 
 // 响应拦截器 - 处理通用错误
 function responseInterceptor<T>(response: UniResponse<T>): UniResponse<T> {
+  // 检查HTTP状态码，如果是错误状态码（>=400），应该reject
+  if (response.statusCode >= 400) {
+    // 构造错误对象，让错误拦截器处理
+    const error: UniError = {
+      errMsg: `HTTP ${response.statusCode}`,
+      statusCode: response.statusCode,
+      data: response.data,
+      config: response.config
+    }
+    // 抛出错误，让错误拦截器处理
+    throw error
+  }
+  
   console.log('[API] 响应成功:', response.config?.url, response.statusCode)
-    return response
+  return response
 }
 
 // 错误拦截器
@@ -172,6 +199,9 @@ function errorInterceptor(error: UniError): Promise<never> {
       responseData: error.data
       })
       error.userMessage = '没有权限访问此资源，请检查是否已登录或token是否有效'
+      // 403错误通常表示token无效或过期，清除token
+      // 注意：不在这里自动跳转，让调用者决定如何处理
+      removeToken()
     }
     // 404 未找到
   else if (error.statusCode === 404) {
@@ -230,8 +260,15 @@ function request<T = any>(config: RequestConfig): Promise<UniResponse<T>> {
         try {
           const processedResponse = responseInterceptor(response)
           resolve(processedResponse)
-        } catch (error) {
-          reject(error)
+        } catch (error: any) {
+          // 如果响应拦截器抛出错误，通过错误拦截器处理
+          if (error.statusCode) {
+            // 这是一个HTTP错误，通过错误拦截器处理
+            errorInterceptor(error).catch(reject)
+          } else {
+            // 其他类型的错误直接reject
+            reject(error)
+          }
         }
       },
       fail: (err) => {
@@ -353,6 +390,35 @@ export const gameApi = {
   // 获取敌人面板信息
   async getEnemyPanel(enemyId: number) {
     return await apiClient.get(`/game/enemy-panel?enemyId=${enemyId}`)
+  },
+}
+
+// 商城相关 API 方法
+export const shopApi = {
+  // 获取所有商城商品
+  async getAllOffers() {
+    return await apiClient.get('/shop/offers')
+  },
+
+  // 按商店类型获取商品（角色 / 法术 / 装备 / 道具）
+  async getOffersByType(shopType: 'item' | 'card_character' | 'spell' | 'equipment') {
+    return await apiClient.get(`/shop/offers/${shopType}`)
+  },
+
+  // 刷新指定商店类型的商品（随机打乱顺序）
+  async refreshShop(shopType: 'item' | 'card_character' | 'spell' | 'equipment') {
+    return await apiClient.post(`/shop/refresh/${shopType}`)
+  },
+
+  // 购买商品（新版本：直接使用 offerType 和 targetId）
+  async purchaseItem(payload: { offerType: 'item' | 'card' | 'card_character'; targetId: number; quantity?: number }) {
+    const requestData = {
+      offerType: payload.offerType,
+      targetId: payload.targetId,
+      quantity: payload.quantity ?? 1,
+    }
+    console.log('[API] 商城购买请求:', requestData)
+    return await apiClient.post('/shop/purchase', requestData)
   },
 }
 

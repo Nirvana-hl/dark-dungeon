@@ -85,124 +85,179 @@ public class ShopService {
     }
 
     /**
-     * 获取指定商店类型的商品列表（最多8个）
-     * @param shopType 商店类型：item-道具商店, card_character-卡牌商店
-     * @return 商品列表（最多8个）
+     * 获取指定商店类型的商品列表（直接从模板表查询）
+     * @param shopType 商店类型：item-道具商店, card_character-角色商店, spell-法术商店, equipment-装备商店
+     * @return 商品列表（只返回有shopPrice的商品）
      */
     public List<ShopOfferDetailDTO> getShopOffersByType(String shopType) {
-        QueryWrapper<ShopOffer> wrapper = new QueryWrapper<>();
-        wrapper.eq("offer_type", shopType)
-               .orderByAsc("display_order")
-               .last("LIMIT 8");
-        List<ShopOffer> offers = shopOfferMapper.selectList(wrapper);
-
-        // 如果商品不足8个，用空位填充
-        List<ShopOfferDetailDTO> result = offers.stream()
-                .map(this::toShopOfferDetailDTO)
-                .collect(Collectors.toList());
+        List<ShopOfferDetailDTO> result = new java.util.ArrayList<>();
         
-        // 确保返回8个位置（不足的用null填充，前端会显示为空位）
-        while (result.size() < 8) {
-            result.add(null);
-        }
-        
-        return result;
-    }
-
-    /**
-     * 刷新指定商店类型的商品（随机生成8个商品）
-     * @param shopType 商店类型：item-道具商店, card_character-卡牌商店
-     * @return 刷新后的商品列表（8个）
-     */
-    @Transactional
-    public List<ShopOfferDetailDTO> refreshShop(String shopType) {
-        // 删除该商店类型的所有现有商品
-        QueryWrapper<ShopOffer> deleteWrapper = new QueryWrapper<>();
-        deleteWrapper.eq("offer_type", shopType);
-        shopOfferMapper.delete(deleteWrapper);
-
-        // 根据商店类型获取所有可用的商品/角色（只选择有shopPrice且shopPrice > 0的）
-        List<Long> availableIds;
-        if ("item".equals(shopType)) {
-            // 只获取有shopPrice且shopPrice > 0的道具
-            QueryWrapper<Item> itemWrapper = new QueryWrapper<>();
-            itemWrapper.isNotNull("shop_price")
-                    .gt("shop_price", 0);
-            List<Item> items = itemMapper.selectList(itemWrapper);
-            availableIds = items.stream()
-                    .map(Item::getId)
+        if ("card_character".equals(shopType)) {
+            // 角色商店：从 card_characters 表查询
+            QueryWrapper<CardCharacter> wrapper = new QueryWrapper<>();
+            wrapper.isNotNull("shop_price")
+                   .gt("shop_price", 0)
+                   .eq("card_type", "player")  // 只查询玩家角色卡
+                   .orderByDesc("rarity")  // 按稀有度排序
+                   .orderByAsc("id");
+            List<CardCharacter> characters = cardCharacterMapper.selectList(wrapper);
+            
+            result = characters.stream()
+                    .map(this::cardCharacterToShopOfferDTO)
                     .collect(Collectors.toList());
-        } else if ("card_character".equals(shopType)) {
-            // 只获取有shopPrice且shopPrice > 0的卡牌角色
-            QueryWrapper<CardCharacter> characterWrapper = new QueryWrapper<>();
-            characterWrapper.isNotNull("shop_price")
-                    .gt("shop_price", 0);
-            List<CardCharacter> characters = cardCharacterMapper.selectList(characterWrapper);
-            availableIds = characters.stream()
-                    .map(CardCharacter::getId)
+                    
+        } else if ("spell".equals(shopType)) {
+            // 法术商店：从 cards 表查询，card_type = 'spell'
+            QueryWrapper<Card> wrapper = new QueryWrapper<>();
+            wrapper.eq("card_type", "spell")
+                   .isNotNull("shop_price")
+                   .orderByDesc("rarity")
+                   .orderByAsc("id");
+            List<Card> cards = cardMapper.selectList(wrapper);
+            
+            result = cards.stream()
+                    .filter(card -> {
+                        // 检查 shopPrice JSON 是否有有效价格
+                        Long price = parseCardShopPrice(card.getShopPrice());
+                        return price != null && price > 0;
+                    })
+                    .map(this::cardToShopOfferDTO)
+                    .collect(Collectors.toList());
+                    
+        } else if ("equipment".equals(shopType)) {
+            // 装备商店：从 cards 表查询，card_type = 'equipment'
+            QueryWrapper<Card> wrapper = new QueryWrapper<>();
+            wrapper.eq("card_type", "equipment")
+                   .isNotNull("shop_price")
+                   .orderByDesc("rarity")
+                   .orderByAsc("id");
+            List<Card> cards = cardMapper.selectList(wrapper);
+            
+            result = cards.stream()
+                    .filter(card -> {
+                        // 检查 shopPrice JSON 是否有有效价格
+                        Long price = parseCardShopPrice(card.getShopPrice());
+                        return price != null && price > 0;
+                    })
+                    .map(this::cardToShopOfferDTO)
+                    .collect(Collectors.toList());
+                    
+        } else if ("item".equals(shopType)) {
+            // 道具商店：从 items 表查询
+            QueryWrapper<Item> wrapper = new QueryWrapper<>();
+            wrapper.isNotNull("shop_price")
+                   .gt("shop_price", 0)
+                   .orderByDesc("rarity")
+                   .orderByAsc("id");
+            List<Item> items = itemMapper.selectList(wrapper);
+            
+            result = items.stream()
+                    .map(this::itemToShopOfferDTO)
                     .collect(Collectors.toList());
         } else {
             throw new RuntimeException("不支持的商店类型: " + shopType);
         }
-
-        if (availableIds.isEmpty()) {
-            throw new RuntimeException("没有可用的商品");
+        
+        return result;
+    }
+    
+    /**
+     * 将 CardCharacter 转换为 ShopOfferDetailDTO
+     */
+    private ShopOfferDetailDTO cardCharacterToShopOfferDTO(CardCharacter character) {
+        ShopOfferDetailDTO dto = new ShopOfferDetailDTO();
+        dto.setId(character.getId());  // 使用角色ID作为商品ID
+        dto.setOfferType("card_character");
+        dto.setTargetId(character.getId());
+        dto.setPrice(character.getShopPrice() != null ? character.getShopPrice().longValue() : 0L);
+        
+        CardCharacterDTO cardCharacterDTO = new CardCharacterDTO();
+        BeanUtils.copyProperties(character, cardCharacterDTO);
+        dto.setCardCharacter(cardCharacterDTO);
+        
+        return dto;
+    }
+    
+    /**
+     * 将 Card 转换为 ShopOfferDetailDTO
+     */
+    private ShopOfferDetailDTO cardToShopOfferDTO(Card card) {
+        ShopOfferDetailDTO dto = new ShopOfferDetailDTO();
+        dto.setId(card.getId());  // 使用卡牌ID作为商品ID
+        dto.setOfferType("card");
+        dto.setTargetId(card.getId());
+        
+        // 解析 shopPrice JSON
+        Long price = parseCardShopPrice(card.getShopPrice());
+        dto.setPrice(price != null ? price : 0L);
+        
+        CardDTO cardDTO = new CardDTO();
+        BeanUtils.copyProperties(card, cardDTO);
+        dto.setCard(cardDTO);
+        
+        return dto;
+    }
+    
+    /**
+     * 将 Item 转换为 ShopOfferDetailDTO
+     */
+    private ShopOfferDetailDTO itemToShopOfferDTO(Item item) {
+        ShopOfferDetailDTO dto = new ShopOfferDetailDTO();
+        dto.setId(item.getId());  // 使用道具ID作为商品ID
+        dto.setOfferType("item");
+        dto.setTargetId(item.getId());
+        dto.setPrice(item.getShopPrice() != null ? item.getShopPrice().longValue() : 0L);
+        
+        ItemDTO itemDTO = new ItemDTO();
+        BeanUtils.copyProperties(item, itemDTO);
+        dto.setItem(itemDTO);
+        
+        return dto;
+    }
+    
+    /**
+     * 解析 Card 表的 shopPrice JSON 字段
+     * 格式：{"currency_type": "gold", "amount": 300}
+     */
+    private Long parseCardShopPrice(String shopPriceJson) {
+        if (shopPriceJson == null || shopPriceJson.trim().isEmpty()) {
+            return null;
         }
-
-        // 随机选择8个（如果可用商品少于8个，则全部选择）
-        // 注意：这里只是随机选择商品，价格完全来自数据库
-        Collections.shuffle(availableIds, new Random());
-        int count = Math.min(8, availableIds.size());
-        List<Long> selectedIds = availableIds.subList(0, count);
-
-        // 创建新的商店商品（所有价格都来自数据库，不随机生成）
-        int displayOrder = 1;
-        for (int i = 0; i < selectedIds.size(); i++) {
-            Long targetId = selectedIds.get(i);
-            ShopOffer offer = new ShopOffer();
-            offer.setOfferType(shopType);
-            offer.setTargetId(targetId);
-            
-            // 根据商品类型设置价格（严格使用数据库中的shopPrice）
-            if ("item".equals(shopType)) {
-                Item item = itemMapper.selectById(targetId);
-                // 道具必须使用数据库中的shopPrice，如果没有价格则跳过该道具
-                if (item == null) {
-                    continue; // 跳过无效的道具
-                }
-                if (item.getShopPrice() == null || item.getShopPrice() <= 0) {
-                    // 如果没有设置shopPrice，跳过该道具，不添加到商店
-                    continue;
-                }
-                // 使用数据库中的shopPrice
-                long basePrice = item.getShopPrice().longValue();
-                offer.setPrice(basePrice);
-            } else if ("card_character".equals(shopType)) {
-                CardCharacter character = cardCharacterMapper.selectById(targetId);
-                // 卡牌角色必须使用数据库中的shopPrice，如果没有价格则跳过该角色
-                if (character == null) {
-                    continue; // 跳过无效的角色
-                }
-                if (character.getShopPrice() == null || character.getShopPrice() <= 0) {
-                    // 如果没有设置shopPrice，跳过该角色，不添加到商店
-                    continue;
-                }
-                // 使用数据库中的shopPrice
-                long basePrice = character.getShopPrice().longValue();
-                offer.setPrice(basePrice);
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>> typeRef = 
+                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {};
+            java.util.Map<String, Object> priceMap = objectMapper.readValue(shopPriceJson, typeRef);
+            Object amount = priceMap.get("amount");
+            if (amount instanceof Number) {
+                return ((Number) amount).longValue();
             }
-            
-            offer.setDisplayOrder(displayOrder++);
-            offer.setRefreshRule("{}");
-            shopOfferMapper.insert(offer);
+        } catch (Exception e) {
+            System.err.println("解析 shopPrice JSON 失败: " + shopPriceJson + ", error: " + e.getMessage());
         }
-
-        // 返回刷新后的商品列表
-        return getShopOffersByType(shopType);
+        return null;
     }
 
     /**
-     * 购买商品
+     * 刷新指定商店类型的商品（由于现在直接从模板表查询，刷新功能已简化）
+     * 注意：由于不再使用shop_offers表，刷新功能实际上只是重新查询，不改变数据
+     * 如果需要实现真正的刷新（如随机排序），可以在前端或这里实现排序逻辑
+     * @param shopType 商店类型：item-道具商店, card_character-角色商店, spell-法术商店, equipment-装备商店
+     * @return 商品列表
+     */
+    public List<ShopOfferDetailDTO> refreshShop(String shopType) {
+        // 由于现在直接从模板表查询，刷新功能实际上只是重新查询
+        // 如果需要实现随机排序，可以在这里添加排序逻辑
+        List<ShopOfferDetailDTO> offers = getShopOffersByType(shopType);
+        
+        // 随机打乱顺序（可选）
+        Collections.shuffle(offers, new Random());
+        
+        return offers;
+    }
+
+    /**
+     * 购买商品（支持直接使用模板表ID购买）
      * @param userId 用户ID
      * @param request 购买请求
      * @return 购买结果信息
@@ -210,21 +265,43 @@ public class ShopService {
     @Transactional
     public String purchaseItem(Long userId, PurchaseRequest request) {
         // 验证请求参数
-        if (request == null || request.getShopOfferId() == null) {
-            throw new RuntimeException("商品ID不能为空");
+        if (request == null) {
+            throw new RuntimeException("购买请求不能为空");
         }
 
         Integer quantity = request.getQuantity() != null && request.getQuantity() > 0 
                 ? request.getQuantity() : 1;
 
-        // 查询商品信息
-        ShopOffer offer = shopOfferMapper.selectById(request.getShopOfferId());
-        if (offer == null) {
-            throw new RuntimeException("商品不存在");
+        String offerType;
+        Long targetId;
+        Long price;
+
+        // 兼容旧版本：如果提供了shopOfferId，先从shop_offers表查询
+        if (request.getShopOfferId() != null) {
+            ShopOffer offer = shopOfferMapper.selectById(request.getShopOfferId());
+            if (offer == null) {
+                throw new RuntimeException("商品不存在");
+            }
+            offerType = offer.getOfferType();
+            targetId = offer.getTargetId();
+            price = offer.getPrice();
+        } else {
+            // 新版本：直接使用模板表ID和类型
+            if (request.getOfferType() == null || request.getTargetId() == null) {
+                throw new RuntimeException("商品类型和目标ID不能为空");
+            }
+            offerType = request.getOfferType().trim();
+            targetId = request.getTargetId();
+            
+            // 从模板表获取价格
+            price = getPriceFromTemplate(offerType, targetId);
+            if (price == null || price <= 0) {
+                throw new RuntimeException("商品价格无效或商品不存在");
+            }
         }
 
         // 计算总价
-        Long totalPrice = offer.getPrice() * quantity;
+        Long totalPrice = price * quantity;
 
         // 检查用户余额（默认使用gold货币）
         UserWallet wallet = getUserWallet(userId, "gold");
@@ -238,29 +315,44 @@ public class ShopService {
         userWalletMapper.updateById(wallet);
 
         // 发放物品
-        String offerType = offer.getOfferType();
-        if (offerType == null || offerType.trim().isEmpty()) {
-            throw new RuntimeException("商品类型不能为空");
-        }
-        
-        // 去除空格并转为小写进行比较（防止大小写或空格问题）
-        offerType = offerType.trim();
-        
         if ("item".equals(offerType)) {
             // 发放道具
-            addItemToInventory(userId, offer.getTargetId(), quantity);
+            addItemToInventory(userId, targetId, quantity);
             return String.format("成功购买 %d 个道具", quantity);
         } else if ("card".equals(offerType)) {
             // 发放卡牌（法术/装备）
-            addCardToUser(userId, offer.getTargetId(), quantity);
+            addCardToUser(userId, targetId, quantity);
             return String.format("成功购买 %d 张卡牌", quantity);
         } else if ("card_character".equals(offerType)) {
             // 发放角色（卡牌角色）
-            addCardCharacterToUser(userId, offer.getTargetId(), quantity);
+            addCardCharacterToUser(userId, targetId, quantity);
             return String.format("成功购买 %d 个角色", quantity);
         } else {
-            throw new RuntimeException("不支持的商品类型: " + offerType + " (实际值: [" + offer.getOfferType() + "])");
+            throw new RuntimeException("不支持的商品类型: " + offerType);
         }
+    }
+    
+    /**
+     * 从模板表获取商品价格
+     */
+    private Long getPriceFromTemplate(String offerType, Long targetId) {
+        if ("item".equals(offerType)) {
+            Item item = itemMapper.selectById(targetId);
+            if (item != null && item.getShopPrice() != null) {
+                return item.getShopPrice().longValue();
+            }
+        } else if ("card".equals(offerType)) {
+            Card card = cardMapper.selectById(targetId);
+            if (card != null) {
+                return parseCardShopPrice(card.getShopPrice());
+            }
+        } else if ("card_character".equals(offerType)) {
+            CardCharacter character = cardCharacterMapper.selectById(targetId);
+            if (character != null && character.getShopPrice() != null) {
+                return character.getShopPrice().longValue();
+            }
+        }
+        return null;
     }
 
     /**

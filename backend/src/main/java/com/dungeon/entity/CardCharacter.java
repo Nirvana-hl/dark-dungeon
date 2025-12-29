@@ -89,5 +89,10 @@ public class CardCharacter {
      * 背景故事
      */
     private String lore;
+    
+    /**
+     * 卡牌类型：player-玩家角色卡, enemy-敌人角色卡
+     */
+    private String cardType;
 }
 

@@ -1,0 +1,3 @@
+// This placeholder file exists only because apply_patch requires at least one file section.
+// The real changes are applied to existing TypeScript files below.
+

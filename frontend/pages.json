@@ -1,6 +1,15 @@
 {
   "pages": [
     {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#0f172a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f172a"
+      }
+    },
+    {
       "path": "pages/camp/camp",
       "style": {
         "navigationBarTitleText": "营地",
@@ -13,15 +22,6 @@
       "path": "pages/home/home",
       "style": {
         "navigationBarTitleText": "暗黑地牢肉鸽",
-        "navigationBarBackgroundColor": "#0f172a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0f172a"
-      }
-    },
-    {
-      "path": "pages/login/login",
-      "style": {
-        "navigationBarTitleText": "登录",
         "navigationBarBackgroundColor": "#0f172a",
         "navigationBarTextStyle": "white",
         "backgroundColor": "#0f172a"
@@ -89,6 +89,15 @@
         "navigationBarTextStyle": "white",
         "backgroundColor": "#0f172a"
       }
+    },
+    {
+      "path": "pages/class-selection/class-selection",
+      "style": {
+        "navigationBarTitleText": "职业选择",
+        "navigationBarBackgroundColor": "#2d1b0e",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#2d1b0e"
+      }
     }
   ],
   "globalStyle": {
@@ -101,44 +110,6 @@
     "app-plus": {
       "titleNView": false
     }
-  },
-  "tabBar": {
-    "color": "#8b8b8b",
-    "selectedColor": "#3b82f6",
-    "backgroundColor": "#1e293b",
-    "borderStyle": "black",
-    "list": [
-      {
-        "pagePath": "pages/camp/camp",
-        "text": "营地",
-        "iconPath": "static/tabbar/yingdi.jpg",
-        "selectedIconPath": "static/tabbar/yingdi.jpg"
-      },
-      {
-        "pagePath": "pages/skills/skills",
-        "text": "技能树",
-        "iconPath": "static/tabbar/background.jpg",
-        "selectedIconPath": "static/tabbar/background.jpg"
-      },
-      {
-        "pagePath": "pages/explore/explore",
-        "text": "闯关",
-        "iconPath": "static/tabbar/tansuo.jpg",
-        "selectedIconPath": "static/tabbar/tansuo.jpg"
-      },
-      {
-        "pagePath": "pages/shop/shop",
-        "text": "商城",
-        "iconPath": "static/tabbar/background.jpg",
-        "selectedIconPath": "static/tabbar/background.jpg"
-      },
-      {
-        "pagePath": "pages/achievements/achievements",
-        "text": "成就",
-        "iconPath": "static/tabbar/touxiang.jpg",
-        "selectedIconPath": "static/tabbar/touxiang.jpg"
-      }
-    ]
   },
   "condition": {
     "current": 0,

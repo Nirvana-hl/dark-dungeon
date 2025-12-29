@@ -1,144 +1,91 @@
 <template>
   <view class="home-container">
-    <!-- 背景图片 -->
-    <image class="background-image" src="/static/background.png" mode="aspectFill"></image>
-    
-    <!-- 背景遮罩层 -->
-    <view class="background-overlay"></view>
-    
-    <!-- 游戏标题 -->
-  <view class="game-title">
-    <text class="title-text">🎮 暗黑地牢肉鸽</text>
-    <!-- 右上角隐蔽的退出按钮，不影响主视觉 -->
-    <button class="logout-btn" @click="handleLogout">退出登录</button>
-  </view>
-    
-    <!-- 底部中央开始挑战按钮 -->
-    <view class="center-action">
-      <button class="explore-button" @click="handleStartExplore">
-        <view class="button-content">
-          <view class="button-text-wrapper">
-            <text class="button-text-line">开始</text>
-            <text class="button-text-line">挑战</text>
+    <!-- 顶部玩家信息 -->
+    <view class="player-header">
+      <view class="player-left">
+        <view class="avatar-wrapper">
+          <image class="avatar" src="/static/tabbar/touxiang.jpg" mode="aspectFill" />
+        </view>
+        <view class="player-info">
+          <view class="player-row">
+            <text class="player-name">冒险者</text>
+            <text class="player-level">Lv 1</text>
+          </view>
+          <view class="player-row">
+            <text class="label">体力</text>
+            <view class="bar-bg">
+              <view class="bar-fill hp"></view>
+            </view>
           </view>
         </view>
+      </view>
+      <view class="player-right">
+        <view class="currency-box">
+          <text class="currency-icon">💰</text>
+          <text class="currency-value">1250</text>
+        </view>
+        <button class="logout-btn" @click="handleLogout">退出</button>
+      </view>
+    </view>
+
+    <!-- 中间“开始冒险”大按钮 -->
+    <view class="main-action">
+      <button class="start-btn" @click="handleStartAdventure">
+        <text class="start-title">开始冒险</text>
+        <text class="start-sub">前往营地，整装待发</text>
       </button>
+    </view>
+
+    <!-- 快捷入口 -->
+    <view class="quick-section">
+      <view class="section-title-row">
+        <text class="section-title">快捷入口</text>
+      </view>
+      <view class="quick-grid">
+        <view class="quick-item" @click="goCamp">
+          <view class="quick-icon">
+            <i class="fas fa-campground"></i>
+          </view>
+          <text class="quick-label">营地</text>
+        </view>
+        <view class="quick-item" @click="goSkills">
+          <view class="quick-icon">
+            <i class="fas fa-sitemap"></i>
+          </view>
+          <text class="quick-label">技能树</text>
+        </view>
+        <view class="quick-item" @click="goExplore">
+          <view class="quick-icon">
+            <i class="fas fa-dungeon"></i>
+          </view>
+          <text class="quick-label">闯关</text>
+        </view>
+        <view class="quick-item" @click="goShop">
+          <view class="quick-icon">
+            <i class="fas fa-store"></i>
+          </view>
+          <text class="quick-label">商城</text>
+        </view>
+        <view class="quick-item" @click="goAchievements">
+          <view class="quick-icon">
+            <i class="fas fa-trophy"></i>
+          </view>
+          <text class="quick-label">成就</text>
+        </view>
+        <view class="quick-item" @click="goSettings">
+          <view class="quick-icon">
+            <i class="fas fa-cog"></i>
+          </view>
+          <text class="quick-label">设置</text>
+        </view>
+      </view>
     </view>
   </view>
 </template>
 
-<style scoped>
-.home-container {
-  width: 100%;
-  height: 100vh;
-  position: relative;
-  overflow: hidden;
-}
-
-/* 背景图片 */
-.background-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-}
-
-/* 背景遮罩层 */
-.background-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 1;
-}
-
-/* 游戏标题 */
-.game-title {
-  position: absolute;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  width: 100%;
-  text-align: center;
-}
-
-.title-text {
-  display: block;
-  font-size: 48px;
-  font-weight: bold;
-  color: #ffd700;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
-}
-
-/* 右上角退出按钮：小巧半透明，不抢主视觉 */
-.logout-btn {
-  position: absolute;
-  top: -10px;
-  right: 20px;
-  padding: 8px 14px;
-  font-size: 14px;
-  color: #ffd700;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 215, 0, 0.6);
-  border-radius: 999px;
-  backdrop-filter: blur(6px);
-  z-index: 11;
-}
-.logout-btn:active {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-/* 底部中央进入游戏按钮 */
-.center-action {
-  position: absolute;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-}
-
-.explore-button {
-  background: none;
-  border: none;
-  padding: 0;
-}
-
-.button-content {
-  background: linear-gradient(135deg, #4a1a1a, #2d1b1b);
-  padding: 20px 50px;
-  border-radius: 20px;
-  border: 2px solid rgba(139, 69, 19, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.button-text-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.2;
-}
-
-.button-text-line {
-  color: #d4a574;
-  font-size: 36px;
-  font-weight: bold;
-  display: block;
-}
-</style>
-
 <script setup lang="ts">
-import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAuthStore } from '@/stores/auth'
 
-// uni-app 类型声明（注意：tabBar 页面必须用 switchTab 打开）
 declare const uni: {
   navigateTo: (options: { url: string }) => void
   switchTab: (options: { url: string }) => void
@@ -147,24 +94,37 @@ declare const uni: {
 
 const auth = useAuthStore()
 
-// 页面加载时初始化
-onLoad(() => {
-  console.log('[Home] 页面加载 - 简化版本')
-})
-
-// 页面显示时
-onShow(() => {
-  console.log('[Home] 页面显示')
-})
-
-// 处理开始挑战：从首页进入“营地”（tabBar 页面）
-function handleStartExplore() {
-  console.log('[Home] 点击开始挑战按钮，跳转到营地')
-  // 营地是 tabBar 页面，必须使用 switchTab 跳转
+// 主按钮：开始冒险 → 进入营地
+function handleStartAdventure() {
   uni.switchTab({ url: '/pages/camp/camp' })
 }
 
-// 退出登录：清 token 并回登录页
+// 快捷入口
+function goCamp() {
+  uni.switchTab({ url: '/pages/camp/camp' })
+}
+
+function goSkills() {
+  uni.navigateTo({ url: '/pages/skills/skills' })
+}
+
+function goExplore() {
+  uni.navigateTo({ url: '/pages/explore/explore' })
+}
+
+function goShop() {
+  uni.navigateTo({ url: '/pages/shop/shop' })
+}
+
+function goAchievements() {
+  uni.navigateTo({ url: '/pages/achievements/achievements' })
+}
+
+function goSettings() {
+  uni.navigateTo({ url: '/pages/settings/settings' })
+}
+
+// 退出登录
 async function handleLogout() {
   try {
     await auth.logout()
@@ -173,3 +133,200 @@ async function handleLogout() {
   }
 }
 </script>
+
+<style scoped>
+.home-container {
+  width: 100%;
+  height: 100vh;
+  background: #020617;
+  padding: 24rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 20rpx;
+  border-radius: 20rpx;
+  background: #0f172a;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.4);
+}
+
+.player-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.avatar-wrapper {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2rpx solid #f97316;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.player-name {
+  font-size: 28rpx;
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.player-level {
+  font-size: 22rpx;
+  color: #facc15;
+}
+
+.label {
+  font-size: 20rpx;
+  color: #9ca3af;
+}
+
+.bar-bg {
+  width: 200rpx;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: #1f2937;
+  overflow: hidden;
+}
+
+.bar-fill.hp {
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444, #f97316);
+}
+
+.player-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
+}
+
+.currency-box {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 6rpx 10rpx;
+  border-radius: 999rpx;
+  background: #111827;
+}
+
+.currency-icon {
+  font-size: 22rpx;
+}
+
+.currency-value {
+  font-size: 22rpx;
+  color: #facc15;
+  font-weight: 600;
+}
+
+.logout-btn {
+  padding: 4rpx 12rpx;
+  font-size: 20rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #4b5563;
+  background: transparent;
+  color: #9ca3af;
+}
+
+.main-action {
+  margin-top: 8rpx;
+}
+
+.start-btn {
+  width: 100%;
+  padding: 24rpx 0;
+  border-radius: 24rpx;
+  border: none;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 20rpx rgba(248, 113, 22, 0.5);
+}
+
+.start-title {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.start-sub {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  opacity: 0.9;
+}
+
+.quick-section {
+  flex: 1;
+  padding-top: 8rpx;
+}
+
+.section-title-row {
+  margin-bottom: 12rpx;
+}
+
+.section-title {
+  font-size: 26rpx;
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+}
+
+.quick-item {
+  padding: 16rpx 8rpx;
+  border-radius: 20rpx;
+  background: #020617;
+  border: 1rpx solid #1f2937;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.quick-icon {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #60a5fa;
+  font-size: 32rpx;
+}
+
+.quick-label {
+  font-size: 22rpx;
+  color: #e5e7eb;
+}
+</style>

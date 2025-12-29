@@ -34,6 +34,11 @@ public class Card {
     private String cardType;
     
     /**
+     * 使用类型：player-玩家卡牌, enemy-敌人卡牌
+     */
+    private String usageType;
+    
+    /**
      * 稀有度：common-普通, rare-稀有, epic-史诗, legendary-传说
      */
     private String rarity;

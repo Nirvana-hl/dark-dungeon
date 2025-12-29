@@ -26,17 +26,23 @@
     
     <!-- 卡片属性 -->
     <view class="card-stats">
-      <view class="stat-row">
-        <i class="fas fa-heart stat-icon health"></i>
-        <text>{{ character.currentHp || 1 }}</text>
+      <view class="stat-row stat-row-health">
+        <view class="stat-icon-wrapper health">
+          <i class="fas fa-heart stat-icon"></i>
+          <text class="stat-value">{{ character.currentHp || 1 }}</text>
+        </view>
       </view>
-      <view class="stat-row">
-        <i class="fas fa-sword stat-icon attack"></i>
-        <text>1</text>
+      <view class="stat-row stat-row-attack">
+        <view class="stat-icon-wrapper attack">
+          <i class="fas fa-sword stat-icon"></i>
+          <text class="stat-value">1</text>
+        </view>
       </view>
-      <view class="stat-row" v-if="character.currentArmor">
-        <i class="fas fa-shield stat-icon armor"></i>
-        <text>{{ character.currentArmor }}</text>
+      <view class="stat-row stat-row-armor" v-if="character.currentArmor">
+        <view class="stat-icon-wrapper armor">
+          <i class="fas fa-shield stat-icon"></i>
+          <text class="stat-value">{{ character.currentArmor }}</text>
+        </view>
       </view>
     </view>
     
@@ -251,26 +257,55 @@ function handleImageError(event: Event) {
 .stat-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: bold;
+  justify-content: center;
+  flex: 1;
+}
+
+.stat-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.stat-icon-wrapper.health {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(185, 28, 28, 0.9) 100%);
+  border-color: rgba(255, 200, 200, 0.5);
+}
+
+.stat-icon-wrapper.attack {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.9) 0%, rgba(220, 38, 38, 0.9) 100%);
+  border-color: rgba(255, 200, 150, 0.5);
+}
+
+.stat-icon-wrapper.armor {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.9) 0%, rgba(13, 71, 161, 0.9) 100%);
+  border-color: rgba(200, 220, 255, 0.5);
 }
 
 .stat-icon {
-  width: 12px;
-  height: 12px;
+  position: absolute;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  opacity: 0.7;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
-.stat-icon.health {
-  color: var(--hp-full);
-}
-
-.stat-icon.attack {
-  color: var(--text-accent);
-}
-
-.stat-icon.armor {
-  color: #2196f3;
+.stat-value {
+  position: relative;
+  z-index: 2;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  line-height: 1;
 }
 
 .card-traits {
