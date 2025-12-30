@@ -7,7 +7,7 @@
         <text class="shop-title">神秘商店</text>
     </view>
       <view class="header-right">
-        <i class="fas fa-coins gold-icon"></i>
+        <text class="gold-icon">💰</text>
         <text class="gold-amount">{{ formatGold(goldBalance) }}</text>
         </view>
     </view>
@@ -81,7 +81,7 @@
           <view class="product-image-wrapper">
             <image 
               :src="getProductImage(offer)" 
-              mode="aspectFit"
+              mode="aspectFill"
               class="product-image"
               @error="handleImageError"
             />
@@ -695,9 +695,9 @@ onMounted(async () => {
 
 <style scoped>
 .shop-container {
-  height: 100vh;
+  min-height: 100vh;
   background: linear-gradient(180deg, #2c1810 0%, #1a0f08 100%);
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -938,8 +938,7 @@ onMounted(async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  overflow: hidden; /* 禁止滚动，保持一屏展示 */
+  justify-content: flex-start;
   min-height: 0;
 }
 
@@ -978,11 +977,8 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12rpx;
-  margin-bottom: 0;
-  flex: 1;
+  margin-bottom: 24rpx;
   align-content: flex-start; /* 从顶部开始排列 */
-  overflow-y: auto; /* 允许滚动，防止超出底部 */
-  max-height: 100%;
 }
 
 .product-card {
@@ -996,8 +992,6 @@ onMounted(async () => {
   min-width: 0;
   box-shadow: inset 0 2rpx 4rpx rgba(0, 0, 0, 0.3), 0 2rpx 8rpx rgba(0, 0, 0, 0.4);
   position: relative;
-  height: 100%;
-  max-height: 100%;
 }
 
 .product-card::before {
@@ -1066,20 +1060,14 @@ onMounted(async () => {
   background: linear-gradient(180deg, rgba(80, 53, 26, 0.8) 0%, rgba(60, 40, 20, 0.9) 100%);
   flex-shrink: 0;
   border-bottom: 2px solid rgba(101, 67, 33, 0.8);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 8rpx;
 }
 
 .product-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
 }
 
 /* 角色攻击 / 生命覆盖在图片底部左右两侧 */
