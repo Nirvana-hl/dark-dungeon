@@ -161,12 +161,112 @@
         <text>加载中...</text>
         </view>
     </view>
+
+    <!-- 商品详情弹窗 -->
+    <view v-if="selectedOffer" class="product-detail-modal" @click="closeProductDetail">
+      <view class="modal-content" @click.stop>
+        <!-- 关闭按钮 -->
+        <view class="modal-close-btn" @click="closeProductDetail">
+          <text>✕</text>
+        </view>
+
+        <!-- 商品大图 -->
+        <view class="detail-image-wrapper">
+          <image 
+            :src="getProductImage(selectedOffer)" 
+            mode="aspectFit"
+            class="detail-image"
+            @error="handleImageError"
+          />
+          <!-- 价格标签 -->
+          <view v-if="!isOwned(selectedOffer)" class="detail-price-badge">
+            <text class="price-icon">💰</text>
+            <text class="price-value">{{ formatPrice(selectedOffer.price) }}</text>
+          </view>
+        </view>
+
+        <!-- 商品信息 -->
+        <view class="detail-info">
+          <!-- 名称和稀有度 -->
+          <view class="detail-header">
+            <text class="detail-name">{{ getProductName(selectedOffer) }}</text>
+            <view class="detail-rarity-badge" :class="getRarityBadgeClass(selectedOffer)">
+              <text>{{ getRarityText(selectedOffer) }}</text>
+            </view>
+          </view>
+
+          <!-- 属性统计（如果是角色） -->
+          <view v-if="selectedOffer.cardCharacter" class="detail-stats">
+            <view v-if="selectedOffer.cardCharacter.baseAttack" class="stat-box stat-attack">
+              <text class="stat-icon">⚔️</text>
+              <view class="stat-info">
+                <text class="stat-label">攻击</text>
+                <text class="stat-value">+{{ selectedOffer.cardCharacter.baseAttack }}</text>
+              </view>
+            </view>
+            <view v-if="selectedOffer.cardCharacter.baseDefense" class="stat-box stat-defense">
+              <text class="stat-icon">🛡️</text>
+              <view class="stat-info">
+                <text class="stat-label">防御</text>
+                <text class="stat-value">+{{ selectedOffer.cardCharacter.baseDefense }}</text>
+              </view>
+            </view>
+            <view v-if="selectedOffer.cardCharacter.baseHp" class="stat-box stat-health">
+              <text class="stat-icon">❤️</text>
+              <view class="stat-info">
+                <text class="stat-label">生命</text>
+                <text class="stat-value">+{{ selectedOffer.cardCharacter.baseHp }}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 技能特性（如果是角色，只显示第一个） -->
+          <view v-if="selectedOffer.cardCharacter && getFirstTrait(selectedOffer.cardCharacter)" class="detail-skills">
+            <view class="skills-header">
+              <text class="skills-icon">⚡</text>
+              <text class="skills-title">技能特性</text>
+            </view>
+            <view class="skill-item">
+              <text class="skill-name">{{ getFirstTrait(selectedOffer.cardCharacter)?.name || '未知技能' }}:</text>
+              <text class="skill-desc">{{ getFirstTrait(selectedOffer.cardCharacter)?.description || '暂无描述' }}</text>
+            </view>
+          </view>
+
+          <!-- 商品描述 -->
+          <view class="detail-description">
+            <view class="description-header">
+              <text class="description-icon">ℹ️</text>
+              <text class="description-title">商品描述</text>
+            </view>
+            <text class="description-text">{{ getProductDescription(selectedOffer, true) || '暂无描述' }}</text>
+          </view>
+
+          <!-- 购买按钮 -->
+          <view class="detail-actions">
+            <button 
+              v-if="!isOwned(selectedOffer)"
+              class="detail-buy-btn"
+              :class="{ disabled: !canAfford(selectedOffer) }"
+              :disabled="!canAfford(selectedOffer)"
+              @click="handlePurchaseFromDetail(selectedOffer)"
+            >
+              <text class="buy-icon">🛒</text>
+              <text>{{ canAfford(selectedOffer) ? '立即购买' : '余额不足' }}</text>
+            </button>
+            <view v-else class="detail-owned">
+              <text>✓</text>
+              <text>已拥有</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { shopApi } from '@/api/request'
+import { shopApi, gameApi } from '@/api/request'
 import { useWalletStore } from '@/stores/wallet'
 import { useShopStore } from '@/stores/shop'
 import { CurrencyType } from '@/types'
@@ -222,6 +322,9 @@ const offers = ref<any[]>([])
 const loading = ref(false)
 const isRefreshing = ref(false)
 const avatarError = ref(false)
+const selectedOffer = ref<any>(null)
+const selectedOfferTraits = ref<any[]>([])
+const loadingTraits = ref(false)
 const walletStore = useWalletStore()
 const shopStore = useShopStore()
 
@@ -517,7 +620,7 @@ function getProductName(offer: any): string {
   return '未知商品'
 }
 
-function getProductDescription(offer: any): string {
+function getProductDescription(offer: any, full: boolean = false): string {
   if (!offer) return '暂无描述'
   
   // 角色：使用 lore 字段（背景故事）
@@ -525,7 +628,10 @@ function getProductDescription(offer: any): string {
     // 优先使用 lore 字段
     const lore = offer.cardCharacter.lore || offer.cardCharacter.description || ''
     if (lore) {
-      // 如果 lore 太长，截取前18个字符
+      // 如果需要完整描述，返回全部；否则截取前18个字符
+      if (full) {
+        return lore
+      }
       return lore.length > 18 ? lore.substring(0, 18) + '...' : lore
     }
     // 如果没有 lore，尝试使用特性描述
@@ -540,29 +646,69 @@ function getProductDescription(offer: any): string {
   // 卡牌：显示描述
   if (offer.card) {
     const desc = offer.card.description || ''
-    // 如果描述太长，截取
+    if (full) {
+      return desc || '暂无描述'
+    }
     return desc.length > 18 ? desc.substring(0, 18) + '...' : desc || '暂无描述'
   }
   
   // 道具：显示描述
   if (offer.item) {
     const desc = offer.item.description || ''
+    if (full) {
+      return desc || '暂无描述'
+    }
     return desc.length > 18 ? desc.substring(0, 18) + '...' : desc || '暂无描述'
   }
   
   return '暂无描述'
 }
 
+// 获取第一个技能特性（从card_character_traits表中）
+function getFirstTrait(cardCharacter: any): any | null {
+  if (!cardCharacter) return null
+  
+  // 优先使用已加载的 traits
+  if (selectedOfferTraits.value && selectedOfferTraits.value.length > 0) {
+    return selectedOfferTraits.value[0]
+  }
+  
+  // 如果 cardCharacter 中有 traits 数组
+  if (cardCharacter.traits) {
+    if (Array.isArray(cardCharacter.traits)) {
+      if (cardCharacter.traits.length > 0) {
+        return cardCharacter.traits[0]
+      }
+    } else if (typeof cardCharacter.traits === 'string') {
+      // 如果是 JSON 字符串，尝试解析
+      try {
+        const parsed = JSON.parse(cardCharacter.traits)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed[0]
+        }
+      } catch (e) {
+        console.warn('[Shop] 解析 traits JSON 失败:', e)
+      }
+    }
+  }
+  
+  return null
+}
+
 function getProductImage(offer: any): string {
   // 根据商品类型返回图片路径
   if (offer.cardCharacter) {
-    return `/static/images/shop/characters/${offer.cardCharacter.id || 'default'}.png`
+    const id = offer.cardCharacter.id || 'default'
+    // 尝试多种可能的路径格式
+    return `/static/images/shop/characters/${id}.png`
   }
   if (offer.card) {
-    return `/static/images/shop/cards/${offer.card.id || 'default'}.png`
+    const id = offer.card.id || 'default'
+    return `/static/images/shop/cards/${id}.png`
   }
   if (offer.item) {
-    return `/static/images/shop/items/${offer.item.id || 'default'}.png`
+    const id = offer.item.id || 'default'
+    return `/static/images/shop/items/${id}.png`
   }
   return '/static/images/shop/default.png'
 }
@@ -626,10 +772,22 @@ function formatGold(balance: bigint): string {
 
 function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
-  // 尝试使用默认图片，如果还是失败就隐藏图片
-  if (img.src && !img.src.includes('default')) {
+  console.warn('[Shop] 图片加载失败:', img.src)
+  
+  // 如果是角色图片，尝试使用角色名称或ID的其他格式
+  if (img.src && img.src.includes('/characters/')) {
+    // 尝试使用默认图片
+    if (!img.src.includes('default')) {
+      img.src = '/static/images/shop/characters/default.png'
+      return
+    }
+  }
+  
+  // 如果还是失败，使用占位图
+  if (img.src && !img.src.includes('touxiang')) {
     img.src = '/static/tabbar/touxiang.jpg'
   } else {
+    // 最后隐藏图片
     img.style.display = 'none'
   }
 }
@@ -648,9 +806,86 @@ function isOwned(offer: any): boolean {
   return false
 }
 
-function showProductDetail(offer: any) {
-  // 可以在这里实现商品详情弹窗
+async function showProductDetail(offer: any) {
   console.log('[Shop] 查看商品详情:', offer)
+  selectedOffer.value = offer
+  selectedOfferTraits.value = []
+  
+  // 如果是角色商品，尝试加载特性数据
+  if (offer.cardCharacter && offer.cardCharacter.id) {
+    await loadCardCharacterTraits(offer.cardCharacter.id)
+  }
+}
+
+async function loadCardCharacterTraits(cardCharacterId: number | string) {
+  try {
+    loadingTraits.value = true
+    console.log('[Shop] 加载角色特性:', cardCharacterId)
+    
+    const response = await gameApi.getCardCharacterTraits(cardCharacterId)
+    
+    if (response.data && response.data.code === 200 && response.data.data) {
+      const traits = Array.isArray(response.data.data) ? response.data.data : []
+      selectedOfferTraits.value = traits
+      console.log('[Shop] 特性加载成功:', traits.length, '个特性', traits)
+    } else {
+      console.warn('[Shop] 特性数据为空')
+      selectedOfferTraits.value = []
+    }
+  } catch (error: any) {
+    console.error('[Shop] 加载特性失败:', error)
+    selectedOfferTraits.value = []
+  } finally {
+    loadingTraits.value = false
+  }
+}
+
+function closeProductDetail() {
+  selectedOffer.value = null
+  selectedOfferTraits.value = []
+}
+
+async function handlePurchaseFromDetail(offer: any) {
+  if (!canAfford(offer)) {
+    uni.showToast({
+      title: '余额不足',
+      icon: 'none'
+    })
+    return
+  }
+  
+  try {
+    console.log('[Shop] 从详情页购买商品:', offer.id)
+    
+    const response = await shopApi.purchaseItem({
+      offerType: offer.offerType,
+      targetId: Number(offer.targetId || offer.id),
+      quantity: 1,
+    })
+    
+    if (response.data.code === 200) {
+      uni.showToast({
+        title: '购买成功',
+        icon: 'success'
+      })
+      // 关闭弹窗
+      closeProductDetail()
+      // 刷新商品列表和钱包余额
+      await loadOffers()
+      await walletStore.loadWallets()
+    } else {
+      uni.showToast({
+        title: response.data.message || '购买失败',
+        icon: 'none'
+      })
+    }
+  } catch (error: any) {
+    console.error('[Shop] 购买异常:', error)
+    uni.showToast({
+      title: error.userMessage || '购买失败',
+      icon: 'none'
+    })
+  }
 }
 
 // 生命周期
@@ -1413,6 +1648,342 @@ onMounted(async () => {
 
 .loading-state text {
   font-size: 28rpx;
+}
+
+/* 商品详情弹窗 */
+.product-detail-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 40rpx 32rpx;
+  overflow-y: auto;
+}
+
+.modal-content {
+  position: relative;
+  width: 100%;
+  max-width: 680rpx;
+  max-height: 90vh;
+  background: linear-gradient(180deg, rgba(139, 90, 43, 0.95) 0%, rgba(101, 67, 33, 0.98) 100%);
+  border-radius: 24rpx;
+  border: 3px solid rgba(212, 165, 116, 0.8);
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  width: 60rpx;
+  height: 60rpx;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  color: #ffffff;
+  font-size: 36rpx;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.modal-close-btn:active {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(0.95);
+}
+
+.detail-image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 480rpx;
+  min-height: 420rpx;
+  max-height: 480rpx;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(80, 53, 26, 0.9) 0%, rgba(60, 40, 20, 0.95) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx;
+  flex-shrink: 0;
+}
+
+.detail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.detail-price-badge {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 20rpx;
+  background: linear-gradient(135deg, rgba(139, 90, 43, 0.95) 0%, rgba(101, 67, 33, 0.98) 100%);
+  border: 2px solid rgba(212, 165, 116, 0.9);
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.5);
+}
+
+.price-icon {
+  font-size: 32rpx;
+}
+
+.price-value {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #ffd700;
+}
+
+.detail-info {
+  padding: 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.detail-name {
+  flex: 1;
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.detail-rarity-badge {
+  padding: 8rpx 20rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  font-weight: bold;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.detail-rarity-badge.badge-common {
+  background: rgba(128, 128, 128, 0.8);
+  color: #ffffff;
+}
+
+.detail-rarity-badge.badge-rare {
+  background: rgba(33, 150, 243, 0.8);
+  color: #2196f3;
+}
+
+.detail-rarity-badge.badge-epic {
+  background: rgba(156, 39, 176, 0.8);
+  color: #e1bee7;
+}
+
+.detail-rarity-badge.badge-legendary {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.9), rgba(255, 87, 34, 0.9));
+  color: #fff3e0;
+}
+
+.detail-stats {
+  display: flex;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.stat-box {
+  flex: 1;
+  min-width: 180rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 16rpx;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-icon {
+  font-size: 40rpx;
+  flex-shrink: 0;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #d4a574;
+}
+
+.stat-value {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.stat-attack .stat-value {
+  color: #f44336;
+}
+
+.stat-defense .stat-value {
+  color: #2196f3;
+}
+
+.stat-health .stat-value {
+  color: #4caf50;
+}
+
+.detail-skills {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  border: 2px solid rgba(255, 215, 0, 0.3);
+}
+
+.skills-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.skills-icon {
+  font-size: 32rpx;
+}
+
+.skills-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.skill-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+  flex-wrap: wrap;
+}
+
+.skill-name {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #ffd700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.skill-desc {
+  font-size: 24rpx;
+  color: #d4a574;
+  line-height: 1.5;
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-description {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.description-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.description-icon {
+  font-size: 32rpx;
+}
+
+.description-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.description-text {
+  font-size: 26rpx;
+  color: #d4a574;
+  line-height: 1.6;
+}
+
+.detail-actions {
+  padding-top: 16rpx;
+  border-top: 2px solid rgba(212, 165, 116, 0.3);
+}
+
+.detail-buy-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx;
+  background: linear-gradient(135deg, rgba(205, 133, 63, 0.95) 0%, rgba(160, 82, 45, 0.98) 100%);
+  border: 2px solid rgba(212, 165, 116, 0.9);
+  border-radius: 16rpx;
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: bold;
+  transition: all 0.3s;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.4);
+}
+
+.detail-buy-btn:not(.disabled):active {
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.3);
+}
+
+.detail-buy-btn.disabled {
+  background: linear-gradient(135deg, rgba(80, 53, 26, 0.6) 0%, rgba(60, 40, 20, 0.7) 100%);
+  border-color: rgba(101, 67, 33, 0.5);
+  opacity: 0.6;
+}
+
+.buy-icon {
+  font-size: 32rpx;
+}
+
+.detail-owned {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.6) 0%, rgba(56, 142, 60, 0.7) 100%);
+  border: 2px solid rgba(129, 199, 132, 0.8);
+  border-radius: 16rpx;
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: bold;
 }
 
 /* 响应式适配 - 确保始终显示3列 */

@@ -1,90 +1,27 @@
 <template>
   <view class="home-container">
-    <!-- 顶部玩家信息 -->
-    <view class="player-header">
-      <view class="player-left">
-        <view class="avatar-wrapper">
-          <image class="avatar" src="/static/tabbar/touxiang.jpg" mode="aspectFill" />
-        </view>
-        <view class="player-info">
-          <view class="player-row">
-            <text class="player-name">冒险者</text>
-            <text class="player-level">Lv 1</text>
-          </view>
-          <view class="player-row">
-            <text class="label">体力</text>
-            <view class="bar-bg">
-              <view class="bar-fill hp"></view>
-            </view>
-          </view>
-        </view>
-      </view>
-      <view class="player-right">
-        <view class="currency-box">
-          <text class="currency-icon">💰</text>
-          <text class="currency-value">1250</text>
-        </view>
-        <button class="logout-btn" @click="handleLogout">退出</button>
-      </view>
+    <!-- 背景图片 -->
+    <image class="background-image" src="/static/tabbar/background.jpg" mode="aspectFill"></image>
+    
+    <!-- 右上角退出登录按钮 -->
+    <view class="logout-container">
+      <button class="logout-btn" @click="handleLogout">退出登录</button>
     </view>
 
-    <!-- 中间“开始冒险”大按钮 -->
+    <!-- 中间下方"开始冒险"按钮 -->
     <view class="main-action">
       <button class="start-btn" @click="handleStartAdventure">
         <text class="start-title">开始冒险</text>
-        <text class="start-sub">前往营地，整装待发</text>
       </button>
-    </view>
-
-    <!-- 快捷入口 -->
-    <view class="quick-section">
-      <view class="section-title-row">
-        <text class="section-title">快捷入口</text>
-      </view>
-      <view class="quick-grid">
-        <view class="quick-item" @click="goCamp">
-          <view class="quick-icon">
-            <i class="fas fa-campground"></i>
-          </view>
-          <text class="quick-label">营地</text>
-        </view>
-        <view class="quick-item" @click="goSkills">
-          <view class="quick-icon">
-            <i class="fas fa-sitemap"></i>
-          </view>
-          <text class="quick-label">技能树</text>
-        </view>
-        <view class="quick-item" @click="goExplore">
-          <view class="quick-icon">
-            <i class="fas fa-dungeon"></i>
-          </view>
-          <text class="quick-label">闯关</text>
-        </view>
-        <view class="quick-item" @click="goShop">
-          <view class="quick-icon">
-            <i class="fas fa-store"></i>
-          </view>
-          <text class="quick-label">商城</text>
-        </view>
-        <view class="quick-item" @click="goAchievements">
-          <view class="quick-icon">
-            <i class="fas fa-trophy"></i>
-          </view>
-          <text class="quick-label">成就</text>
-        </view>
-        <view class="quick-item" @click="goSettings">
-          <view class="quick-icon">
-            <i class="fas fa-cog"></i>
-          </view>
-          <text class="quick-label">设置</text>
-        </view>
-      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useCampStore } from '@/stores/camp'
+import apiClient, { API_ENDPOINTS, type ApiResponse } from '@/api/request'
 
 declare const uni: {
   navigateTo: (options: { url: string }) => void
@@ -93,35 +30,72 @@ declare const uni: {
 }
 
 const auth = useAuthStore()
+const campStore = useCampStore()
 
-// 主按钮：开始冒险 → 进入营地
-function handleStartAdventure() {
-  uni.switchTab({ url: '/pages/camp/camp' })
+// 检查用户是否选择了角色
+async function checkPlayerCharacter(): Promise<boolean> {
+  try {
+    // 先尝试从store获取
+    if (campStore.playerCharacter) {
+      return true
+    }
+    
+    // 如果store中没有，尝试获取营地数据
+    await campStore.fetchCampData()
+    
+    if (campStore.playerCharacter) {
+      return true
+    }
+    
+    // 如果还是没有，尝试直接调用API
+    const response = await apiClient.get<ApiResponse<any>>(
+      API_ENDPOINTS.CHARACTER.PLAYER_INSTANCE
+    )
+    
+    if (response.data && response.data.code === 200 && response.data.data) {
+      return true
+    }
+    
+    return false
+  } catch (error: any) {
+    const statusCode = error.statusCode || error.response?.status
+    
+    // 404表示没有角色
+    if (statusCode === 404) {
+      return false
+    }
+    
+    // 401/403需要重新登录
+    if (statusCode === 401 || statusCode === 403) {
+      console.warn('检查角色时认证失败，需要重新登录')
+      return false
+    }
+    
+    console.warn('检查角色失败:', error?.message || error)
+    return false
+  }
 }
 
-// 快捷入口
-function goCamp() {
-  uni.switchTab({ url: '/pages/camp/camp' })
-}
-
-function goSkills() {
-  uni.navigateTo({ url: '/pages/skills/skills' })
-}
-
-function goExplore() {
-  uni.navigateTo({ url: '/pages/explore/explore' })
-}
-
-function goShop() {
-  uni.navigateTo({ url: '/pages/shop/shop' })
-}
-
-function goAchievements() {
-  uni.navigateTo({ url: '/pages/achievements/achievements' })
-}
-
-function goSettings() {
-  uni.navigateTo({ url: '/pages/settings/settings' })
+// 开始冒险：检查是否选择了角色
+async function handleStartAdventure() {
+  try {
+    console.log('[Home] 开始检查角色状态...')
+    const hasCharacter = await checkPlayerCharacter()
+    
+    if (!hasCharacter) {
+      // 未选择角色，跳转到选择界面
+      console.log('[Home] 用户未选择角色，跳转到角色选择界面')
+      uni.navigateTo({ url: '/pages/class-selection/class-selection' })
+    } else {
+      // 已选择角色，直接进入营地界面
+      console.log('[Home] 用户已选择角色，跳转到营地界面')
+      uni.navigateTo({ url: '/pages/camp/camp' })
+    }
+  } catch (error) {
+    console.error('[Home] 检查角色状态失败:', error)
+    // 出错时也尝试跳转到角色选择界面
+    uni.navigateTo({ url: '/pages/class-selection/class-selection' })
+  }
 }
 
 // 退出登录
@@ -132,201 +106,95 @@ async function handleLogout() {
     uni.reLaunch({ url: '/pages/login/login' })
   }
 }
+
+// 页面加载时初始化营地数据（如果有的话）
+onMounted(async () => {
+  if (auth.isAuthenticated) {
+    try {
+      // 预加载营地数据，但不阻塞界面
+      campStore.fetchCampData().catch(err => {
+        console.warn('[Home] 预加载营地数据失败:', err)
+      })
+    } catch (error) {
+      console.warn('[Home] 初始化营地数据失败:', error)
+    }
+  }
+})
 </script>
 
 <style scoped>
 .home-container {
+  position: relative;
   width: 100%;
   height: 100vh;
-  background: #020617;
-  padding: 24rpx;
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
-}
-
-.player-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16rpx 20rpx;
-  border-radius: 20rpx;
-  background: #0f172a;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.4);
-}
-
-.player-left {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.avatar-wrapper {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 50%;
   overflow: hidden;
-  border: 2rpx solid #f97316;
 }
 
-.avatar {
+.background-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+  z-index: 0;
 }
 
-.player-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.player-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.player-name {
-  font-size: 28rpx;
-  color: #e5e7eb;
-  font-weight: 600;
-}
-
-.player-level {
-  font-size: 22rpx;
-  color: #facc15;
-}
-
-.label {
-  font-size: 20rpx;
-  color: #9ca3af;
-}
-
-.bar-bg {
-  width: 200rpx;
-  height: 10rpx;
-  border-radius: 999rpx;
-  background: #1f2937;
-  overflow: hidden;
-}
-
-.bar-fill.hp {
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(90deg, #ef4444, #f97316);
-}
-
-.player-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8rpx;
-}
-
-.currency-box {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 6rpx 10rpx;
-  border-radius: 999rpx;
-  background: #111827;
-}
-
-.currency-icon {
-  font-size: 22rpx;
-}
-
-.currency-value {
-  font-size: 22rpx;
-  color: #facc15;
-  font-weight: 600;
+.logout-container {
+  position: absolute;
+  top: 40rpx;
+  right: 40rpx;
+  z-index: 10;
 }
 
 .logout-btn {
-  padding: 4rpx 12rpx;
-  font-size: 20rpx;
-  border-radius: 999rpx;
-  border: 1rpx solid #4b5563;
-  background: transparent;
-  color: #9ca3af;
+  padding: 12rpx 24rpx;
+  font-size: 28rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e5e7eb;
+  backdrop-filter: blur(10rpx);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.3);
+}
+
+.logout-btn:active {
+  background: rgba(15, 23, 42, 0.9);
+  transform: scale(0.98);
 }
 
 .main-action {
-  margin-top: 8rpx;
+  position: absolute;
+  bottom: 120rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600rpx;
+  z-index: 10;
 }
 
 .start-btn {
   width: 100%;
-  padding: 24rpx 0;
+  padding: 32rpx 0;
   border-radius: 24rpx;
   border: none;
   background: linear-gradient(135deg, #f97316, #ea580c);
   color: #fff;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8rpx 20rpx rgba(248, 113, 22, 0.5);
-}
-
-.start-title {
-  font-size: 32rpx;
+  box-shadow: 0 12rpx 32rpx rgba(248, 113, 22, 0.6);
   font-weight: 700;
 }
 
-.start-sub {
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  opacity: 0.9;
+.start-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 8rpx 24rpx rgba(248, 113, 22, 0.5);
 }
 
-.quick-section {
-  flex: 1;
-  padding-top: 8rpx;
-}
-
-.section-title-row {
-  margin-bottom: 12rpx;
-}
-
-.section-title {
-  font-size: 26rpx;
-  color: #e5e7eb;
-  font-weight: 600;
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16rpx;
-}
-
-.quick-item {
-  padding: 16rpx 8rpx;
-  border-radius: 20rpx;
-  background: #020617;
-  border: 1rpx solid #1f2937;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.quick-icon {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 20rpx;
-  background: #0f172a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #60a5fa;
-  font-size: 32rpx;
-}
-
-.quick-label {
-  font-size: 22rpx;
-  color: #e5e7eb;
+.start-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
 }
 </style>
