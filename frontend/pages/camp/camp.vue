@@ -1,7 +1,10 @@
 <template>
   <view class="camp-container">
-    <!-- 背景图片 -->
+    <!-- 背景图片 - 完整展示 -->
     <image class="camp-background" src="/static/yingdi.png" mode="aspectFill"></image>
+    
+    <!-- 暗黑遮罩层 -->
+    <view class="dark-overlay"></view>
     
     <!-- 顶部角色信息 -->
     <view class="character-info-section">
@@ -71,8 +74,17 @@
             </view>
           </view>
 
-      <!-- 中间空白区域 -->
-      <view class="center-space"></view>
+      <!-- 中间区域 - 开始闯关按钮 -->
+      <view class="center-action-area">
+        <button class="start-battle-btn" @click="startBattle">
+          <view class="btn-glow"></view>
+          <view class="btn-shadow"></view>
+          <view class="btn-content">
+            <i class="fas fa-sword btn-icon"></i>
+            <text class="btn-text">开始闯关</text>
+          </view>
+        </button>
+      </view>
 
       <!-- 右侧导航 -->
       <view class="nav-side nav-right">
@@ -98,16 +110,75 @@
             </view>
             </view>
 
-    <!-- 底部中间开始闯关按钮 -->
-    <view class="bottom-action">
-      <button class="start-battle-btn" @click="startBattle">
-        <view class="btn-glow"></view>
-        <view class="btn-content">
-          <i class="fas fa-sword btn-icon"></i>
-          <text class="btn-text">开始闯关</text>
-                </view>
-                </button>
+    <!-- 底部压力显示区域 -->
+    <view class="stress-section">
+      <view class="stress-container" @click="toggleStressDetails">
+        <!-- 压力标题 -->
+        <view class="stress-header">
+          <i class="fas fa-skull stress-icon"></i>
+          <text class="stress-title">压力状态</text>
+          <i class="fas fa-chevron-down stress-arrow" :class="{ 'expanded': showStressDetails }"></i>
         </view>
+        
+        <!-- 压力条 -->
+        <view class="stress-bar-wrapper">
+          <view class="stress-bar-bg">
+            <view 
+              class="stress-bar-fill"
+              :class="stressLevelClass"
+              :style="{ width: stressPercentage + '%' }"
+            >
+              <view class="stress-bar-glow"></view>
+            </view>
+          </view>
+          <view class="stress-value">
+            <text class="stress-number">{{ currentStress }}</text>
+            <text class="stress-max">/100</text>
+            <text class="stress-level-text" :class="stressLevelClass">{{ stressLevelText }}</text>
+          </view>
+        </view>
+        
+        <!-- 压力等级指示点 -->
+        <view class="stress-dots">
+          <view 
+            v-for="level in 4" 
+            :key="level"
+            class="stress-dot"
+            :class="{ 
+              'active': level <= stressLevel,
+              [`level-${level}`]: true
+            }"
+          ></view>
+        </view>
+      </view>
+      
+      <!-- Debuff显示区域 -->
+      <view v-if="showStressDetails && activeDebuffs.length > 0" class="debuffs-section">
+        <view class="debuffs-title">
+          <i class="fas fa-exclamation-triangle debuff-title-icon"></i>
+          <text>负面效果</text>
+        </view>
+        <view class="debuffs-list">
+          <view 
+            v-for="(debuff, index) in activeDebuffs" 
+            :key="`${debuff.stressLevel}-${index}`"
+            class="debuff-item"
+            :class="debuff.debuffType || debuff.type"
+          >
+            <view class="debuff-icon-wrapper">
+              <i :class="getDebuffIcon(debuff.debuffType || debuff.type)"></i>
+            </view>
+            <view class="debuff-info">
+              <view class="debuff-name">{{ debuff.debuffName || debuff.name }}</view>
+              <view class="debuff-description">{{ debuff.effectDescription || debuff.description }}</view>
+            </view>
+            <view class="debuff-badge">
+              <text class="debuff-level">Lv.{{ debuff.stressLevel }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
 
     <!-- 背包模态框 -->
     <view v-if="showInventoryModal" class="modal-overlay" @click="showInventoryModal = false">
@@ -149,8 +220,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
-import { campApi } from '@/api/request'
+import { campApi, stressApi } from '@/api/request'
 import { useCampStore } from '@/stores/camp'
+import type { StressDebuffConfig } from '@/types'
 
 // uni-app 类型声明
 declare const uni: {
@@ -166,6 +238,13 @@ const showInventoryModal = ref(false)
 const inventoryItems = ref<any[]>([])
 const loadingInventory = ref(false)
 const avatarImageSrc = ref('/static/tabbar/touxiang.jpg')
+
+// 压力系统状态
+const currentStress = ref(0)
+const stressLevel = ref(1)
+const activeDebuffs = ref<any[]>([])
+const showStressDetails = ref(false)
+const loadingStress = ref(false)
 
 // 计算属性
 const hpPercentage = computed(() => {
@@ -247,14 +326,121 @@ function startBattle() {
   uni.navigateTo({ url: '/pages/explore/explore' })
 }
 
+// 压力系统相关函数
+async function loadStressData() {
+  try {
+    loadingStress.value = true
+    const response = await stressApi.getStressStatus()
+    if (response.data.code === 200 && response.data.data) {
+      const stressData = response.data.data
+      currentStress.value = stressData.currentStress || 0
+      stressLevel.value = stressData.stressLevel || 1
+      
+      // 处理激活的debuff
+      if (stressData.activeDebuffs && stressData.activeDebuffs.length > 0) {
+        activeDebuffs.value = stressData.activeDebuffs.map((debuff: any) => ({
+          ...debuff,
+          name: debuff.debuffName || debuff.name,
+          description: debuff.effectDescription || debuff.description,
+          type: debuff.debuffType || debuff.type
+        }))
+      } else {
+        // 如果没有激活的debuff，根据压力等级获取可能的debuff
+        await loadDebuffsByLevel()
+      }
+    }
+  } catch (error) {
+    console.error('加载压力数据失败:', error)
+    // 如果API失败，尝试从角色数据中获取压力信息
+    if (playerCharacter.value) {
+      currentStress.value = playerCharacter.value.currentStress || 0
+      stressLevel.value = playerCharacter.value.stressLevel || 1
+    }
+  } finally {
+    loadingStress.value = false
+  }
+}
+
+async function loadDebuffsByLevel() {
+  try {
+    const response = await stressApi.getStressDebuffs()
+    if (response.data.code === 200 && response.data.data) {
+      const allDebuffs = response.data.data
+      // 根据当前压力等级筛选debuff
+      const levelDebuffs = allDebuffs.filter((debuff: any) => 
+        debuff.stressLevel === stressLevel.value
+      )
+      
+      // 如果有多个debuff，随机选择一个显示（模拟触发）
+      if (levelDebuffs.length > 0) {
+        const randomIndex = Math.floor(Math.random() * levelDebuffs.length)
+        const selectedDebuff = levelDebuffs[randomIndex]
+        activeDebuffs.value = [{
+          ...selectedDebuff,
+          name: selectedDebuff.debuffName || selectedDebuff.name,
+          description: selectedDebuff.effectDescription || selectedDebuff.description,
+          type: selectedDebuff.debuffType || selectedDebuff.type
+        }]
+      }
+    }
+  } catch (error) {
+    console.error('加载debuff配置失败:', error)
+  }
+}
+
+function toggleStressDetails() {
+  showStressDetails.value = !showStressDetails.value
+  // 如果展开且没有debuff数据，尝试加载
+  if (showStressDetails.value && activeDebuffs.value.length === 0) {
+    loadDebuffsByLevel()
+  }
+}
+
+// 计算属性
+const stressPercentage = computed(() => {
+  return Math.min(100, Math.max(0, currentStress.value))
+})
+
+const stressLevelClass = computed(() => {
+  switch (stressLevel.value) {
+    case 1: return 'stress-low'
+    case 2: return 'stress-medium'
+    case 3: return 'stress-high'
+    case 4: return 'stress-max'
+    default: return 'stress-none'
+  }
+})
+
+const stressLevelText = computed(() => {
+  switch (stressLevel.value) {
+    case 1: return '轻松'
+    case 2: return '紧张'
+    case 3: return '焦虑'
+    case 4: return '崩溃'
+    default: return '平静'
+  }
+})
+
+function getDebuffIcon(type: string): string {
+  switch (type) {
+    case 'mental': return 'fas fa-brain'
+    case 'combat': return 'fas fa-sword'
+    case 'behavioral': return 'fas fa-walking'
+    default: return 'fas fa-exclamation-triangle'
+  }
+}
+
 onLoad(async () => {
   console.log('[Camp] 营地界面加载')
-// 加载营地数据
+  // 加载营地数据
   try {
     await campStore.fetchCampData()
   } catch (error) {
     console.error('加载营地数据失败:', error)
   }
+  
+  // 加载压力数据
+  await loadStressData()
 })
 
 onMounted(async () => {
@@ -266,6 +452,19 @@ onMounted(async () => {
       console.error('加载营地数据失败:', error)
     }
   }
+  
+  // 如果角色数据中有压力信息，使用它
+  if (playerCharacter.value) {
+    if (playerCharacter.value.currentStress !== undefined) {
+      currentStress.value = playerCharacter.value.currentStress
+    }
+    if (playerCharacter.value.stressLevel !== undefined) {
+      stressLevel.value = playerCharacter.value.stressLevel
+    }
+  }
+  
+  // 加载压力数据
+  await loadStressData()
 })
 </script>
 
@@ -288,6 +487,24 @@ onMounted(async () => {
   height: 100%;
   z-index: 0;
   object-fit: cover;
+  object-position: center;
+}
+
+/* 暗黑遮罩层 - 增强恐怖氛围 */
+.dark-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.3) 0%,
+    rgba(0, 0, 0, 0.5) 50%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* 顶部角色信息 */
@@ -404,16 +621,21 @@ onMounted(async () => {
   z-index: 10;
   flex: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 40rpx 40rpx 0;
+  padding: 40rpx;
   min-height: 0;
 }
 
-/* 中间空白区域 */
-.center-space {
-  flex: 0 0 200rpx;
-  min-width: 200rpx;
+/* 中间操作区域 - 开始闯关按钮 */
+.center-action-area {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 300rpx;
+  height: 300rpx;
 }
 
 /* 侧边导航 */
@@ -532,39 +754,68 @@ onMounted(async () => {
     0 2rpx 4rpx rgba(0, 0, 0, 0.8);
 }
 
-/* 底部操作区域 */
-.bottom-action {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40rpx 0 60rpx;
-}
-
+/* 开始闯关按钮 - 暗黑地牢风格 */
 .start-battle-btn {
   position: relative;
-  width: 240rpx;
-  height: 240rpx;
+  width: 280rpx;
+  height: 280rpx;
   border: none;
-  background: radial-gradient(circle at center, rgba(139, 69, 19, 0.4) 0%, rgba(0, 0, 0, 0.8) 100%);
-  border: 4rpx solid rgba(139, 69, 19, 0.9);
+  background: radial-gradient(
+    circle at center,
+    rgba(139, 0, 0, 0.6) 0%,
+    rgba(69, 0, 0, 0.8) 50%,
+    rgba(0, 0, 0, 0.95) 100%
+  );
+  border: 5rpx solid rgba(139, 0, 0, 0.9);
   border-radius: 50%;
   cursor: pointer;
   overflow: visible;
   box-shadow: 
-    0 0 30rpx rgba(139, 69, 19, 0.6),
-    0 0 60rpx rgba(139, 69, 19, 0.4),
-    inset 0 0 40rpx rgba(0, 0, 0, 0.6);
+    0 0 40rpx rgba(139, 0, 0, 0.8),
+    0 0 80rpx rgba(139, 0, 0, 0.5),
+    inset 0 0 50rpx rgba(0, 0, 0, 0.8),
+    0 0 0 10rpx rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 
+      0 0 40rpx rgba(139, 0, 0, 0.8),
+      0 0 80rpx rgba(139, 0, 0, 0.5),
+      inset 0 0 50rpx rgba(0, 0, 0, 0.8),
+      0 0 0 10rpx rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 60rpx rgba(184, 0, 0, 1),
+      0 0 120rpx rgba(184, 0, 0, 0.7),
+      inset 0 0 70rpx rgba(0, 0, 0, 0.9),
+      0 0 0 15rpx rgba(139, 0, 0, 0.5);
+  }
 }
 
 .start-battle-btn:active {
   transform: scale(0.95);
+  animation: none;
   box-shadow: 
-    0 0 60rpx rgba(184, 134, 11, 0.8),
-    0 0 120rpx rgba(184, 134, 11, 0.6),
-    inset 0 0 80rpx rgba(0, 0, 0, 0.8);
+    0 0 80rpx rgba(220, 20, 60, 1),
+    0 0 160rpx rgba(220, 20, 60, 0.8),
+    inset 0 0 100rpx rgba(0, 0, 0, 1);
+}
+
+.btn-shadow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .btn-glow {
@@ -573,16 +824,17 @@ onMounted(async () => {
   left: 50%;
   width: 0;
   height: 0;
-  background: radial-gradient(circle, rgba(184, 134, 11, 0.4) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(220, 20, 60, 0.5) 0%, transparent 70%);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   transition: width 0.4s ease, height 0.4s ease;
   pointer-events: none;
+  z-index: 1;
 }
 
 .start-battle-btn:active .btn-glow {
-  width: 400rpx;
-  height: 400rpx;
+  width: 500rpx;
+  height: 500rpx;
 }
 
 .btn-content {
@@ -593,45 +845,52 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
+  gap: 16rpx;
   z-index: 2;
 }
 
 .btn-icon {
-  font-size: 60rpx;
-  color: #daa520;
+  font-size: 72rpx;
+  color: #dc143c;
   text-shadow: 
-    0 0 15rpx rgba(218, 165, 32, 0.8),
-    0 0 30rpx rgba(218, 165, 32, 0.5),
-    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+    0 0 20rpx rgba(220, 20, 60, 1),
+    0 0 40rpx rgba(220, 20, 60, 0.8),
+    0 0 60rpx rgba(139, 0, 0, 0.6),
+    0 4rpx 8rpx rgba(0, 0, 0, 0.9);
   transition: all 0.3s ease;
+  filter: drop-shadow(0 0 10rpx rgba(220, 20, 60, 0.8));
 }
 
 .start-battle-btn:active .btn-icon {
-  color: #ffd700;
+  color: #ff1744;
   text-shadow: 
-    0 0 20rpx rgba(255, 215, 0, 1),
-    0 0 40rpx rgba(255, 215, 0, 0.8),
-    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
-  transform: scale(1.1);
+    0 0 30rpx rgba(255, 23, 68, 1),
+    0 0 60rpx rgba(255, 23, 68, 0.9),
+    0 0 90rpx rgba(220, 20, 60, 0.8),
+    0 4rpx 8rpx rgba(0, 0, 0, 0.9);
+  transform: scale(1.15) rotate(5deg);
 }
 
 .btn-text {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #daa520;
+  font-size: 36rpx;
+  font-weight: 900;
+  color: #dc143c;
   text-shadow: 
-    0 0 12rpx rgba(218, 165, 32, 0.8),
-    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
-  letter-spacing: 2rpx;
+    0 0 15rpx rgba(220, 20, 60, 1),
+    0 0 30rpx rgba(220, 20, 60, 0.8),
+    0 4rpx 8rpx rgba(0, 0, 0, 0.9);
+  letter-spacing: 4rpx;
   transition: all 0.3s ease;
+  font-family: 'Arial Black', sans-serif;
 }
 
 .start-battle-btn:active .btn-text {
-  color: #ffd700;
+  color: #ff1744;
   text-shadow: 
-    0 0 15rpx rgba(255, 215, 0, 1),
-    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+    0 0 20rpx rgba(255, 23, 68, 1),
+    0 0 40rpx rgba(255, 23, 68, 0.9),
+    0 4rpx 8rpx rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
 }
 
 /* 模态框样式 */
@@ -775,5 +1034,462 @@ onMounted(async () => {
 .item-quantity {
   font-size: 24rpx;
   color: rgba(218, 165, 32, 0.7);
+}
+
+/* 压力显示区域 - 暗黑地牢风格 */
+.stress-section {
+  position: relative;
+  z-index: 10;
+  padding: 30rpx 40rpx 40rpx;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.7) 50%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
+  border-top: 3rpx solid rgba(139, 0, 0, 0.8);
+  box-shadow: 
+    0 -10rpx 30rpx rgba(0, 0, 0, 0.8),
+    inset 0 10rpx 20rpx rgba(0, 0, 0, 0.5);
+}
+
+.stress-container {
+  background: rgba(0, 0, 0, 0.6);
+  border: 2rpx solid rgba(139, 0, 0, 0.6);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 0 20rpx rgba(139, 0, 0, 0.4),
+    inset 0 0 20rpx rgba(0, 0, 0, 0.5);
+}
+
+.stress-container:active {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(184, 0, 0, 0.8);
+  box-shadow: 
+    0 0 30rpx rgba(184, 0, 0, 0.6),
+    inset 0 0 30rpx rgba(0, 0, 0, 0.7);
+}
+
+.stress-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.stress-icon {
+  font-size: 32rpx;
+  color: #dc143c;
+  text-shadow: 
+    0 0 10rpx rgba(220, 20, 60, 0.8),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+  animation: skull-pulse 2s ease-in-out infinite;
+}
+
+@keyframes skull-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.stress-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #dc143c;
+  text-shadow: 
+    0 0 10rpx rgba(220, 20, 60, 0.8),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+  letter-spacing: 2rpx;
+  flex: 1;
+}
+
+.stress-arrow {
+  font-size: 24rpx;
+  color: rgba(220, 20, 60, 0.7);
+  transition: transform 0.3s ease;
+}
+
+.stress-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.stress-bar-wrapper {
+  margin-bottom: 16rpx;
+}
+
+.stress-bar-bg {
+  width: 100%;
+  height: 20rpx;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2rpx solid rgba(139, 0, 0, 0.6);
+  border-radius: 10rpx;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 2rpx 8rpx rgba(0, 0, 0, 0.8);
+}
+
+.stress-bar-fill {
+  height: 100%;
+  transition: width 0.5s ease, background 0.3s ease;
+  border-radius: 8rpx;
+  position: relative;
+  overflow: hidden;
+}
+
+.stress-bar-fill.stress-none {
+  background: linear-gradient(90deg, #4a5568, #718096);
+}
+
+.stress-bar-fill.stress-low {
+  background: linear-gradient(90deg, #48bb78, #38a169);
+  box-shadow: 0 0 10rpx rgba(72, 187, 120, 0.5);
+}
+
+.stress-bar-fill.stress-medium {
+  background: linear-gradient(90deg, #ed8936, #dd6b20);
+  box-shadow: 0 0 15rpx rgba(237, 137, 54, 0.6);
+}
+
+.stress-bar-fill.stress-high {
+  background: linear-gradient(90deg, #f56565, #e53e3e);
+  box-shadow: 0 0 20rpx rgba(245, 101, 101, 0.7);
+  animation: stress-high-pulse 1.5s ease-in-out infinite;
+}
+
+.stress-bar-fill.stress-max {
+  background: linear-gradient(90deg, #dc143c, #8b0000);
+  box-shadow: 0 0 30rpx rgba(220, 20, 60, 0.9);
+  animation: stress-max-pulse 1s ease-in-out infinite;
+}
+
+@keyframes stress-high-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20rpx rgba(245, 101, 101, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 40rpx rgba(245, 101, 101, 1);
+  }
+}
+
+@keyframes stress-max-pulse {
+  0%, 100% {
+    box-shadow: 0 0 30rpx rgba(220, 20, 60, 0.9);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 60rpx rgba(220, 20, 60, 1);
+    opacity: 0.9;
+  }
+}
+
+.stress-bar-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.stress-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.stress-number {
+  font-size: 36rpx;
+  font-weight: 900;
+  color: #dc143c;
+  text-shadow: 
+    0 0 10rpx rgba(220, 20, 60, 0.8),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+}
+
+.stress-max {
+  font-size: 24rpx;
+  color: rgba(220, 20, 60, 0.7);
+}
+
+.stress-level-text {
+  font-size: 24rpx;
+  font-weight: 700;
+  margin-left: auto;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+}
+
+.stress-level-text.stress-low {
+  color: #48bb78;
+  background: rgba(72, 187, 120, 0.2);
+}
+
+.stress-level-text.stress-medium {
+  color: #ed8936;
+  background: rgba(237, 137, 54, 0.2);
+}
+
+.stress-level-text.stress-high {
+  color: #f56565;
+  background: rgba(245, 101, 101, 0.2);
+}
+
+.stress-level-text.stress-max {
+  color: #dc143c;
+  background: rgba(220, 20, 60, 0.3);
+  animation: text-pulse 1s ease-in-out infinite;
+}
+
+@keyframes text-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.stress-dots {
+  display: flex;
+  gap: 12rpx;
+  justify-content: center;
+  margin-top: 16rpx;
+}
+
+.stress-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: rgba(139, 0, 0, 0.3);
+  border: 2rpx solid rgba(139, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.stress-dot.active.level-1 {
+  background: #48bb78;
+  border-color: #38a169;
+  box-shadow: 0 0 10rpx rgba(72, 187, 120, 0.6);
+}
+
+.stress-dot.active.level-2 {
+  background: #ed8936;
+  border-color: #dd6b20;
+  box-shadow: 0 0 10rpx rgba(237, 137, 54, 0.6);
+}
+
+.stress-dot.active.level-3 {
+  background: #f56565;
+  border-color: #e53e3e;
+  box-shadow: 0 0 15rpx rgba(245, 101, 101, 0.8);
+  animation: dot-pulse 1.5s ease-in-out infinite;
+}
+
+.stress-dot.active.level-4 {
+  background: #dc143c;
+  border-color: #8b0000;
+  box-shadow: 0 0 20rpx rgba(220, 20, 60, 1);
+  animation: dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
+  }
+}
+
+/* Debuff显示区域 */
+.debuffs-section {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 2rpx solid rgba(139, 0, 0, 0.4);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.debuffs-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #dc143c;
+  text-shadow: 
+    0 0 10rpx rgba(220, 20, 60, 0.8),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+}
+
+.debuff-title-icon {
+  font-size: 28rpx;
+  color: #f56565;
+  animation: warning-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes warning-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.debuffs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.debuff-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx;
+  background: rgba(0, 0, 0, 0.5);
+  border-left: 4rpx solid;
+  border-radius: 8rpx;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 2rpx 8rpx rgba(0, 0, 0, 0.5),
+    inset 0 0 10rpx rgba(0, 0, 0, 0.3);
+}
+
+.debuff-item.mental {
+  border-left-color: #9c27b0;
+  background: rgba(156, 39, 176, 0.1);
+}
+
+.debuff-item.combat {
+  border-left-color: #f56565;
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.debuff-item.behavioral {
+  border-left-color: #ed8936;
+  background: rgba(237, 137, 54, 0.1);
+}
+
+.debuff-item:active {
+  background: rgba(0, 0, 0, 0.7);
+  transform: translateX(4rpx);
+}
+
+.debuff-icon-wrapper {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  border: 2rpx solid;
+  flex-shrink: 0;
+}
+
+.debuff-item.mental .debuff-icon-wrapper {
+  border-color: #9c27b0;
+  color: #ba68c8;
+  box-shadow: 0 0 10rpx rgba(156, 39, 176, 0.5);
+}
+
+.debuff-item.combat .debuff-icon-wrapper {
+  border-color: #f56565;
+  color: #fc8181;
+  box-shadow: 0 0 10rpx rgba(245, 101, 101, 0.5);
+}
+
+.debuff-item.behavioral .debuff-icon-wrapper {
+  border-color: #ed8936;
+  color: #f6ad55;
+  box-shadow: 0 0 10rpx rgba(237, 137, 54, 0.5);
+}
+
+.debuff-icon-wrapper i {
+  font-size: 28rpx;
+}
+
+.debuff-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.debuff-name {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #dc143c;
+  text-shadow: 
+    0 0 8rpx rgba(220, 20, 60, 0.6),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+}
+
+.debuff-description {
+  font-size: 22rpx;
+  color: rgba(220, 20, 60, 0.8);
+  line-height: 1.4;
+  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.8);
+}
+
+.debuff-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60rpx;
+  padding: 6rpx 12rpx;
+  background: rgba(139, 0, 0, 0.6);
+  border: 2rpx solid rgba(220, 20, 60, 0.6);
+  border-radius: 8rpx;
+  flex-shrink: 0;
+}
+
+.debuff-level {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #dc143c;
+  text-shadow: 
+    0 0 6rpx rgba(220, 20, 60, 0.8),
+    0 1rpx 2rpx rgba(0, 0, 0, 0.8);
 }
 </style>
