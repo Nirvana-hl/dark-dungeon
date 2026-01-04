@@ -2,10 +2,28 @@
   <view class="skills-panel">
     <!-- 面板头部 -->
     <view class="skills-header">
-      <view class="header-content">
+      <!-- 左侧：职业和头像 -->
+      <view v-if="playerCharacter" class="header-character-info">
+        <image 
+          class="character-avatar"
+          src="/static/touxiang.png"
+          mode="aspectFill"
+          @error="handleAvatarError"
+        ></image>
+        <view class="character-details">
+          <text class="character-name">{{ playerCharacter.playerCharacterName || '冒险者' }}</text>
+          <text class="character-class">{{ getCharacterClassName(playerCharacter.playerCharacterCode) }}</text>
+        </view>
+      </view>
+      <view v-else class="header-character-info-placeholder"></view>
+      
+      <!-- 中间：标题（居中） -->
+      <view class="header-title-center">
         <text class="header-title">技能树</text>
         <text class="header-subtitle">解锁你的力量</text>
       </view>
+      
+      <!-- 右侧：关闭按钮 -->
       <view class="close-btn" @click="handleClose">
         <text class="close-icon">✕</text>
       </view>
@@ -19,6 +37,16 @@
           <text class="category-title">主动技能</text>
         </view>
         <view class="skill-tree-wrapper" :style="{ minHeight: activeSkillTreeMinHeight }">
+          <!-- 每行的等级标签（主动技能） -->
+          <view 
+            v-for="[row, level] in activeSkillRowLevels" 
+            :key="`active-level-${row}`"
+            class="row-level-label"
+            :style="getRowLevelStyle(row, activeSkills)"
+          >
+            <text class="level-text">Lv.{{ level }}</text>
+          </view>
+          
           <!-- 主动技能节点 -->
           <view 
             v-for="skill in sortedActiveSkills" 
@@ -32,17 +60,17 @@
             :style="getSkillNodeStyle(skill, activeSkills)"
             @click="handleSkillClick(skill)"
           >
-            <!-- 技能图标 -->
-            <view class="skill-icon-wrapper">
-              <view class="skill-icon" :class="getSkillIconClass(skill)"></view>
-              <view v-if="skill.isUnlocked" class="unlock-badge">✓</view>
+            <!-- 图标和名称区域 -->
+            <view class="skill-content">
+              <!-- 技能图标 -->
+              <view class="skill-icon-wrapper">
+                <view class="skill-icon" :class="getSkillIconClass(skill)"></view>
+                <view v-if="skill.isUnlocked" class="unlock-badge">✓</view>
+              </view>
+              
+              <!-- 技能名称 -->
+              <text class="skill-name">{{ skill.name }}</text>
             </view>
-            
-            <!-- 技能名称 -->
-            <text class="skill-name">{{ skill.name }}</text>
-            
-            <!-- 技能等级要求 -->
-            <text v-if="skill.requiredLevel" class="skill-level-req">Lv.{{ skill.requiredLevel }}</text>
           </view>
 
           <!-- 主动技能连接线 -->
@@ -62,6 +90,16 @@
           <text class="category-title">被动技能</text>
         </view>
         <view class="skill-tree-wrapper" :style="{ minHeight: passiveSkillTreeMinHeight }">
+          <!-- 每行的等级标签（被动技能） -->
+          <view 
+            v-for="[row, level] in passiveSkillRowLevels" 
+            :key="`passive-level-${row}`"
+            class="row-level-label"
+            :style="getRowLevelStyle(row, passiveSkills)"
+          >
+            <text class="level-text">Lv.{{ level }}</text>
+          </view>
+          
           <!-- 被动技能节点 -->
           <view 
             v-for="skill in sortedPassiveSkills" 
@@ -75,17 +113,17 @@
             :style="getSkillNodeStyle(skill, passiveSkills)"
             @click="handleSkillClick(skill)"
           >
-            <!-- 技能图标 -->
-            <view class="skill-icon-wrapper">
-              <view class="skill-icon" :class="getSkillIconClass(skill)"></view>
-              <view v-if="skill.isUnlocked" class="unlock-badge">✓</view>
+            <!-- 图标和名称区域 -->
+            <view class="skill-content">
+              <!-- 技能图标 -->
+              <view class="skill-icon-wrapper">
+                <view class="skill-icon" :class="getSkillIconClass(skill)"></view>
+                <view v-if="skill.isUnlocked" class="unlock-badge">✓</view>
+              </view>
+              
+              <!-- 技能名称 -->
+              <text class="skill-name">{{ skill.name }}</text>
             </view>
-            
-            <!-- 技能名称 -->
-            <text class="skill-name">{{ skill.name }}</text>
-            
-            <!-- 技能等级要求 -->
-            <text v-if="skill.requiredLevel" class="skill-level-req">Lv.{{ skill.requiredLevel }}</text>
           </view>
 
           <!-- 被动技能连接线 -->
@@ -305,13 +343,63 @@ const passiveConnectionLines = computed(() => {
   return calculateConnectionLines(passiveSkills.value, skills.value)
 })
 
+// 计算属性：获取每行的等级信息（主动技能）
+const activeSkillRowLevels = computed(() => {
+  const rowLevels: Map<number, number> = new Map()
+  activeSkills.value.forEach(skill => {
+    if (skill.requiredLevel) {
+      const row = skill.positionInTree.row
+      // 如果该行还没有等级，或者当前技能的等级更小（更早的等级），则更新
+      if (!rowLevels.has(row) || (rowLevels.get(row)! > skill.requiredLevel)) {
+        rowLevels.set(row, skill.requiredLevel)
+      }
+    }
+  })
+  // 转换为数组形式，以便在模板中遍历
+  return Array.from(rowLevels.entries())
+})
+
+// 计算属性：获取每行的等级信息（被动技能）
+const passiveSkillRowLevels = computed(() => {
+  const rowLevels: Map<number, number> = new Map()
+  passiveSkills.value.forEach(skill => {
+    if (skill.requiredLevel) {
+      const row = skill.positionInTree.row
+      // 如果该行还没有等级，或者当前技能的等级更小（更早的等级），则更新
+      if (!rowLevels.has(row) || (rowLevels.get(row)! > skill.requiredLevel)) {
+        rowLevels.set(row, skill.requiredLevel)
+      }
+    }
+  })
+  // 转换为数组形式，以便在模板中遍历
+  return Array.from(rowLevels.entries())
+})
+
+// 获取行等级标签的样式
+function getRowLevelStyle(row: number, skillList: Skill[]) {
+  const baseSize = 100
+  const spacing = 180 // 增加间距
+  const startY = 20
+  
+  const maxRow = Math.max(...skillList.map(s => s.positionInTree.row))
+  const minRow = Math.min(...skillList.map(s => s.positionInTree.row))
+  const rowIndex = row - minRow
+  
+  const top = startY + rowIndex * spacing + baseSize / 2
+  
+  return {
+    top: `${top}rpx`,
+    left: '20rpx'
+  }
+}
+
 // 计算技能树最小高度的通用函数
 function calculateSkillTreeMinHeight(skillList: Skill[]) {
   if (skillList.length === 0) {
     return 'auto'
   }
   const baseSize = 100 // 缩小后的节点大小
-  const spacing = 130 // 缩小后的间距
+  const spacing = 180 // 增加节点间距
   const startY = 20
   const paddingBottom = 20
   
@@ -319,7 +407,7 @@ function calculateSkillTreeMinHeight(skillList: Skill[]) {
   const minRow = Math.min(...skillList.map(s => s.positionInTree.row))
   const rowCount = maxRow - minRow + 1
   
-  const nodeTotalHeight = baseSize + 40 // 节点高度 + 名称和等级的高度
+  const nodeTotalHeight = baseSize + 60 // 节点高度 + 名称高度（增加了名称的高度）
   const totalHeight = startY + (rowCount - 1) * spacing + nodeTotalHeight + paddingBottom
   
   return `${totalHeight}rpx`
@@ -338,8 +426,9 @@ const passiveSkillTreeMinHeight = computed(() => {
 // 获取技能节点样式
 function getSkillNodeStyle(skill: Skill, skillList: Skill[]) {
   const baseSize = 100 // 缩小后的节点大小（rpx）- 正方形
-  const spacing = 130 // 缩小后的节点间距（rpx）
+  const spacing = 180 // 增加节点间距（rpx）
   const startY = 20 // 起始Y位置（rpx）
+  const levelLabelWidth = 80 // 左侧等级标签占用的宽度（rpx）
 
   // 计算位置（从下到上，row越大越靠下）
   const maxRow = Math.max(...skillList.map(s => s.positionInTree.row))
@@ -352,12 +441,15 @@ function getSkillNodeStyle(skill: Skill, skillList: Skill[]) {
   const minCol = Math.min(...skillList.map(s => s.positionInTree.column))
   const colCount = maxCol - minCol + 1
   
+  // 计算节点实际宽度
+  const nodeWidth = baseSize
   // 计算总宽度：列数 * 间距 + 最后一个节点的大小
-  const totalWidth = (colCount - 1) * spacing + baseSize
+  const totalWidth = (colCount - 1) * spacing + nodeWidth
   
   // 获取容器宽度（考虑弹窗的实际宽度，约85%的750rpx = 637.5rpx，取630rpx）
-  const containerWidth = 630 // 弹窗实际宽度（rpx）
-  const offsetX = Math.max(0, (containerWidth - totalWidth) / 2)
+  // 减去左侧等级标签的宽度
+  const containerWidth = 630 - levelLabelWidth // 弹窗实际宽度（rpx）
+  const offsetX = Math.max(0, (containerWidth - totalWidth) / 2) + levelLabelWidth
 
   // 计算相对于最小列的偏移
   const left = offsetX + (column - minCol) * spacing
@@ -367,7 +459,7 @@ function getSkillNodeStyle(skill: Skill, skillList: Skill[]) {
     left: `${left}rpx`,
     top: `${top}rpx`,
     width: `${baseSize}rpx`,
-    height: `${baseSize}rpx` // 确保是正方形
+    height: 'auto' // 高度自适应
   }
 }
 
@@ -379,8 +471,9 @@ function getLineStyle(line: {
   toUnlocked: boolean
 }, skillList: Skill[]) {
   const baseSize = 100 // 缩小后的节点大小
-  const spacing = 130 // 缩小后的间距
+  const spacing = 180 // 增加节点间距
   const startY = 20
+  const levelLabelWidth = 80 // 左侧等级标签占用的宽度（rpx）
 
   const maxRow = Math.max(...skillList.map(s => s.positionInTree.row))
   const minRow = Math.min(...skillList.map(s => s.positionInTree.row))
@@ -395,13 +488,16 @@ function getLineStyle(line: {
   const toCol = line.to.column
 
   // 计算列位置，居中显示
-  const totalWidth = (colCount - 1) * spacing + baseSize
-  const containerWidth = 630 // 弹窗实际宽度（rpx）
-  const offsetX = Math.max(0, (containerWidth - totalWidth) / 2)
+  const nodeWidth = baseSize
+  const totalWidth = (colCount - 1) * spacing + nodeWidth
+  const containerWidth = 630 - levelLabelWidth // 弹窗实际宽度（rpx）
+  const offsetX = Math.max(0, (containerWidth - totalWidth) / 2) + levelLabelWidth
 
-  const fromX = offsetX + (fromCol - minCol) * spacing + baseSize / 2
+  // 连接线从图标中心开始
+  const iconCenterOffset = baseSize / 2 // 图标中心在节点中心
+  const fromX = offsetX + (fromCol - minCol) * spacing + iconCenterOffset
   const fromY = startY + fromRowIndex * spacing + baseSize / 2
-  const toX = offsetX + (toCol - minCol) * spacing + baseSize / 2
+  const toX = offsetX + (toCol - minCol) * spacing + iconCenterOffset
   const toY = startY + toRowIndex * spacing + baseSize / 2
 
   // 计算线的长度和角度
@@ -532,6 +628,27 @@ async function unlockSkill(skill: Skill) {
 // 关闭面板
 function handleClose() {
   emit('close')
+}
+
+// 获取职业名称
+function getCharacterClassName(code: string | undefined): string {
+  if (!code) return '未知职业'
+  const classMap: Record<string, string> = {
+    'warden': '守望者',
+    'occultist': '秘术师',
+    'ranger': '游侠',
+    'warrior': '战士',
+    'priest': '牧师',
+    'mage': '法师',
+    'rogue': '盗贼',
+    'mechanist': '机械师'
+  }
+  return classMap[code] || '未知职业'
+}
+
+// 处理头像加载错误
+function handleAvatarError() {
+  console.log('头像加载失败')
 }
 
 
@@ -667,6 +784,68 @@ onMounted(() => {
   }
 }
 
+// 左侧角色信息
+.header-character-info {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 0 0 auto;
+  min-width: 200rpx;
+}
+
+.header-character-info-placeholder {
+  flex: 0 0 auto;
+  min-width: 200rpx;
+}
+
+.character-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(147, 112, 219, 0.8);
+  box-shadow: 
+    0 0 15rpx rgba(138, 43, 226, 0.6),
+    0 0 30rpx rgba(138, 43, 226, 0.3);
+  background: linear-gradient(135deg, 
+    rgba(138, 43, 226, 0.3) 0%, 
+    rgba(75, 0, 130, 0.3) 100%);
+}
+
+.character-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.character-name {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #ffd700;
+  text-shadow: 
+    0 0 10rpx rgba(255, 215, 0, 0.8),
+    0 0 20rpx rgba(138, 43, 226, 0.4);
+  white-space: nowrap;
+}
+
+.character-class {
+  font-size: 20rpx;
+  color: rgba(255, 215, 0, 0.8);
+  text-shadow: 0 0 8rpx rgba(255, 215, 0, 0.5);
+  white-space: nowrap;
+}
+
+// 中间标题（居中）
+.header-title-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 @keyframes shimmer {
   0%, 100% {
     opacity: 0.3;
@@ -676,10 +855,6 @@ onMounted(() => {
   }
 }
 
-.header-content {
-  display: flex;
-  flex-direction: column;
-}
 
 .header-title {
   font-size: 40rpx;
@@ -725,6 +900,9 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 0 15rpx rgba(138, 43, 226, 0.4);
+  position: relative;
+  z-index: 11;
+  flex: 0 0 auto;
   
   &:hover {
     background: linear-gradient(135deg, rgba(138, 43, 226, 0.8) 0%, rgba(75, 0, 130, 0.8) 100%);
@@ -812,6 +990,41 @@ onMounted(() => {
   transition: all 0.3s;
   z-index: 5;
   flex-shrink: 0;
+}
+
+// 技能内容区域（图标和名称）
+.skill-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  flex-shrink: 0;
+}
+
+// 行等级标签
+.row-level-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  transform: translateY(-50%);
+}
+
+.level-text {
+  font-size: 24rpx;
+  color: rgba(255, 215, 0, 0.9);
+  font-weight: bold;
+  text-shadow: 
+    0 0 10rpx rgba(255, 215, 0, 0.8),
+    0 0 20rpx rgba(138, 43, 226, 0.4);
+  padding: 4rpx 12rpx;
+  background: linear-gradient(135deg, 
+    rgba(138, 43, 226, 0.3) 0%, 
+    rgba(75, 0, 130, 0.3) 100%);
+  border: 2rpx solid rgba(147, 112, 219, 0.6);
+  border-radius: 8rpx;
+  white-space: nowrap;
 }
 
 .skill-icon-wrapper {
@@ -990,35 +1203,41 @@ onMounted(() => {
 }
 
 .skill-name {
-  margin-top: 8rpx;
-  font-size: 20rpx;
-  color: #ffd700;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #ffffff;
   text-align: center;
   font-weight: bold;
-  text-shadow: 
-    0 0 10rpx rgba(255, 215, 0, 0.8),
-    0 0 20rpx rgba(138, 43, 226, 0.4);
   white-space: nowrap;
-  max-width: 100rpx;
+  max-width: 120rpx;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2;
+  line-height: 1.4;
+  padding: 4rpx 8rpx;
+  background: linear-gradient(135deg, 
+    rgba(26, 26, 46, 0.9) 0%, 
+    rgba(45, 27, 78, 0.9) 100%);
+  border: 2rpx solid rgba(147, 112, 219, 0.6);
+  border-radius: 8rpx;
+  box-shadow: 
+    0 0 10rpx rgba(0, 0, 0, 0.5),
+    0 0 20rpx rgba(138, 43, 226, 0.3);
+  text-shadow: 
+    1rpx 1rpx 2rpx rgba(0, 0, 0, 0.8),
+    0 0 8rpx rgba(255, 215, 0, 0.6);
 }
 
 .skill-locked .skill-name {
-  color: rgba(147, 112, 219, 0.7);
-  text-shadow: 0 0 8rpx rgba(147, 112, 219, 0.3);
+  color: rgba(200, 200, 200, 0.7);
+  background: linear-gradient(135deg, 
+    rgba(26, 26, 46, 0.7) 0%, 
+    rgba(45, 27, 78, 0.7) 100%);
+  border-color: rgba(75, 0, 130, 0.4);
+  text-shadow: 
+    1rpx 1rpx 2rpx rgba(0, 0, 0, 0.6),
+    0 0 6rpx rgba(147, 112, 219, 0.4);
 }
 
-.skill-level-req {
-  margin-top: 4rpx;
-  font-size: 18rpx;
-  color: rgba(255, 215, 0, 0.9);
-  text-align: center;
-  line-height: 1.2;
-  font-weight: bold;
-  text-shadow: 0 0 8rpx rgba(255, 215, 0, 0.5);
-}
 
 // 连接线 - 魔法光效
 .connection-line {
