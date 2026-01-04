@@ -3,7 +3,7 @@ import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { useAuthStore } from './stores/auth'
 import { useCampStore } from './stores/camp'
 import apiClient, { API_ENDPOINTS, type ApiResponse } from './api/request'
-
+import '@/static/font-awesome/font-awesome.min.css'
 // uni-app 全局对象类型（这里只声明用到的 API）
 declare const uni: {
   reLaunch: (options: { url: string }) => void

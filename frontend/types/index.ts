@@ -187,6 +187,7 @@ export interface Skill {
   unlockPath?: string[]
   isUnlocked?: boolean
   canUnlock?: boolean
+  skillType?: 'active' | 'passive' // 技能类型：后端解析effectPayload后返回
 }
 
 export interface UserPlayerCharacterSkill {

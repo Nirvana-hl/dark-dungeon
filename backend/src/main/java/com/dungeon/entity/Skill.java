@@ -1,6 +1,7 @@
 package com.dungeon.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -19,9 +20,15 @@ public class Skill {
     private Long id;
     
     /**
-     * 策划短码
+     * 策划短码（技能代码，如：warden_sacred_shield）
      */
     private String code;
+    
+    /**
+     * 职业代码（如：warden, occultist, ranger, warrior）
+     */
+    @TableField("player_character_code")
+    private String playerCharacterCode;
     
     /**
      * 技能名称

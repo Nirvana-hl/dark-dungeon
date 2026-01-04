@@ -21,11 +21,27 @@ public class CardCharacterController {
 
     /**
      * 查询全部卡牌角色，可选按职业/阵营筛选
+     * 默认只返回玩家角色（cardType='player'），可通过cardType参数查询敌人角色
+     * 
+     * @param classType 职业筛选（可选）
+     * @param faction 阵营筛选（可选）
+     * @param cardType 卡牌类型筛选（可选）：player-玩家角色, enemy-敌人角色, 不传则默认只返回玩家角色
      */
     @GetMapping
     public Result<List<CardCharacterDTO>> getCardCharacters(@RequestParam(required = false) String classType,
-                                                            @RequestParam(required = false) String faction) {
+                                                            @RequestParam(required = false) String faction,
+                                                            @RequestParam(required = false) String cardType) {
         try {
+            // 如果指定了cardType=enemy，查询敌人角色
+            if ("enemy".equals(cardType)) {
+                // 查询所有敌人角色（暂不支持按职业/阵营筛选敌人）
+                if (classType != null || faction != null) {
+                    return Result.error("暂不支持按职业/阵营筛选敌人角色");
+                }
+                return Result.success(cardCharacterService.getByCardType("enemy"));
+            }
+            
+            // 默认只返回玩家角色（已有过滤逻辑）
             if (classType != null) {
                 return Result.success(cardCharacterService.getByClass(classType));
             }

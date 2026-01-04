@@ -11,7 +11,7 @@
  Target Server Version : 80040 (8.0.40)
  File Encoding         : 65001
 
- Date: 26/12/2025 10:51:58
+ Date: 31/12/2025 16:55:06
 */
 
 SET NAMES utf8mb4;
@@ -86,7 +86,7 @@ CREATE TABLE `card_character_traits`  (
 -- ----------------------------
 -- Records of card_character_traits
 -- ----------------------------
-INSERT INTO `card_character_traits` VALUES (1, 1, '星辉祝福', 'positive', '{\"heal_allies\": 2}', '{\"2\": {\"heal_allies\": 3}, \"3\": {\"heal_allies\": 4}, \"4\": {\"heal_allies\": 5}}', '提升全队治疗量');
+INSERT INTO `card_character_traits` VALUES (1, 1, '星辉祝福', 'positive', '{\"heal_allies\": 2}', '{\"2\": {\"heal_allies\": 3}, \"3\": {\"heal_allies\": 4}, \"4\": {\"heal_allies\": 5}}', '治疗所有角色，恢复2点生命');
 INSERT INTO `card_character_traits` VALUES (2, 2, '钢铁护盾', 'positive', '{\"armor_bonus\": 3}', '{\"2\": {\"armor_bonus\": 5}, \"3\": {\"armor_bonus\": 8}}', '提供额外护甲');
 INSERT INTO `card_character_traits` VALUES (3, 13, '神圣治疗', 'positive', '{\"heal_allies\": 30}', '{\"2\": {\"heal_allies\": 35}, \"3\": {\"heal_allies\": 40}, \"4\": {\"heal_allies\": 50}}', '给团队大额回血');
 
@@ -110,26 +110,37 @@ CREATE TABLE `card_characters`  (
   `traits` json NOT NULL,
   `shop_price` int NOT NULL DEFAULT 0,
   `lore` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL,
+  `card_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'player' COMMENT '卡牌类型：player(玩家)/enemy(敌人)',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_card_characters_code`(`code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 25 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of card_characters
 -- ----------------------------
-INSERT INTO `card_characters` VALUES (1, 'priestess', '星辉祭司', 'support', 'human', 'rare', 40, 8, 2, 1, 5, '{\"stats\": {\"hp\": 10, \"attack\": 2}, \"traits\": {\"heal_allies\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"全体治疗\", \"value\": 2}]', 280, '神圣的治愈者，能够恢复队友的生命');
-INSERT INTO `card_characters` VALUES (2, 'shield_guard', '重甲盾卫', 'protector', 'human', 'common', 55, 6, 1, 1, 5, '{\"stats\": {\"hp\": 15, \"armor\": 3}}', '[{\"name\": \"护盾\", \"value\": 3}]', 160, '坚不可摧的防御者');
-INSERT INTO `card_characters` VALUES (3, 'fire_mage', '火焰法师', 'mage', 'human', 'epic', 35, 25, 3, 1, 5, '{\"stats\": {\"hp\": 8, \"attack\": 5}, \"traits\": {\"fire_damage\": {\"2\": 5, \"3\": 10}}}', '[{\"name\": \"火焰冲击\", \"value\": 25}]', 500, '掌控火焰的毁灭法师');
-INSERT INTO `card_characters` VALUES (4, 'shadow_assassin', '暗影刺客', 'assassin', 'occult', 'epic', 30, 30, 2, 1, 5, '{\"stats\": {\"hp\": 5, \"attack\": 8}, \"traits\": {\"critical_chance\": {\"2\": 0.1, \"3\": 0.2}}}', '[{\"name\": \"致命一击\", \"value\": 30}]', 600, '暗影中的致命杀手');
-INSERT INTO `card_characters` VALUES (6, 'warrior_common', '新兵战士', 'warrior', 'human', 'common', 70, 5, 0, 1, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}}', '[]', 300, '一名训练有素的新兵，擅长近战。');
-INSERT INTO `card_characters` VALUES (7, 'ranger_common', '见习游侠', 'ranger', 'human', 'common', 70, 18, 2, 1, 5, '{\"stats\": {\"hp\": 8, \"attack\": 4}}', '[]', 300, '年轻的游侠，擅长远程攻击。');
-INSERT INTO `card_characters` VALUES (8, 'priest_common', '初级祭司', 'priest', 'human', 'common', 60, 10, 2, 1, 5, '{\"stats\": {\"hp\": 6, \"attack\": 2}}', '[]', 300, '初出茅庐的祭司，能够治疗队友。');
-INSERT INTO `card_characters` VALUES (9, 'warrior_rare', '精英战士', 'warrior', 'human', 'rare', 100, 10, 2, 2, 5, '{\"stats\": {\"hp\": 12, \"attack\": 4}, \"traits\": {\"shield_bash\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"盾击\", \"type\": \"positive\", \"effect_payload\": {\"stun_chance\": 0.2}}]', 800, '经验丰富的战士，能够使用盾击。');
-INSERT INTO `card_characters` VALUES (10, 'occultist_rare', '神秘学者', 'occultist', 'occult', 'rare', 65, 25, 3, 2, 5, '{\"stats\": {\"hp\": 7, \"attack\": 5}, \"traits\": {\"dark_bolt\": {\"2\": 2, \"3\": 3}}}', '[{\"name\": \"暗影箭\", \"type\": \"positive\", \"effect_payload\": {\"damage_multiplier\": 1.2}}]', 800, '掌握黑暗魔法的学者。');
-INSERT INTO `card_characters` VALUES (11, 'ranger_rare', '资深游侠', 'ranger', 'human', 'rare', 85, 22, 2, 2, 5, '{\"stats\": {\"hp\": 9, \"attack\": 5}, \"traits\": {\"multi_shot\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"多重射击\", \"type\": \"positive\", \"effect_payload\": {\"targets\": 2}}]', 800, '技艺精湛的游侠，能够同时攻击多个目标。');
-INSERT INTO `card_characters` VALUES (12, 'warrior_epic', '传奇战士', 'warrior', 'human', 'epic', 120, 25, 2, 3, 5, '{\"stats\": {\"hp\": 15, \"attack\": 6}, \"traits\": {\"berserker_rage\": {\"2\": 1, \"3\": 2, \"4\": 3}}}', '[{\"name\": \"狂战士之怒\", \"type\": \"positive\", \"effect_payload\": {\"duration\": 3, \"attack_bonus\": 10}}]', 2000, '传说中的战士，拥有强大的战斗意志。');
-INSERT INTO `card_characters` VALUES (13, 'priest_epic', '大祭司', 'priest', 'divine', 'epic', 90, 15, 2, 3, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}, \"traits\": {\"divine_heal\": {\"2\": 2, \"3\": 3, \"4\": 4}}}', '[{\"name\": \"神圣治疗\", \"type\": \"positive\", \"effect_payload\": {\"heal_all\": 30}}]', 2000, '受到神祇祝福的大祭司，能够治愈所有队友。');
-INSERT INTO `card_characters` VALUES (14, 'dragon_knight', '龙骑士', 'warrior', 'divine', 'legendary', 150, 10, 3, 3, 5, '{\"stats\": {\"hp\": 20, \"attack\": 8}, \"traits\": {\"dragon_breath\": {\"2\": 1, \"3\": 2, \"4\": 3, \"5\": 4}}}', '[{\"name\": \"龙息\", \"type\": \"positive\", \"effect_payload\": {\"aoe_damage\": 50, \"burn_chance\": 0.5}}]', 5000, '传说中的龙骑士，能够驾驭巨龙的力量。');
+INSERT INTO `card_characters` VALUES (1, 'priestess', '星辉祭司', 'support', 'human', 'rare', 40, 8, 2, 1, 5, '{\"stats\": {\"hp\": 10, \"attack\": 2}, \"traits\": {\"heal_allies\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"全体治疗\", \"value\": 2}]', 280, '神圣的治愈者，能够恢复队友的生命', 'player');
+INSERT INTO `card_characters` VALUES (2, 'shield_guard', '重甲盾卫', 'protector', 'human', 'common', 55, 6, 1, 1, 5, '{\"stats\": {\"hp\": 15, \"armor\": 3}}', '[{\"name\": \"护盾\", \"value\": 3}]', 160, '坚不可摧的防御者', 'player');
+INSERT INTO `card_characters` VALUES (3, 'fire_mage', '火焰法师', 'mage', 'human', 'epic', 35, 25, 3, 1, 5, '{\"stats\": {\"hp\": 8, \"attack\": 5}, \"traits\": {\"fire_damage\": {\"2\": 5, \"3\": 10}}}', '[{\"name\": \"火焰冲击\", \"value\": 25}]', 500, '掌控火焰的毁灭法师', 'player');
+INSERT INTO `card_characters` VALUES (4, 'shadow_assassin', '暗影刺客', 'assassin', 'occult', 'epic', 30, 30, 2, 1, 5, '{\"stats\": {\"hp\": 5, \"attack\": 8}, \"traits\": {\"critical_chance\": {\"2\": 0.1, \"3\": 0.2}}}', '[{\"name\": \"致命一击\", \"value\": 30}]', 600, '暗影中的致命杀手', 'player');
+INSERT INTO `card_characters` VALUES (6, 'warrior_common', '新兵战士', 'warrior', 'human', 'common', 70, 5, 0, 1, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}}', '[]', 300, '一名训练有素的新兵，擅长近战。', 'player');
+INSERT INTO `card_characters` VALUES (7, 'ranger_common', '见习游侠', 'ranger', 'human', 'common', 70, 18, 2, 1, 5, '{\"stats\": {\"hp\": 8, \"attack\": 4}}', '[]', 300, '年轻的游侠，擅长远程攻击。', 'player');
+INSERT INTO `card_characters` VALUES (8, 'priest_common', '初级祭司', 'priest', 'human', 'common', 60, 10, 2, 1, 5, '{\"stats\": {\"hp\": 6, \"attack\": 2}}', '[]', 300, '初出茅庐的祭司，能够治疗队友。', 'player');
+INSERT INTO `card_characters` VALUES (9, 'warrior_rare', '精英战士', 'warrior', 'human', 'rare', 100, 10, 2, 2, 5, '{\"stats\": {\"hp\": 12, \"attack\": 4}, \"traits\": {\"shield_bash\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"盾击\", \"type\": \"positive\", \"effect_payload\": {\"stun_chance\": 0.2}}]', 800, '经验丰富的战士，能够使用盾击。', 'player');
+INSERT INTO `card_characters` VALUES (10, 'occultist_rare', '神秘学者', 'occultist', 'occult', 'rare', 65, 25, 3, 2, 5, '{\"stats\": {\"hp\": 7, \"attack\": 5}, \"traits\": {\"dark_bolt\": {\"2\": 2, \"3\": 3}}}', '[{\"name\": \"暗影箭\", \"type\": \"positive\", \"effect_payload\": {\"damage_multiplier\": 1.2}}]', 800, '掌握黑暗魔法的学者。', 'player');
+INSERT INTO `card_characters` VALUES (11, 'ranger_rare', '资深游侠', 'ranger', 'human', 'rare', 85, 22, 2, 2, 5, '{\"stats\": {\"hp\": 9, \"attack\": 5}, \"traits\": {\"multi_shot\": {\"2\": 1, \"3\": 2}}}', '[{\"name\": \"多重射击\", \"type\": \"positive\", \"effect_payload\": {\"targets\": 2}}]', 800, '技艺精湛的游侠，能够同时攻击多个目标。', 'player');
+INSERT INTO `card_characters` VALUES (12, 'warrior_epic', '传奇战士', 'warrior', 'human', 'epic', 120, 25, 2, 3, 5, '{\"stats\": {\"hp\": 15, \"attack\": 6}, \"traits\": {\"berserker_rage\": {\"2\": 1, \"3\": 2, \"4\": 3}}}', '[{\"name\": \"狂战士之怒\", \"type\": \"positive\", \"effect_payload\": {\"duration\": 3, \"attack_bonus\": 10}}]', 2000, '传说中的战士，拥有强大的战斗意志。', 'player');
+INSERT INTO `card_characters` VALUES (13, 'priest_epic', '大祭司', 'priest', 'divine', 'epic', 90, 15, 2, 3, 5, '{\"stats\": {\"hp\": 10, \"attack\": 3}, \"traits\": {\"divine_heal\": {\"2\": 2, \"3\": 3, \"4\": 4}}}', '[{\"name\": \"神圣治疗\", \"type\": \"positive\", \"effect_payload\": {\"heal_all\": 30}}]', 2000, '受到神祇祝福的大祭司，能够治愈所有队友。', 'player');
+INSERT INTO `card_characters` VALUES (14, 'dragon_knight', '龙骑士', 'warrior', 'divine', 'legendary', 150, 10, 3, 3, 5, '{\"stats\": {\"hp\": 20, \"attack\": 8}, \"traits\": {\"dragon_breath\": {\"2\": 1, \"3\": 2, \"4\": 3, \"5\": 4}}}', '[{\"name\": \"龙息\", \"type\": \"positive\", \"effect_payload\": {\"aoe_damage\": 50, \"burn_chance\": 0.5}}]', 5000, '传说中的龙骑士，能够驾驭巨龙的力量。', 'player');
+INSERT INTO `card_characters` VALUES (15, 'enemy_skeleton_warrior', '骷髅战士', 'warrior', 'undead', 'common', 80, 15, 2, 1, 1, '{\"stats\": {\"hp\": 10, \"attack\": 3}}', '[]', 0, '不死族战士，只会基础攻击', 'enemy');
+INSERT INTO `card_characters` VALUES (16, 'enemy_skeleton_archer', '骷髅弓箭手', 'ranger', 'undead', 'common', 60, 20, 2, 1, 1, '{\"stats\": {\"hp\": 8, \"attack\": 4}}', '[]', 0, '远程攻击的不死族弓手', 'enemy');
+INSERT INTO `card_characters` VALUES (17, 'enemy_ghoul', '食尸鬼', 'assassin', 'undead', 'rare', 100, 25, 2, 1, 1, '{\"stats\": {\"hp\": 12, \"attack\": 5}}', '[{\"name\": \"撕裂\", \"type\": \"positive\", \"effect_payload\": {\"bleed\": true}}]', 0, '凶残的不死族捕食者', 'enemy');
+INSERT INTO `card_characters` VALUES (18, 'enemy_wight', '尸妖', 'warrior', 'undead', 'rare', 120, 22, 2, 1, 1, '{\"stats\": {\"hp\": 15, \"attack\": 4}}', '[{\"name\": \"死亡之触\", \"type\": \"positive\", \"effect_payload\": {\"drain\": true}}]', 0, '吸取生命力的不死族战士', 'enemy');
+INSERT INTO `card_characters` VALUES (19, 'enemy_imp', '小恶魔', 'mage', 'demon', 'common', 50, 22, 2, 1, 1, '{\"stats\": {\"hp\": 6, \"attack\": 5}}', '[]', 0, '低等恶魔，会发射火球', 'enemy');
+INSERT INTO `card_characters` VALUES (20, 'enemy_demon_warrior', '恶魔战士', 'warrior', 'demon', 'common', 90, 18, 2, 1, 1, '{\"stats\": {\"hp\": 12, \"attack\": 3}}', '[]', 0, '普通恶魔战士', 'enemy');
+INSERT INTO `card_characters` VALUES (21, 'enemy_hellfire_wizard', '狱火巫师', 'mage', 'demon', 'rare', 70, 30, 3, 1, 1, '{\"stats\": {\"hp\": 8, \"attack\": 6}}', '[{\"name\": \"火焰风暴\", \"type\": \"positive\", \"effect_payload\": {\"aoe_damage\": 25}}]', 0, '掌握火焰魔法的中阶恶魔', 'enemy');
+INSERT INTO `card_characters` VALUES (22, 'enemy_demon_lord', '恶魔领主', 'warrior', 'demon', 'epic', 200, 35, 3, 1, 1, '{\"stats\": {\"hp\": 25, \"attack\": 8}}', '[{\"name\": \"恶魔之怒\", \"type\": \"positive\", \"effect_payload\": {\"buff_attack\": 15}}]', 0, '统领低等恶魔的强者', 'enemy');
+INSERT INTO `card_characters` VALUES (23, 'enemy_lich', '巫妖', 'mage', 'undead', 'epic', 300, 40, 3, 1, 1, '{\"stats\": {\"hp\": 30, \"attack\": 10}}', '[{\"name\": \"死亡射线\", \"type\": \"positive\", \"effect_payload\": {\"damage\": 60}}]', 0, '不死族的大法师', 'enemy');
+INSERT INTO `card_characters` VALUES (24, 'enemy_demon_king', '魔王', 'warrior', 'demon', 'legendary', 500, 50, 3, 1, 1, '{\"stats\": {\"hp\": 40, \"attack\": 12}}', '[{\"name\": \"毁灭之息\", \"type\": \"positive\", \"effect_payload\": {\"aoe_damage\": 80}}]', 0, '统治恶魔世界的王者', 'enemy');
 
 -- ----------------------------
 -- Table structure for cards
@@ -148,6 +159,7 @@ CREATE TABLE `cards`  (
   `camp_unlock_condition` json NOT NULL,
   `shop_price` json NOT NULL,
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL,
+  `usage_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'player' COMMENT '使用类型：player-玩家卡牌, enemy-敌人卡牌',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_cards_code`(`code` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 51 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
@@ -155,28 +167,28 @@ CREATE TABLE `cards`  (
 -- ----------------------------
 -- Records of cards
 -- ----------------------------
-INSERT INTO `cards` VALUES (1, 'holy_light', '圣光术', 'spell', 'rare', 'none', 1, '{}', '{\"type\": \"heal_single\", \"heal_amount\": 12}', '{}', '{\"amount\": 120, \"currency_type\": \"gold\"}', '对友军单体治疗12点生命值');
-INSERT INTO `cards` VALUES (2, 'fireball', '火球术', 'spell', 'common', 'none', 2, '{}', '{\"type\": \"damage_single\", \"damage\": 30}', '{}', '{\"amount\": 80, \"currency_type\": \"gold\"}', '对单个敌人造成30点火焰伤害');
-INSERT INTO `cards` VALUES (3, 'iron_wall', '铁壁护甲', 'equipment', 'common', 'armor', 0, '{\"armor\": 6}', '{\"type\": \"buff_armor\"}', '{}', '{\"amount\": 90, \"currency_type\": \"gold\"}', '强化持有者的护甲，提供6点护甲值');
-INSERT INTO `cards` VALUES (4, 'blood_sword', '血刃', 'equipment', 'epic', 'weapon', 0, '{\"attack\": 15, \"lifesteal\": 0.1}', '{\"type\": \"buff_attack\", \"lifesteal\": true}', '{}', '{\"amount\": 300, \"currency_type\": \"gold\"}', '强大的武器，攻击力+15，攻击时恢复10%伤害的生命值');
-INSERT INTO `cards` VALUES (33, 'heal', '治疗术', 'spell', 'common', 'none', 2, '{}', '{\"heal\": 25, \"target\": \"ally\"}', '{}', '{\"amount\": 200, \"currency_type\": \"gold\"}', '恢复友方25点生命值。');
-INSERT INTO `cards` VALUES (34, 'shield', '护盾术', 'spell', 'common', 'none', 1, '{}', '{\"armor\": 15, \"target\": \"ally\", \"duration\": 2}', '{}', '{\"amount\": 200, \"currency_type\": \"gold\"}', '为友方提供15点护甲，持续2回合。');
-INSERT INTO `cards` VALUES (35, 'meteor', '陨石术', 'spell', 'rare', 'none', 4, '{}', '{\"aoe\": true, \"damage\": 60, \"target\": \"enemy\"}', '{}', '{\"amount\": 800, \"currency_type\": \"gold\"}', '召唤陨石，对所有敌人造成60点伤害。');
-INSERT INTO `cards` VALUES (36, 'mass_heal', '群体治疗', 'spell', 'rare', 'none', 3, '{}', '{\"heal\": 30, \"target\": \"all_allies\"}', '{}', '{\"amount\": 800, \"currency_type\": \"gold\"}', '恢复所有友方30点生命值。');
-INSERT INTO `cards` VALUES (37, 'ice_shield', '寒冰护盾', 'spell', 'rare', 'none', 2, '{}', '{\"armor\": 25, \"target\": \"ally\", \"duration\": 3, \"freeze_chance\": 0.3}', '{}', '{\"amount\": 800, \"currency_type\": \"gold\"}', '提供25点护甲，并有30%概率冰冻攻击者。');
-INSERT INTO `cards` VALUES (38, 'dragon_breath', '龙息术', 'spell', 'epic', 'none', 5, '{}', '{\"aoe\": true, \"burn\": true, \"damage\": 80, \"target\": \"enemy\", \"burn_damage\": 10, \"burn_duration\": 3}', '{}', '{\"amount\": 2000, \"currency_type\": \"gold\"}', '释放龙息，对所有敌人造成80点伤害并附加燃烧效果。');
-INSERT INTO `cards` VALUES (39, 'resurrection', '复活术', 'spell', 'epic', 'none', 6, '{}', '{\"heal\": 50, \"revive\": true, \"target\": \"ally\"}', '{}', '{\"amount\": 2000, \"currency_type\": \"gold\"}', '复活一名倒下的友方，并恢复50点生命值。');
-INSERT INTO `cards` VALUES (40, 'apocalypse', '末日审判', 'spell', 'legendary', 'none', 8, '{}', '{\"aoe\": true, \"stun\": true, \"damage\": 150, \"target\": \"enemy\", \"stun_duration\": 2}', '{}', '{\"amount\": 5000, \"currency_type\": \"gold\"}', '释放末日审判，对所有敌人造成150点伤害并眩晕2回合。');
-INSERT INTO `cards` VALUES (41, 'iron_sword', '铁剑', 'equipment', 'common', 'weapon', 0, '{\"attack\": 10}', '{}', '{}', '{\"amount\": 300, \"currency_type\": \"gold\"}', '基础武器，增加10点攻击力。');
-INSERT INTO `cards` VALUES (42, 'steel_sword', '钢剑', 'equipment', 'rare', 'weapon', 0, '{\"attack\": 20, \"crit_chance\": 0.1}', '{\"crit_damage\": 1.5}', '{}', '{\"amount\": 1000, \"currency_type\": \"gold\"}', '精制武器，增加20点攻击力和10%暴击率。');
-INSERT INTO `cards` VALUES (43, 'dragon_blade', '龙刃', 'equipment', 'epic', 'weapon', 0, '{\"attack\": 35, \"crit_chance\": 0.2}', '{\"burn_chance\": 0.3, \"crit_damage\": 2.0}', '{}', '{\"amount\": 2500, \"currency_type\": \"gold\"}', '传说中的武器，增加35点攻击力并有30%概率造成燃烧。');
-INSERT INTO `cards` VALUES (44, 'excalibur', '王者之剑', 'equipment', 'legendary', 'weapon', 0, '{\"attack\": 50, \"crit_chance\": 0.3}', '{\"crit_damage\": 2.5, \"heal_on_kill\": 20}', '{}', '{\"amount\": 6000, \"currency_type\": \"gold\"}', '传说中的王者之剑，击杀敌人时恢复生命值。');
-INSERT INTO `cards` VALUES (45, 'leather_armor', '皮甲', 'equipment', 'common', 'armor', 0, '{\"hp\": 20, \"defense\": 15}', '{}', '{}', '{\"amount\": 300, \"currency_type\": \"gold\"}', '基础护甲，增加15点防御和20点生命值。');
-INSERT INTO `cards` VALUES (46, 'plate_armor', '板甲', 'equipment', 'rare', 'armor', 0, '{\"hp\": 40, \"defense\": 30}', '{\"damage_reduction\": 0.1}', '{}', '{\"amount\": 1000, \"currency_type\": \"gold\"}', '重型护甲，增加30点防御和40点生命值，减少10%伤害。');
-INSERT INTO `cards` VALUES (47, 'dragon_scale', '龙鳞甲', 'equipment', 'epic', 'armor', 0, '{\"hp\": 60, \"defense\": 50}', '{\"fire_resistance\": 0.5, \"damage_reduction\": 0.2}', '{}', '{\"amount\": 2500, \"currency_type\": \"gold\"}', '龙鳞制成的护甲，拥有强大的防御力和火焰抗性。');
-INSERT INTO `cards` VALUES (48, 'health_ring', '生命之戒', 'equipment', 'common', 'trinket', 0, '{\"hp\": 30}', '{\"regen\": 5}', '{}', '{\"amount\": 400, \"currency_type\": \"gold\"}', '每回合恢复5点生命值。');
-INSERT INTO `cards` VALUES (49, 'power_amulet', '力量护符', 'equipment', 'rare', 'trinket', 0, '{\"attack\": 15}', '{\"attack_bonus_per_kill\": 2}', '{}', '{\"amount\": 1200, \"currency_type\": \"gold\"}', '每次击杀敌人增加2点攻击力。');
-INSERT INTO `cards` VALUES (50, 'phoenix_feather', '凤凰之羽', 'equipment', 'epic', 'trinket', 0, '{\"hp\": 50}', '{\"revive_hp\": 50, \"revive_once\": true}', '{}', '{\"amount\": 3000, \"currency_type\": \"gold\"}', '拥有一次复活机会，复活时恢复50%生命值。');
+INSERT INTO `cards` VALUES (1, 'holy_light', '圣光术', 'spell', 'rare', 'none', 1, '{}', '{\"type\": \"heal_single\", \"heal_amount\": 12}', '{}', '{\"amount\": 120, \"currency_type\": \"gold\"}', '对友军单体治疗12点生命值', 'player');
+INSERT INTO `cards` VALUES (2, 'fireball', '火球术', 'spell', 'common', 'none', 2, '{}', '{\"type\": \"damage_single\", \"damage\": 30}', '{}', '{\"amount\": 80, \"currency_type\": \"gold\"}', '对单个敌人造成30点火焰伤害', 'player');
+INSERT INTO `cards` VALUES (3, 'iron_wall', '铁壁护甲', 'equipment', 'common', 'armor', 0, '{\"armor\": 6}', '{\"type\": \"buff_armor\"}', '{}', '{\"amount\": 90, \"currency_type\": \"gold\"}', '强化持有者的护甲，提供6点护甲值', 'player');
+INSERT INTO `cards` VALUES (4, 'blood_sword', '血刃', 'equipment', 'epic', 'weapon', 0, '{\"attack\": 15, \"lifesteal\": 0.1}', '{\"type\": \"buff_attack\", \"lifesteal\": true}', '{}', '{\"amount\": 300, \"currency_type\": \"gold\"}', '强大的武器，攻击力+15，攻击时恢复10%伤害的生命值', 'player');
+INSERT INTO `cards` VALUES (33, 'heal', '治疗术', 'spell', 'common', 'none', 2, '{}', '{\"heal\": 25, \"target\": \"ally\"}', '{}', '{\"amount\": 200, \"currency_type\": \"gold\"}', '恢复友方25点生命值。', 'player');
+INSERT INTO `cards` VALUES (34, 'shield', '护盾术', 'spell', 'common', 'none', 1, '{}', '{\"armor\": 15, \"target\": \"ally\", \"duration\": 2}', '{}', '{\"amount\": 200, \"currency_type\": \"gold\"}', '为友方提供15点护甲，持续2回合。', 'player');
+INSERT INTO `cards` VALUES (35, 'meteor', '陨石术', 'spell', 'rare', 'none', 4, '{}', '{\"aoe\": true, \"damage\": 60, \"target\": \"enemy\"}', '{}', '{\"amount\": 800, \"currency_type\": \"gold\"}', '召唤陨石，对所有敌人造成60点伤害。', 'player');
+INSERT INTO `cards` VALUES (36, 'mass_heal', '群体治疗', 'spell', 'rare', 'none', 3, '{}', '{\"heal\": 30, \"target\": \"all_allies\"}', '{}', '{\"amount\": 800, \"currency_type\": \"gold\"}', '恢复所有友方30点生命值。', 'player');
+INSERT INTO `cards` VALUES (37, 'ice_shield', '寒冰护盾', 'spell', 'rare', 'none', 2, '{}', '{\"armor\": 25, \"target\": \"ally\", \"duration\": 3, \"freeze_chance\": 0.3}', '{}', '{\"amount\": 800, \"currency_type\": \"gold\"}', '提供25点护甲，并有30%概率冰冻攻击者。', 'player');
+INSERT INTO `cards` VALUES (38, 'dragon_breath', '龙息术', 'spell', 'epic', 'none', 5, '{}', '{\"aoe\": true, \"burn\": true, \"damage\": 80, \"target\": \"enemy\", \"burn_damage\": 10, \"burn_duration\": 3}', '{}', '{\"amount\": 2000, \"currency_type\": \"gold\"}', '释放龙息，对所有敌人造成80点伤害并附加燃烧效果。', 'player');
+INSERT INTO `cards` VALUES (39, 'resurrection', '复活术', 'spell', 'epic', 'none', 6, '{}', '{\"heal\": 50, \"revive\": true, \"target\": \"ally\"}', '{}', '{\"amount\": 2000, \"currency_type\": \"gold\"}', '复活一名倒下的友方，并恢复50点生命值。', 'player');
+INSERT INTO `cards` VALUES (40, 'apocalypse', '末日审判', 'spell', 'legendary', 'none', 8, '{}', '{\"aoe\": true, \"stun\": true, \"damage\": 150, \"target\": \"enemy\", \"stun_duration\": 2}', '{}', '{\"amount\": 5000, \"currency_type\": \"gold\"}', '释放末日审判，对所有敌人造成150点伤害并眩晕2回合。', 'player');
+INSERT INTO `cards` VALUES (41, 'iron_sword', '铁剑', 'equipment', 'common', 'weapon', 0, '{\"attack\": 10}', '{}', '{}', '{\"amount\": 300, \"currency_type\": \"gold\"}', '基础武器，增加10点攻击力。', 'player');
+INSERT INTO `cards` VALUES (42, 'steel_sword', '钢剑', 'equipment', 'rare', 'weapon', 0, '{\"attack\": 20, \"crit_chance\": 0.1}', '{\"crit_damage\": 1.5}', '{}', '{\"amount\": 1000, \"currency_type\": \"gold\"}', '精制武器，增加20点攻击力和10%暴击率。', 'player');
+INSERT INTO `cards` VALUES (43, 'dragon_blade', '龙刃', 'equipment', 'epic', 'weapon', 0, '{\"attack\": 35, \"crit_chance\": 0.2}', '{\"burn_chance\": 0.3, \"crit_damage\": 2.0}', '{}', '{\"amount\": 2500, \"currency_type\": \"gold\"}', '传说中的武器，增加35点攻击力并有30%概率造成燃烧。', 'player');
+INSERT INTO `cards` VALUES (44, 'excalibur', '王者之剑', 'equipment', 'legendary', 'weapon', 0, '{\"attack\": 50, \"crit_chance\": 0.3}', '{\"crit_damage\": 2.5, \"heal_on_kill\": 20}', '{}', '{\"amount\": 6000, \"currency_type\": \"gold\"}', '传说中的王者之剑，击杀敌人时恢复生命值。', 'player');
+INSERT INTO `cards` VALUES (45, 'leather_armor', '皮甲', 'equipment', 'common', 'armor', 0, '{\"hp\": 20, \"defense\": 15}', '{}', '{}', '{\"amount\": 300, \"currency_type\": \"gold\"}', '基础护甲，增加15点防御和20点生命值。', 'player');
+INSERT INTO `cards` VALUES (46, 'plate_armor', '板甲', 'equipment', 'rare', 'armor', 0, '{\"hp\": 40, \"defense\": 30}', '{\"damage_reduction\": 0.1}', '{}', '{\"amount\": 1000, \"currency_type\": \"gold\"}', '重型护甲，增加30点防御和40点生命值，减少10%伤害。', 'player');
+INSERT INTO `cards` VALUES (47, 'dragon_scale', '龙鳞甲', 'equipment', 'epic', 'armor', 0, '{\"hp\": 60, \"defense\": 50}', '{\"fire_resistance\": 0.5, \"damage_reduction\": 0.2}', '{}', '{\"amount\": 2500, \"currency_type\": \"gold\"}', '龙鳞制成的护甲，拥有强大的防御力和火焰抗性。', 'player');
+INSERT INTO `cards` VALUES (48, 'health_ring', '生命之戒', 'equipment', 'common', 'trinket', 0, '{\"hp\": 30}', '{\"regen\": 5}', '{}', '{\"amount\": 400, \"currency_type\": \"gold\"}', '每回合恢复5点生命值。', 'player');
+INSERT INTO `cards` VALUES (49, 'power_amulet', '力量护符', 'equipment', 'rare', 'trinket', 0, '{\"attack\": 15}', '{\"attack_bonus_per_kill\": 2}', '{}', '{\"amount\": 1200, \"currency_type\": \"gold\"}', '每次击杀敌人增加2点攻击力。', 'player');
+INSERT INTO `cards` VALUES (50, 'phoenix_feather', '凤凰之羽', 'equipment', 'epic', 'trinket', 0, '{\"hp\": 50}', '{\"revive_hp\": 50, \"revive_once\": true}', '{}', '{\"amount\": 3000, \"currency_type\": \"gold\"}', '拥有一次复活机会，复活时恢复50%生命值。', 'player');
 
 -- ----------------------------
 -- Table structure for dungeons
@@ -248,11 +260,30 @@ CREATE TABLE `enemy_card_characters`  (
   INDEX `idx_enemy_card_characters_character`(`card_character_id` ASC) USING BTREE,
   CONSTRAINT `fk_enemy_card_characters_character` FOREIGN KEY (`card_character_id`) REFERENCES `card_characters` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `fk_enemy_card_characters_enemy` FOREIGN KEY (`enemy_id`) REFERENCES `enemies` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '敌人角色卡关联表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 20 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '敌人角色卡关联表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of enemy_card_characters
 -- ----------------------------
+INSERT INTO `enemy_card_characters` VALUES (1, 1, 15, 3);
+INSERT INTO `enemy_card_characters` VALUES (2, 1, 17, 2);
+INSERT INTO `enemy_card_characters` VALUES (3, 2, 24, 1);
+INSERT INTO `enemy_card_characters` VALUES (4, 3, 20, 3);
+INSERT INTO `enemy_card_characters` VALUES (5, 3, 21, 2);
+INSERT INTO `enemy_card_characters` VALUES (6, 4, 17, 3);
+INSERT INTO `enemy_card_characters` VALUES (7, 4, 16, 2);
+INSERT INTO `enemy_card_characters` VALUES (8, 5, 15, 4);
+INSERT INTO `enemy_card_characters` VALUES (9, 5, 18, 2);
+INSERT INTO `enemy_card_characters` VALUES (10, 6, 19, 3);
+INSERT INTO `enemy_card_characters` VALUES (11, 6, 21, 2);
+INSERT INTO `enemy_card_characters` VALUES (12, 7, 22, 2);
+INSERT INTO `enemy_card_characters` VALUES (13, 7, 18, 2);
+INSERT INTO `enemy_card_characters` VALUES (14, 8, 23, 1);
+INSERT INTO `enemy_card_characters` VALUES (15, 9, 24, 3);
+INSERT INTO `enemy_card_characters` VALUES (16, 10, 24, 2);
+INSERT INTO `enemy_card_characters` VALUES (17, 10, 23, 1);
+INSERT INTO `enemy_card_characters` VALUES (18, 11, 23, 2);
+INSERT INTO `enemy_card_characters` VALUES (19, 12, 24, 1);
 
 -- ----------------------------
 -- Table structure for enemy_cards
@@ -317,7 +348,7 @@ CREATE TABLE `inventory`  (
   INDEX `fk_inventory_item`(`item_id` ASC) USING BTREE,
   CONSTRAINT `fk_inventory_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_inventory_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 18 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of inventory
@@ -325,6 +356,9 @@ CREATE TABLE `inventory`  (
 INSERT INTO `inventory` VALUES (1, 1, 1, 3, 'unbound', '2025-11-18 10:23:15');
 INSERT INTO `inventory` VALUES (2, 1, 2, 5, 'unbound', '2025-11-18 10:23:15');
 INSERT INTO `inventory` VALUES (3, 3, 1, 5, 'unbound', '2025-11-21 11:47:51');
+INSERT INTO `inventory` VALUES (15, 7, 81, 2, 'unbound', '2025-12-31 14:51:24');
+INSERT INTO `inventory` VALUES (16, 7, 4, 1, 'unbound', '2025-12-31 14:50:29');
+INSERT INTO `inventory` VALUES (17, 7, 49, 1, 'unbound', '2025-12-31 14:50:30');
 
 -- ----------------------------
 -- Table structure for items
@@ -393,15 +427,15 @@ CREATE TABLE `player_characters`  (
   `lore` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_player_characters_code`(`code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 12 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of player_characters
 -- ----------------------------
 INSERT INTO `player_characters` VALUES (1, 'warden', '守望者', 80, 12, '古老仪式守护者，擅长防御和支援');
-INSERT INTO `player_characters` VALUES (2, 'occultist', '秘术师', 60, 9, '操纵禁忌咒语的学者，精通暗影魔法');
-INSERT INTO `player_characters` VALUES (3, 'ranger', '游侠', 70, 10, '森林中的猎手，擅长远程攻击和追踪');
-INSERT INTO `player_characters` VALUES (4, 'warrior', '战士', 100, 15, '勇猛的近战战士，拥有强大的物理攻击力');
+INSERT INTO `player_characters` VALUES (9, 'occultist', '秘术师', 60, 9, '秘术师是那些敢于触碰禁忌知识的学者，他们深入研究被世人遗忘的暗影魔法和古老诅咒。这些危险的学者往往因为对知识的渴望而走上了一条不归路，他们操纵着黑暗力量，能够召唤亡灵、施放诅咒、控制敌人的心智。秘术师通常来自古老的魔法学院或秘密组织，他们为了追求力量不惜付出任何代价。虽然他们的身体脆弱，但他们的魔法力量足以让最强大的敌人感到恐惧。在暗黑地牢中，秘术师是强大的控场者和输出者，但需要队友的保护。');
+INSERT INTO `player_characters` VALUES (10, 'ranger', '游侠', 70, 10, '游侠是森林和荒野中的猎手，他们精通远程武器和追踪技巧，能够在敌人发现之前就将其击败。这些敏捷的战士从小在野外长大，学会了如何利用环境优势、设置陷阱、追踪猎物。游侠通常独来独往，但也会为了共同的目标而加入冒险队伍。他们擅长使用弓箭、弩箭和飞刀，能够在远距离对敌人造成致命打击。在暗黑地牢中，游侠是优秀的侦察兵和远程输出者，他们的陷阱和追踪技能能够帮助队伍提前发现危险。');
+INSERT INTO `player_characters` VALUES (11, 'warrior', '战士', 100, 15, '战士是勇猛的近战专家，他们拥有强大的物理攻击力和惊人的生命力。这些无畏的战士从小接受严格的战斗训练，精通各种近战武器和战斗技巧。战士通常来自军事学院或佣兵团，他们为了荣誉、财富或正义而战斗。他们身穿重甲，手持巨剑或战斧，能够在战场上冲锋陷阵，为队友开辟道路。战士的生命力极其顽强，即使受到重伤也能继续战斗。在暗黑地牢中，战士是队伍的前排核心，他们能够承受大量伤害，同时用强大的攻击力摧毁敌人。');
 
 -- ----------------------------
 -- Table structure for runs
@@ -444,7 +478,7 @@ CREATE TABLE `shop_offers`  (
   `display_order` int NOT NULL DEFAULT 0,
   `refresh_rule` json NOT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 99 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 107 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of shop_offers
@@ -477,14 +511,14 @@ INSERT INTO `shop_offers` VALUES (63, 'item', 2, 50, 5, '{}');
 INSERT INTO `shop_offers` VALUES (64, 'item', 50, 50, 6, '{}');
 INSERT INTO `shop_offers` VALUES (65, 'item', 81, 500, 7, '{}');
 INSERT INTO `shop_offers` VALUES (66, 'item', 4, 200, 8, '{}');
-INSERT INTO `shop_offers` VALUES (91, 'card_character', 3, 500, 1, '{}');
-INSERT INTO `shop_offers` VALUES (92, 'card_character', 8, 300, 2, '{}');
-INSERT INTO `shop_offers` VALUES (93, 'card_character', 13, 2000, 3, '{}');
-INSERT INTO `shop_offers` VALUES (94, 'card_character', 14, 5000, 4, '{}');
-INSERT INTO `shop_offers` VALUES (95, 'card_character', 7, 300, 5, '{}');
-INSERT INTO `shop_offers` VALUES (96, 'card_character', 4, 600, 6, '{}');
-INSERT INTO `shop_offers` VALUES (97, 'card_character', 12, 2000, 7, '{}');
-INSERT INTO `shop_offers` VALUES (98, 'card_character', 9, 800, 8, '{}');
+INSERT INTO `shop_offers` VALUES (99, 'card_character', 14, 5000, 1, '{}');
+INSERT INTO `shop_offers` VALUES (100, 'card_character', 13, 2000, 2, '{}');
+INSERT INTO `shop_offers` VALUES (101, 'card_character', 12, 2000, 3, '{}');
+INSERT INTO `shop_offers` VALUES (102, 'card_character', 11, 800, 4, '{}');
+INSERT INTO `shop_offers` VALUES (103, 'card_character', 3, 500, 5, '{}');
+INSERT INTO `shop_offers` VALUES (104, 'card_character', 2, 160, 6, '{}');
+INSERT INTO `shop_offers` VALUES (105, 'card_character', 8, 300, 7, '{}');
+INSERT INTO `shop_offers` VALUES (106, 'card_character', 6, 300, 8, '{}');
 
 -- ----------------------------
 -- Table structure for skills
@@ -493,6 +527,7 @@ DROP TABLE IF EXISTS `skills`;
 CREATE TABLE `skills`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `player_character_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '',
   `name` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL,
   `effect_payload` json NOT NULL,
@@ -500,13 +535,43 @@ CREATE TABLE `skills`  (
   `position_in_tree` json NOT NULL,
   `unlock_path` json NOT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 67 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of skills
 -- ----------------------------
-INSERT INTO `skills` VALUES (1, 'warden', '暗影毒镖', '对敌人造成10点毒属性伤害，并且每回合持续扣血', '{}', 3, '1', '0');
-INSERT INTO `skills` VALUES (2, 'warden', '刀扇', '向前排所有目标投掷匕首，造成20点伤害', '{}', 5, '1', '0');
+INSERT INTO `skills` VALUES (35, 'warden_sacred_shield', 'warden', '神圣护盾', '守望者召唤神圣能量形成护盾，为自己或队友提供持续3回合的护甲加成。护盾能够吸收物理伤害，并在被击破时对攻击者造成神圣反伤。这是守望者最基础的防御技能，体现了他们守护他人的职责。', '{\"type\": \"buff\", \"target\": \"ally\", \"duration\": 3, \"action_cost\": 2, \"armor_bonus\": 15, \"reflect_damage\": 5}', 1, '{\"row\": 1, \"column\": 1}', '[]');
+INSERT INTO `skills` VALUES (36, 'warden_healing_light', 'warden', '治疗之光', '守望者引导神圣能量，对单个友军单位恢复生命值。这个技能不仅能够治愈伤口，还能驱散轻微的负面状态。治疗之光温暖而纯净，是守望者最常用的支援技能，体现了他们守护生命的使命。', '{\"type\": \"heal\", \"target\": \"ally\", \"action_cost\": 2, \"heal_amount\": 25, \"remove_debuff\": true}', 1, '{\"row\": 1, \"column\": 2}', '[]');
+INSERT INTO `skills` VALUES (37, 'warden_iron_will', 'warden', '坚韧意志', '守望者通过坚定的意志力提升自己的防御能力，减少受到的伤害并提高对负面状态的抗性。这个被动技能让守望者能够在战斗中保持冷静，即使面对强大的敌人也不会退缩。', '{\"type\": \"passive\", \"damage_reduction\": 0.15, \"debuff_resistance\": 0.2}', 1, '{\"row\": 1, \"column\": 3}', '[]');
+INSERT INTO `skills` VALUES (38, 'warden_guardian_wall', 'warden', '守护之墙', '守望者在前方召唤一道神圣能量墙，为所有友军提供护甲加成和伤害减免。这道墙能够持续5回合，是守望者最强大的群体防御技能。在墙的保护下，队友能够更安全地进行战斗。', '{\"type\": \"buff\", \"target\": \"all_allies\", \"duration\": 5, \"action_cost\": 3, \"armor_bonus\": 10, \"damage_reduction\": 0.1}', 3, '{\"row\": 2, \"column\": 1}', '[\"warden_sacred_shield\"]');
+INSERT INTO `skills` VALUES (39, 'warden_group_heal', 'warden', '群体治疗', '守望者释放强大的治疗能量，同时恢复所有友军的生命值。这个技能消耗较大，但能够在关键时刻拯救整个队伍。治疗之光如同圣雨般洒向所有队友，驱散黑暗和伤痛。', '{\"type\": \"heal\", \"target\": \"all_allies\", \"action_cost\": 4, \"heal_amount\": 20, \"remove_debuff\": true}', 3, '{\"row\": 2, \"column\": 2}', '[\"warden_healing_light\"]');
+INSERT INTO `skills` VALUES (40, 'warden_sacred_purification', 'warden', '神圣净化', '守望者释放神圣能量，驱散所有友军的负面状态并恢复少量生命值。这个技能对诅咒、中毒、虚弱等负面效果特别有效，是守望者对抗黑暗魔法的重要手段。', '{\"type\": \"cleanse\", \"target\": \"all_allies\", \"action_cost\": 3, \"heal_amount\": 15, \"remove_all_debuffs\": true}', 3, '{\"row\": 2, \"column\": 3}', '[\"warden_iron_will\"]');
+INSERT INTO `skills` VALUES (41, 'warden_absolute_defense', 'warden', '绝对防御', '守望者进入绝对防御状态，在接下来的2回合内免疫所有伤害，但无法进行攻击。这是守望者最强大的保命技能，能够在危急时刻保护自己或为队友争取时间。绝对防御状态下，守望者如同不可撼动的山岳。', '{\"type\": \"buff\", \"target\": \"self\", \"duration\": 2, \"action_cost\": 4, \"cannot_attack\": true, \"damage_immunity\": true}', 5, '{\"row\": 3, \"column\": 1}', '[\"warden_guardian_wall\"]');
+INSERT INTO `skills` VALUES (42, 'warden_life_link', 'warden', '生命链接', '守望者与一个友军建立生命链接，在接下来的5回合内，守望者受到的伤害会部分转移到自己身上，同时链接的友军会获得持续的生命恢复。这个技能体现了守望者牺牲自己保护他人的精神。', '{\"type\": \"link\", \"target\": \"ally\", \"duration\": 5, \"action_cost\": 3, \"damage_share\": 0.4, \"heal_per_turn\": 10}', 5, '{\"row\": 3, \"column\": 2}', '[\"warden_group_heal\", \"warden_sacred_purification\"]');
+INSERT INTO `skills` VALUES (43, 'occultist_shadow_bolt', 'occultist', '暗影箭', '秘术师凝聚暗影能量，向敌人发射一支暗影箭，造成暗影属性伤害。暗影箭能够穿透部分护甲，对敌人造成持续3回合的暗影侵蚀效果，每回合造成额外伤害。这是秘术师最基础的攻击技能。', '{\"type\": \"attack\", \"damage\": 18, \"target\": \"enemy\", \"dot_damage\": 5, \"action_cost\": 2, \"damage_type\": \"shadow\", \"dot_duration\": 3, \"armor_penetration\": 0.2}', 1, '{\"row\": 1, \"column\": 1}', '[]');
+INSERT INTO `skills` VALUES (44, 'occultist_weakness_curse', 'occultist', '虚弱诅咒', '秘术师对敌人施放虚弱诅咒，降低敌人的攻击力和防御力，持续4回合。被诅咒的敌人会感到力量流失，行动变得迟缓。这个技能是秘术师控制战场的重要手段。', '{\"type\": \"debuff\", \"target\": \"enemy\", \"duration\": 4, \"action_cost\": 2, \"attack_reduction\": 0.25, \"defense_reduction\": 0.2}', 1, '{\"row\": 1, \"column\": 2}', '[]');
+INSERT INTO `skills` VALUES (45, 'occultist_shadow_armor', 'occultist', '暗影护体', '秘术师用暗影能量包裹自己，提高魔法抗性并减少受到的物理伤害。在暗影护体的保护下，秘术师能够更安全地施放魔法。这个被动技能让脆弱的秘术师有了生存保障。', '{\"type\": \"passive\", \"magic_resistance\": 0.3, \"physical_damage_reduction\": 0.15}', 1, '{\"row\": 1, \"column\": 3}', '[]');
+INSERT INTO `skills` VALUES (46, 'occultist_death_coil', 'occultist', '死亡缠绕', '秘术师召唤死亡能量缠绕敌人，造成大量暗影伤害并吸取敌人的生命值来恢复自己。被死亡缠绕的敌人会感到生命力快速流失，而秘术师则从中获得力量。这是秘术师最强大的单体攻击技能。', '{\"type\": \"attack\", \"damage\": 35, \"target\": \"enemy\", \"lifesteal\": 0.4, \"action_cost\": 3, \"damage_type\": \"shadow\"}', 3, '{\"row\": 2, \"column\": 1}', '[\"occultist_shadow_bolt\"]');
+INSERT INTO `skills` VALUES (47, 'occultist_group_curse', 'occultist', '群体诅咒', '秘术师释放强大的诅咒能量，对所有敌人施放虚弱诅咒和暗影侵蚀效果。这个技能能够同时削弱多个敌人，是秘术师最强大的控场技能。诅咒的能量如同瘟疫般在敌人之间蔓延。', '{\"type\": \"debuff\", \"target\": \"all_enemies\", \"duration\": 4, \"dot_damage\": 3, \"action_cost\": 4, \"dot_duration\": 4, \"attack_reduction\": 0.2, \"defense_reduction\": 0.15}', 3, '{\"row\": 2, \"column\": 2}', '[\"occultist_weakness_curse\"]');
+INSERT INTO `skills` VALUES (48, 'occultist_shadow_burst', 'occultist', '暗影爆发', '秘术师引爆周围的暗影能量，对所有敌人造成暗影伤害。这个技能的范围伤害能力极强，但消耗也很大。暗影爆发时，整个战场都会被黑暗能量笼罩，敌人无处可逃。', '{\"type\": \"attack\", \"damage\": 22, \"target\": \"all_enemies\", \"action_cost\": 4, \"damage_type\": \"shadow\"}', 3, '{\"row\": 2, \"column\": 3}', '[\"occultist_shadow_armor\"]');
+INSERT INTO `skills` VALUES (49, 'occultist_soul_harvest', 'occultist', '灵魂收割', '秘术师对生命值低于30%的敌人进行灵魂收割，造成巨额暗影伤害。如果成功击杀敌人，秘术师会恢复大量生命值并获得额外的行动点。这个技能让秘术师在敌人虚弱时能够快速终结战斗。', '{\"type\": \"execute\", \"damage\": 60, \"target\": \"enemy\", \"action_cost\": 3, \"damage_type\": \"shadow\", \"heal_on_kill\": 50, \"execute_threshold\": 0.3, \"bonus_action_points\": 1}', 5, '{\"row\": 3, \"column\": 1}', '[\"occultist_death_coil\"]');
+INSERT INTO `skills` VALUES (50, 'occultist_dark_pact', 'occultist', '黑暗契约', '秘术师与黑暗力量签订契约，在接下来的3回合内大幅提升自己的魔法伤害，但每回合会损失少量生命值。这个技能体现了秘术师为了力量不惜代价的决心。契约期间，秘术师的魔法会变得更加致命。', '{\"type\": \"buff\", \"target\": \"self\", \"duration\": 3, \"action_cost\": 3, \"hp_cost_per_turn\": 8, \"magic_damage_bonus\": 0.5}', 5, '{\"row\": 3, \"column\": 2}', '[\"occultist_group_curse\", \"occultist_shadow_burst\"]');
+INSERT INTO `skills` VALUES (51, 'ranger_precise_shot', 'ranger', '精准射击', '游侠瞄准敌人的弱点，进行精准射击，造成物理伤害并有较高概率造成暴击。精准射击是游侠最基础的攻击技能，体现了他们精湛的箭术。这一箭往往能够命中敌人的要害，造成致命伤害。', '{\"type\": \"attack\", \"damage\": 20, \"target\": \"enemy\", \"action_cost\": 2, \"crit_chance\": 0.35, \"damage_type\": \"physical\", \"crit_multiplier\": 1.8}', 1, '{\"row\": 1, \"column\": 1}', '[]');
+INSERT INTO `skills` VALUES (52, 'ranger_tracking_mark', 'ranger', '追踪标记', '游侠对敌人施加追踪标记，在接下来的5回合内，被标记的敌人会受到额外伤害，并且游侠对其攻击的命中率和暴击率都会提高。追踪标记让游侠能够锁定目标，持续输出伤害。', '{\"type\": \"debuff\", \"target\": \"enemy\", \"duration\": 5, \"action_cost\": 2, \"hit_rate_bonus\": 0.2, \"crit_chance_bonus\": 0.15, \"damage_taken_increase\": 0.15}', 1, '{\"row\": 1, \"column\": 2}', '[]');
+INSERT INTO `skills` VALUES (53, 'ranger_agile_steps', 'ranger', '敏捷步伐', '游侠通过敏捷的步伐提高自己的闪避率和移动速度。这个被动技能让游侠能够在战斗中灵活移动，躲避敌人的攻击。游侠的敏捷是他们生存的关键。', '{\"type\": \"passive\", \"dodge_chance\": 0.25, \"movement_speed_bonus\": 0.3}', 1, '{\"row\": 1, \"column\": 3}', '[]');
+INSERT INTO `skills` VALUES (54, 'ranger_multi_shot', 'ranger', '多重射击', '游侠同时射出多支箭矢，对多个敌人造成物理伤害。每支箭矢的伤害略低于精准射击，但总伤害输出更高。多重射击是游侠应对多个敌人的有效手段，箭雨覆盖整个战场。', '{\"type\": \"attack\", \"damage\": 15, \"target\": \"all_enemies\", \"action_cost\": 3, \"damage_type\": \"physical\"}', 3, '{\"row\": 2, \"column\": 1}', '[\"ranger_precise_shot\"]');
+INSERT INTO `skills` VALUES (55, 'ranger_trap_setting', 'ranger', '陷阱布置', '游侠在战场上布置陷阱，当敌人触发陷阱时会受到物理伤害并被减速。陷阱可以持续3回合，最多同时存在2个。这个技能让游侠能够控制战场，限制敌人的行动。', '{\"type\": \"trap\", \"damage\": 18, \"max_traps\": 2, \"action_cost\": 2, \"damage_type\": \"physical\", \"slow_duration\": 2, \"trap_duration\": 3}', 3, '{\"row\": 2, \"column\": 2}', '[\"ranger_tracking_mark\"]');
+INSERT INTO `skills` VALUES (56, 'ranger_rapid_fire', 'ranger', '疾风连射', '游侠以极快的速度连续射击，对单个敌人造成多次物理伤害。每次射击的伤害较低，但总伤害很高。疾风连射是游侠最强大的单体输出技能，箭矢如雨点般落在敌人身上。', '{\"hits\": 4, \"type\": \"attack\", \"target\": \"enemy\", \"action_cost\": 3, \"damage_type\": \"physical\", \"damage_per_hit\": 8}', 3, '{\"row\": 2, \"column\": 3}', '[\"ranger_agile_steps\"]');
+INSERT INTO `skills` VALUES (57, 'ranger_killing_blow', 'ranger', '致命一击', '游侠瞄准敌人的致命弱点，进行致命一击。如果敌人生命值低于50%，伤害会大幅提高。这个技能让游侠能够在敌人虚弱时快速终结战斗，一箭封喉。', '{\"type\": \"attack\", \"damage\": 45, \"target\": \"enemy\", \"action_cost\": 3, \"damage_type\": \"physical\", \"execute_bonus\": 0.6, \"execute_threshold\": 0.5}', 5, '{\"row\": 3, \"column\": 1}', '[\"ranger_multi_shot\"]');
+INSERT INTO `skills` VALUES (58, 'ranger_hunter_instinct', 'ranger', '猎手本能', '游侠激活猎手本能，在接下来的4回合内大幅提高攻击速度、暴击率和移动速度。这个技能让游侠进入最佳战斗状态，如同真正的猎手般敏锐和致命。', '{\"type\": \"buff\", \"target\": \"self\", \"duration\": 4, \"action_cost\": 3, \"crit_chance_bonus\": 0.3, \"attack_speed_bonus\": 0.5, \"movement_speed_bonus\": 0.4}', 5, '{\"row\": 3, \"column\": 2}', '[\"ranger_trap_setting\", \"ranger_rapid_fire\"]');
+INSERT INTO `skills` VALUES (59, 'warrior_heavy_strike', 'warrior', '重击', '战士用尽全力进行重击，对敌人造成大量物理伤害。重击有较高概率击退敌人并造成短暂眩晕。这是战士最基础的攻击技能，体现了他们强大的力量。重击时，战士的武器会发出破空之声，敌人往往无法抵挡。', '{\"type\": \"attack\", \"damage\": 28, \"target\": \"enemy\", \"action_cost\": 2, \"damage_type\": \"physical\", \"stun_duration\": 1, \"knockback_chance\": 0.4}', 1, '{\"row\": 1, \"column\": 1}', '[]');
+INSERT INTO `skills` VALUES (60, 'warrior_battle_cry', 'warrior', '战吼', '战士发出震撼战场的战吼，提升所有友军的攻击力和士气，持续4回合。战吼不仅能够激励队友，还能震慑敌人，降低敌人的攻击力。这是战士最强大的支援技能，体现了他们的领导力。', '{\"type\": \"buff\", \"target\": \"all_allies\", \"duration\": 4, \"action_cost\": 2, \"attack_bonus\": 0.15, \"morale_bonus\": 0.1, \"enemy_attack_reduction\": 0.1}', 1, '{\"row\": 1, \"column\": 2}', '[]');
+INSERT INTO `skills` VALUES (61, 'warrior_robust_body', 'warrior', '坚韧体魄', '战士通过长期的训练拥有坚韧的体魄，大幅提高生命值上限和物理防御力。这个被动技能让战士能够承受更多伤害，是他们在战场上屹立不倒的基础。', '{\"type\": \"passive\", \"hp_bonus\": 0.2, \"physical_defense_bonus\": 0.25}', 1, '{\"row\": 1, \"column\": 3}', '[]');
+INSERT INTO `skills` VALUES (62, 'warrior_whirlwind', 'warrior', '旋风斩', '战士挥舞武器进行旋转攻击，对所有敌人造成物理伤害。旋风斩是战士最强大的群体攻击技能，战士如同旋风般在敌人中穿梭，所到之处敌人纷纷倒下。', '{\"type\": \"attack\", \"damage\": 20, \"target\": \"all_enemies\", \"action_cost\": 3, \"damage_type\": \"physical\"}', 3, '{\"row\": 2, \"column\": 1}', '[\"warrior_heavy_strike\"]');
+INSERT INTO `skills` VALUES (63, 'warrior_taunt', 'warrior', '嘲讽', '战士通过嘲讽吸引所有敌人的注意力，强制敌人攻击自己，持续3回合。嘲讽期间，战士的防御力会提高。这个技能让战士能够保护脆弱的队友，是坦克型战士的核心技能。', '{\"type\": \"taunt\", \"target\": \"all_enemies\", \"duration\": 3, \"action_cost\": 2, \"defense_bonus\": 0.3}', 3, '{\"row\": 2, \"column\": 2}', '[\"warrior_battle_cry\"]');
+INSERT INTO `skills` VALUES (64, 'warrior_berserker_rage', 'warrior', '狂暴', '战士进入狂暴状态，在接下来的4回合内大幅提高攻击力和攻击速度，但防御力会降低。狂暴状态下，战士会不顾一切地攻击敌人，直到战斗结束。这是战士最强大的输出技能。', '{\"type\": \"buff\", \"target\": \"self\", \"duration\": 4, \"action_cost\": 3, \"attack_bonus\": 0.4, \"defense_penalty\": 0.2, \"attack_speed_bonus\": 0.35}', 3, '{\"row\": 2, \"column\": 3}', '[\"warrior_robust_body\"]');
+INSERT INTO `skills` VALUES (65, 'warrior_ultimate_strike', 'warrior', '终极打击', '战士凝聚所有力量进行终极打击，对单个敌人造成巨额物理伤害。如果敌人生命值低于40%，伤害会进一步提高。终极打击是战士最强大的单体攻击技能，往往能够一击必杀。', '{\"type\": \"attack\", \"damage\": 70, \"target\": \"enemy\", \"action_cost\": 4, \"damage_type\": \"physical\", \"execute_bonus\": 0.5, \"execute_threshold\": 0.4}', 5, '{\"row\": 3, \"column\": 1}', '[\"warrior_whirlwind\"]');
+INSERT INTO `skills` VALUES (66, 'warrior_unyielding_will', 'warrior', '不屈意志', '战士激活不屈意志，在生命值低于30%时自动触发，大幅提高防御力、生命恢复速度和所有负面状态抗性，持续5回合。这个技能让战士在绝境中能够继续战斗，体现了他们永不放弃的精神。', '{\"type\": \"passive_trigger\", \"duration\": 5, \"action_cost\": 0, \"defense_bonus\": 0.5, \"debuff_resistance\": 0.4, \"hp_regen_per_turn\": 15, \"trigger_hp_threshold\": 0.3}', 5, '{\"row\": 3, \"column\": 2}', '[\"warrior_taunt\", \"warrior_berserker_rage\"]');
 
 -- ----------------------------
 -- Table structure for stages
@@ -613,7 +678,7 @@ CREATE TABLE `user_card_characters`  (
   INDEX `fk_ucc_card_character`(`card_character_id` ASC) USING BTREE,
   CONSTRAINT `fk_ucc_card_character` FOREIGN KEY (`card_character_id`) REFERENCES `card_characters` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_ucc_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 35 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 36 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_card_characters
@@ -643,6 +708,7 @@ INSERT INTO `user_card_characters` VALUES (30, 13, 2, 1, 70, 0, 1, 0, 2);
 INSERT INTO `user_card_characters` VALUES (31, 14, 4, 1, 30, 0, 1, 0, 1);
 INSERT INTO `user_card_characters` VALUES (33, 14, 14, 1, 150, 0, 0, 0, 1);
 INSERT INTO `user_card_characters` VALUES (34, 14, 2, 1, 70, 0, 1, 0, 2);
+INSERT INTO `user_card_characters` VALUES (35, 7, 10, 1, 65, 0, 0, 0, 1);
 
 -- ----------------------------
 -- Table structure for user_cards
@@ -704,10 +770,6 @@ CREATE TABLE `user_player_character_skills`  (
 -- ----------------------------
 -- Records of user_player_character_skills
 -- ----------------------------
-INSERT INTO `user_player_character_skills` VALUES (1, 3, 1, 1, '2025-11-21 10:17:29');
-INSERT INTO `user_player_character_skills` VALUES (3, 3, 1, 2, '2025-11-21 10:42:11');
-INSERT INTO `user_player_character_skills` VALUES (4, 6, 1, 1, '2025-12-05 10:14:15');
-INSERT INTO `user_player_character_skills` VALUES (5, 6, 1, 2, '2025-12-05 10:14:17');
 
 -- ----------------------------
 -- Table structure for user_player_characters
@@ -737,7 +799,7 @@ CREATE TABLE `user_player_characters`  (
 INSERT INTO `user_player_characters` VALUES (1, 1, 1, 128, 120, 8, 8, 15, 1, '[]');
 INSERT INTO `user_player_characters` VALUES (2, 3, 1, 78, 60, 6, 6, 30, 2, '[]');
 INSERT INTO `user_player_characters` VALUES (6, 6, 1, 80, 40, 4, 4, 100, 4, '[\"精神崩溃\"]');
-INSERT INTO `user_player_characters` VALUES (8, 7, 1, 80, 40, 4, 4, 72, 3, '[]');
+INSERT INTO `user_player_characters` VALUES (8, 7, 1, 80, 40, 4, 4, 80, 3, '[]');
 INSERT INTO `user_player_characters` VALUES (9, 8, 1, 80, 80, 4, 4, 0, 1, '[]');
 INSERT INTO `user_player_characters` VALUES (13, 12, 1, 80, 80, 4, 4, 0, 1, '[]');
 INSERT INTO `user_player_characters` VALUES (14, 13, 1, 80, 40, 4, 4, 50, 2, '[\"惊惧低语\", \"注意力分散\"]');
@@ -793,7 +855,7 @@ CREATE TABLE `user_wallets`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_wallet_user_currency`(`user_id` ASC, `currency_type` ASC) USING BTREE,
   CONSTRAINT `fk_wallet_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 14 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_wallets
@@ -802,11 +864,12 @@ INSERT INTO `user_wallets` VALUES (1, 1, 'gold', 5000, '2025-11-18 10:23:15');
 INSERT INTO `user_wallets` VALUES (2, 1, 'soulstone', 100, '2025-11-18 10:23:15');
 INSERT INTO `user_wallets` VALUES (3, 3, 'gold', 50, '2025-11-21 11:45:44');
 INSERT INTO `user_wallets` VALUES (4, 6, 'gold', 84579, '2025-12-11 10:15:21');
-INSERT INTO `user_wallets` VALUES (5, 7, 'gold', 58569, '2025-12-11 11:02:32');
+INSERT INTO `user_wallets` VALUES (5, 7, 'gold', 56319, '2025-12-31 14:51:24');
 INSERT INTO `user_wallets` VALUES (6, 8, 'gold', 220, '2025-12-11 10:03:50');
 INSERT INTO `user_wallets` VALUES (10, 12, 'gold', 1000, '2025-12-11 10:41:00');
 INSERT INTO `user_wallets` VALUES (11, 13, 'gold', 7420, '2025-12-11 11:53:01');
 INSERT INTO `user_wallets` VALUES (12, 14, 'gold', 12720, '2025-12-15 21:39:59');
+INSERT INTO `user_wallets` VALUES (13, 7, 'soulstone', 100, '2025-12-30 14:58:56');
 
 -- ----------------------------
 -- Table structure for users

@@ -1,6 +1,7 @@
 package com.dungeon.service;
 
 import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dungeon.dto.SkillDTO;
 import com.dungeon.dto.UnlockSkillRequest;
@@ -53,9 +54,9 @@ public class SkillService {
      * @return 技能树列表
      */
     public List<SkillDTO> getSkillTreeByPlayerCharacterCode(String Code, Long userId) {
-        // 查询该职业的所有技能
+        // 查询该职业的所有技能（使用 player_character_code 字段）
         QueryWrapper<Skill> wrapper = new QueryWrapper<>();
-        wrapper.eq("code", Code);
+        wrapper.eq("player_character_code", Code);
         List<Skill> skills = skillMapper.selectList(wrapper);
 
         if (skills.isEmpty()) {
@@ -134,7 +135,7 @@ public class SkillService {
 
         // 通过技能的 player_character_code 找到对应的 player_character_id
         QueryWrapper<com.dungeon.entity.PlayerCharacter> characterWrapper = new QueryWrapper<>();
-        characterWrapper.eq("code", skill.getCode());
+        characterWrapper.eq("code", skill.getPlayerCharacterCode());
         com.dungeon.entity.PlayerCharacter playerCharacter = playerCharacterMapper.selectOne(characterWrapper);
         
         if (playerCharacter == null) {
@@ -230,7 +231,39 @@ public class SkillService {
         BeanUtils.copyProperties(skill, dto);
         dto.setIsUnlocked(isUnlocked);
         dto.setCanUnlock(canUnlock);
+        
+        // 解析effectPayload，判断技能类型（主动/被动）
+        String skillType = determineSkillType(skill.getEffectPayload());
+        dto.setSkillType(skillType);
+        
         return dto;
+    }
+    
+    /**
+     * 根据effectPayload判断技能类型
+     * @param effectPayload 技能效果配置（JSON字符串）
+     * @return "active" 或 "passive"
+     */
+    private String determineSkillType(String effectPayload) {
+        if (effectPayload == null || effectPayload.trim().isEmpty()) {
+            return "active"; // 默认为主动技能
+        }
+        
+        try {
+            JSONObject effect = JSONObject.parseObject(effectPayload);
+            String type = effect.getString("type");
+            
+            // 如果type为"passive"或"passive_trigger"，则为被动技能
+            if ("passive".equals(type) || "passive_trigger".equals(type)) {
+                return "passive";
+            }
+            
+            // 其他情况（attack、heal、buff、debuff等）为主动技能
+            return "active";
+        } catch (Exception e) {
+            // JSON解析失败，默认为主动技能
+            return "active";
+        }
     }
 
     /**

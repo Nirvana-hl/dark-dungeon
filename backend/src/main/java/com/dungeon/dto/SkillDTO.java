@@ -62,5 +62,11 @@ public class SkillDTO {
      * 是否可以解锁（用于技能树展示，检查等级和前置技能）
      */
     private Boolean canUnlock;
+    
+    /**
+     * 技能类型：active-主动技能，passive-被动技能
+     * 从effectPayload中解析得出，用于前端分类展示
+     */
+    private String skillType;
 }
 

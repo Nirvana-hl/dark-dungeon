@@ -78,7 +78,7 @@ ai-full-stack---dark-dungeon/
 - ✅ 地牢探索（关卡系统）
 
 ### 待实现功能
-- ⏳ 技能系统
+- ✅ 技能系统（已实现技能树显示和解锁功能）
 - ✅ 成就系统（已实现后端接口）
 - ⏳ AI 助手集成
 - ⏳ 实时多人对战（如需要）
@@ -595,6 +595,76 @@ npm run build
   1. **短期（1-2周）**：完善装备效果在战斗中的应用，添加装备效果的测试用例
   2. **中期（1个月）**：如果支持多角色，扩展治疗目标系统
   3. **长期（可选）**：添加治疗效果的可视化（前端动画），支持治疗效果的条件触发
+
+## ♻️ 技能树系统实现（2025-01-XX）
+- **产出**：
+  1. **技能树页面重构**：
+     - ✅ 删除了旧的技能页面（`Skills.vue` 和 `SkillsSimple.vue`）
+     - ✅ 创建了新的技能树页面（`pages/skills/skills.vue`）
+     - ✅ 实现了从下到上的树形显示，符合暗黑地牢风格
+     - ✅ 实现了技能之间的连接线，已解锁的连接线显示亮色
+     - ✅ 已解锁的技能显示亮色（金色光效），可解锁的技能显示中等亮度，锁定技能显示暗色
+  2. **技能解锁功能**：
+     - ✅ 前端调用后端 `POST /user-skills/unlock` API 解锁技能
+     - ✅ 解锁后自动更新技能状态和连接线颜色
+     - ✅ 显示技能详情弹窗，包含技能描述、前置技能、等级要求等信息
+  3. **暗黑地牢风格设计**：
+     - ✅ 使用深色背景（#0a0a0f 到 #1a1a2e 渐变）
+     - ✅ 金色文字和光效（#ffd700）营造恐怖、诡异、明亮的氛围
+     - ✅ 红色边框和阴影（#8b0000）增强暗黑风格
+     - ✅ 技能节点使用圆形设计，带有光晕效果
+     - ✅ 已解锁技能有脉冲动画效果
+- **功能说明**：
+  1. **技能树显示**：
+     - 技能按照 `positionInTree` 中的 `row` 和 `column` 定位
+     - 从下到上显示（row越大越靠下）
+     - 技能之间通过 `unlockPath` 字段连接
+  2. **技能解锁**：
+     - 点击技能节点查看详情
+     - 满足条件（等级要求、前置技能）后可以解锁
+     - 解锁后技能显示为亮色，连接线也会变亮
+  3. **数据来源**：
+     - 从后端 `GET /skills/{playerCharacterCode}` 获取技能树
+     - 自动获取当前用户的主角职业代码
+     - 技能解锁状态从后端返回
+- **使用方式**：
+  - 在营地界面点击"技能"按钮进入技能树页面
+  - 点击技能节点查看详情和解锁
+  - 已解锁的技能会显示金色光效
+- **改进建议**：
+  1. 后续可以添加技能图标，让技能树更加直观
+  2. 可以添加技能预览功能，显示技能效果
+  3. 可以优化连接线的绘制算法，支持更复杂的技能树结构
+
+## ♻️ 卡牌角色查询功能修复（2025-01-XX）
+- **问题**：
+  1. `GET /card-characters` 接口查询时会返回所有角色（包括玩家角色和敌人角色）
+  2. 用户希望只查询玩家角色，但当前实现没有过滤 `cardType` 字段
+  3. `CardCharacterDTO` 缺少 `cardType` 字段，无法区分角色类型
+- **原因分析**：
+  1. `card_characters` 表中有 `card_type` 字段，用于区分 `'player'`（玩家角色）和 `'enemy'`（敌人角色）
+  2. `CardCharacterService` 的所有查询方法（`getAllCardCharacters()`, `getByClass()`, `getByFaction()`）都没有添加 `cardType = 'player'` 的过滤条件
+  3. `CardCharacterDTO` 中缺少 `cardType` 字段，无法在返回数据中体现角色类型
+- **解决方案**：
+  1. ✅ 在 `CardCharacterService.getAllCardCharacters()` 方法中添加 `cardType = 'player'` 的过滤条件，默认只返回玩家角色
+  2. ✅ 在 `CardCharacterService.getByClass()` 方法中添加 `cardType = 'player'` 的过滤条件
+  3. ✅ 在 `CardCharacterService.getByFaction()` 方法中添加 `cardType = 'player'` 的过滤条件
+  4. ✅ 在 `CardCharacterDTO` 中添加 `cardType` 字段，用于标识角色类型
+  5. ✅ 在 `CardCharacterService` 中新增 `getByCardType()` 方法，支持按角色类型查询
+  6. ✅ 在 `CardCharacterController` 中添加可选的 `cardType` 参数，支持查询敌人角色（`?cardType=enemy`）
+- **修复结果**：
+  - ✅ 默认查询只返回玩家角色（`cardType='player'`）
+  - ✅ 可以通过 `?cardType=enemy` 参数查询敌人角色
+  - ✅ 职业和阵营筛选也默认只返回玩家角色
+  - ✅ DTO 中包含 `cardType` 字段，前端可以区分角色类型
+- **使用方式**：
+  - 查询玩家角色：`GET /card-characters`（默认）
+  - 查询敌人角色：`GET /card-characters?cardType=enemy`
+  - 按职业查询玩家角色：`GET /card-characters?classType=warrior`
+  - 按阵营查询玩家角色：`GET /card-characters?faction=human`
+- **改进建议**：
+  1. 后续如果需要支持按职业/阵营筛选敌人角色，可以在 `CardCharacterService` 中添加相应方法
+  2. 可以考虑在查询参数中添加 `includeEnemy` 布尔参数，更直观地控制是否包含敌人角色
 
 ---
 

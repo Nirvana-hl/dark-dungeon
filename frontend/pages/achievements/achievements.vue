@@ -423,24 +423,97 @@ function goHome() {
 <style scoped>
 .achievements-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f1419 100%);
+  background: 
+    linear-gradient(135deg, #000000 0%, #0a0a0a 30%, #000000 60%, #050505 100%),
+    radial-gradient(circle at 20% 30%, rgba(139, 0, 0, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(75, 0, 0, 0.2) 0%, transparent 50%);
+  background-size: 100% 100%, 200% 200%, 200% 200%;
+  background-position: center, 0% 0%, 100% 100%;
   color: #ffffff;
   padding: 0;
   position: relative;
   overflow-x: hidden;
+  animation: darkPulse 8s ease-in-out infinite;
 }
 
-/* 背景装饰 */
+/* 暗黑脉冲动画 */
+@keyframes darkPulse {
+  0%, 100% {
+    background-position: center, 0% 0%, 100% 100%;
+    filter: brightness(1);
+  }
+  50% {
+    background-position: center, 10% 10%, 90% 90%;
+    filter: brightness(0.9);
+  }
+}
+
+/* 背景装饰 - 恐怖效果 */
 .achievements-page::before {
   content: '';
   position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at 30% 50%, rgba(211, 47, 47, 0.1) 0%, transparent 50%);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(139, 0, 0, 0.03) 2px,
+      rgba(139, 0, 0, 0.03) 4px
+    ),
+    radial-gradient(circle at 30% 50%, rgba(139, 0, 0, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 70% 50%, rgba(75, 0, 0, 0.15) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
+  animation: bloodVeins 15s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+/* 血丝动画 */
+@keyframes bloodVeins {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* 添加扭曲的裂纹效果 */
+.achievements-page::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(ellipse 800px 600px at 20% 30%, transparent 40%, rgba(139, 0, 0, 0.1) 41%, transparent 42%),
+    radial-gradient(ellipse 600px 800px at 80% 70%, transparent 40%, rgba(75, 0, 0, 0.1) 41%, transparent 42%);
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: multiply;
+  animation: crackShift 20s ease-in-out infinite;
+}
+
+@keyframes crackShift {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0.5;
+  }
+  33% {
+    transform: translate(10px, -5px) rotate(0.5deg);
+    opacity: 0.7;
+  }
+  66% {
+    transform: translate(-5px, 10px) rotate(-0.5deg);
+    opacity: 0.6;
+  }
 }
 
 /* 进度条区域 */
@@ -462,30 +535,98 @@ function goHome() {
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #d32f2f 0%, #ff5252 50%, #d32f2f 100%);
-  background-size: 200% 100%;
+  background: linear-gradient(90deg, #8b0000 0%, #dc143c 25%, #ff1744 50%, #dc143c 75%, #8b0000 100%);
+  background-size: 300% 100%;
   border-radius: 10rpx;
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 20rpx rgba(211, 47, 47, 0.5);
-  animation: progressShine 2s ease-in-out infinite;
+  box-shadow: 
+    0 0 20rpx rgba(139, 0, 0, 0.8),
+    0 0 40rpx rgba(220, 20, 60, 0.5),
+    inset 0 0 20rpx rgba(139, 0, 0, 0.6);
+  animation: bloodFlow 3s ease-in-out infinite, progressDistort 4s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
 }
 
-@keyframes progressShine {
+.progress-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  animation: bloodShimmer 2s ease-in-out infinite;
+}
+
+@keyframes bloodFlow {
   0%, 100% {
     background-position: 0% 50%;
+    filter: brightness(1);
   }
   50% {
     background-position: 100% 50%;
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes progressDistort {
+  0%, 100% {
+    transform: scaleY(1);
+    border-radius: 10rpx;
+  }
+  50% {
+    transform: scaleY(1.05);
+    border-radius: 8rpx 12rpx 8rpx 12rpx;
+  }
+}
+
+@keyframes bloodShimmer {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
   }
 }
 
 .progress-text {
   font-size: 32rpx;
-  color: #ffffff;
+  color: #dc143c;
   text-align: center;
   display: block;
-  font-weight: 600;
-  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.5);
+  font-weight: 700;
+  text-shadow: 
+    0 0 20rpx rgba(220, 20, 60, 0.8),
+    0 0 40rpx rgba(139, 0, 0, 0.6),
+    0 2rpx 8rpx rgba(0, 0, 0, 0.8);
+  letter-spacing: 2rpx;
+  animation: textFlicker 4s ease-in-out infinite;
+}
+
+@keyframes textFlicker {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 
+      0 0 20rpx rgba(220, 20, 60, 0.8),
+      0 0 40rpx rgba(139, 0, 0, 0.6);
+  }
+  50% {
+    opacity: 0.95;
+    text-shadow: 
+      0 0 30rpx rgba(255, 23, 68, 1),
+      0 0 60rpx rgba(220, 20, 60, 0.8);
+  }
 }
 
 /* 标签页 - 固定定位 */
@@ -496,10 +637,45 @@ function goHome() {
   display: flex;
   gap: 0;
   padding: 0 60rpx;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%);
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.1);
+  background: 
+    linear-gradient(180deg, rgba(0, 0, 0, 0.98) 0%, rgba(10, 0, 0, 0.95) 50%, rgba(0, 0, 0, 0.98) 100%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(139, 0, 0, 0.05) 2px,
+      rgba(139, 0, 0, 0.05) 4px
+    );
+  border-bottom: 3rpx solid rgba(139, 0, 0, 0.6);
+  border-top: 1rpx solid rgba(220, 20, 60, 0.3);
   backdrop-filter: blur(20rpx);
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 4rpx 20rpx rgba(0, 0, 0, 0.6),
+    0 0 30rpx rgba(139, 0, 0, 0.3),
+    inset 0 -2rpx 10rpx rgba(139, 0, 0, 0.2);
+  position: relative;
+}
+
+.tabs-nav::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3rpx;
+  background: linear-gradient(90deg, transparent, rgba(220, 20, 60, 0.6), transparent);
+  animation: navLineFlow 3s ease-in-out infinite;
+}
+
+@keyframes navLineFlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.1);
+  }
 }
 
 .tab-item {
@@ -527,13 +703,46 @@ function goHome() {
 }
 
 .tab-item.active {
-  color: #ffffff;
-  font-weight: 600;
-  text-shadow: 0 0 20rpx rgba(211, 47, 47, 0.5);
+  color: #ff1744;
+  font-weight: 700;
+  text-shadow: 
+    0 0 20rpx rgba(255, 23, 68, 0.8),
+    0 0 40rpx rgba(220, 20, 60, 0.6),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.8);
+  animation: tabGlow 2s ease-in-out infinite;
+}
+
+@keyframes tabGlow {
+  0%, 100% {
+    text-shadow: 
+      0 0 20rpx rgba(255, 23, 68, 0.8),
+      0 0 40rpx rgba(220, 20, 60, 0.6);
+    filter: brightness(1);
+  }
+  50% {
+    text-shadow: 
+      0 0 30rpx rgba(255, 23, 68, 1),
+      0 0 60rpx rgba(220, 20, 60, 0.8);
+    filter: brightness(1.2);
+  }
 }
 
 .tab-item.active::after {
   width: 80%;
+  background: linear-gradient(90deg, transparent, #dc143c, #ff1744, #dc143c, transparent);
+  box-shadow: 0 0 10rpx rgba(220, 20, 60, 0.8);
+  animation: tabLineGlow 2s ease-in-out infinite;
+}
+
+@keyframes tabLineGlow {
+  0%, 100% {
+    box-shadow: 0 0 10rpx rgba(220, 20, 60, 0.8);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 20rpx rgba(255, 23, 68, 1);
+    opacity: 0.9;
+  }
 }
 
 .tab-item:active {
@@ -561,14 +770,49 @@ function goHome() {
   align-items: center;
   gap: 32rpx;
   padding: 36rpx;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  background: 
+    linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(20, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0.8) 100%),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(139, 0, 0, 0.03) 10px,
+      rgba(139, 0, 0, 0.03) 20px
+    );
   border-radius: 20rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  border: 2rpx solid rgba(139, 0, 0, 0.5);
+  border-top-color: rgba(220, 20, 60, 0.3);
+  border-right-color: rgba(139, 0, 0, 0.7);
+  border-bottom-color: rgba(75, 0, 0, 0.7);
+  border-left-color: rgba(220, 20, 60, 0.3);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.2);
+  box-shadow: 
+    0 4rpx 20rpx rgba(0, 0, 0, 0.6),
+    0 0 30rpx rgba(139, 0, 0, 0.3),
+    inset 0 0 40rpx rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10rpx);
+  animation: itemDistort 10s ease-in-out infinite;
+}
+
+@keyframes itemDistort {
+  0%, 100% {
+    transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+    border-radius: 20rpx;
+  }
+  25% {
+    transform: perspective(1000px) rotateX(0.5deg) rotateY(-0.3deg);
+    border-radius: 18rpx 22rpx 18rpx 22rpx;
+  }
+  50% {
+    transform: perspective(1000px) rotateX(0deg) rotateY(0.3deg);
+    border-radius: 22rpx 18rpx 22rpx 18rpx;
+  }
+  75% {
+    transform: perspective(1000px) rotateX(-0.5deg) rotateY(0deg);
+    border-radius: 20rpx;
+  }
 }
 
 .achievement-item::before {
@@ -578,12 +822,59 @@ function goHome() {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transition: left 0.6s;
+  background: linear-gradient(
+    90deg, 
+    transparent, 
+    rgba(220, 20, 60, 0.2), 
+    rgba(139, 0, 0, 0.3),
+    rgba(220, 20, 60, 0.2),
+    transparent
+  );
+  transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: blur(10rpx);
 }
 
 .achievement-item:active::before {
   left: 100%;
+}
+
+/* 添加扭曲的阴影效果 */
+.achievement-item::after {
+  content: '';
+  position: absolute;
+  top: -2rpx;
+  left: -2rpx;
+  right: -2rpx;
+  bottom: -2rpx;
+  background: linear-gradient(
+    45deg,
+    rgba(220, 20, 60, 0.3),
+    transparent,
+    rgba(139, 0, 0, 0.3),
+    transparent,
+    rgba(220, 20, 60, 0.3)
+  );
+  border-radius: 22rpx;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s;
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+.achievement-item:hover::after,
+.achievement-item:active::after {
+  opacity: 1;
+}
+
+@keyframes borderGlow {
+  0%, 100% {
+    opacity: 0.3;
+    filter: blur(5rpx);
+  }
+  50% {
+    opacity: 0.6;
+    filter: blur(8rpx);
+  }
 }
 
 .achievement-item:hover {
@@ -593,9 +884,42 @@ function goHome() {
 }
 
 .achievement-item.unlocked {
-  background: linear-gradient(135deg, rgba(211, 47, 47, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
-  border-color: rgba(211, 47, 47, 0.3);
-  box-shadow: 0 4rpx 20rpx rgba(211, 47, 47, 0.2), inset 0 0 40rpx rgba(211, 47, 47, 0.05);
+  background: 
+    linear-gradient(135deg, rgba(139, 0, 0, 0.4) 0%, rgba(220, 20, 60, 0.2) 50%, rgba(139, 0, 0, 0.4) 100%),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(220, 20, 60, 0.05) 10px,
+      rgba(220, 20, 60, 0.05) 20px
+    );
+  border-color: rgba(220, 20, 60, 0.6);
+  border-top-color: rgba(255, 23, 68, 0.8);
+  border-right-color: rgba(220, 20, 60, 0.8);
+  border-bottom-color: rgba(139, 0, 0, 0.8);
+  border-left-color: rgba(255, 23, 68, 0.8);
+  box-shadow: 
+    0 4rpx 20rpx rgba(139, 0, 0, 0.6),
+    0 0 40rpx rgba(220, 20, 60, 0.5),
+    inset 0 0 60rpx rgba(220, 20, 60, 0.2);
+  animation: unlockedPulse 2s ease-in-out infinite, itemDistort 10s ease-in-out infinite;
+}
+
+@keyframes unlockedPulse {
+  0%, 100% {
+    box-shadow: 
+      0 4rpx 20rpx rgba(139, 0, 0, 0.6),
+      0 0 40rpx rgba(220, 20, 60, 0.5),
+      inset 0 0 60rpx rgba(220, 20, 60, 0.2);
+    border-color: rgba(220, 20, 60, 0.6);
+  }
+  50% {
+    box-shadow: 
+      0 6rpx 30rpx rgba(139, 0, 0, 0.8),
+      0 0 60rpx rgba(220, 20, 60, 0.7),
+      inset 0 0 80rpx rgba(220, 20, 60, 0.3);
+    border-color: rgba(255, 23, 68, 0.8);
+  }
 }
 
 .achievement-item.unlocked::after {
@@ -605,8 +929,20 @@ function goHome() {
   right: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(211, 47, 47, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(220, 20, 60, 0.2) 0%, rgba(139, 0, 0, 0.1) 50%, transparent 70%);
   pointer-events: none;
+  animation: bloodRadial 4s ease-in-out infinite;
+}
+
+@keyframes bloodRadial {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2) rotate(180deg);
+    opacity: 0.6;
+  }
 }
 
 /* 左侧角色图标 */
@@ -621,21 +957,80 @@ function goHome() {
   width: 100%;
   height: 100%;
   border-radius: 20rpx;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+  background: 
+    linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(20, 0, 0, 0.6) 100%),
+    radial-gradient(circle at center, rgba(139, 0, 0, 0.2) 0%, transparent 70%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 72rpx;
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(220, 20, 60, 0.9);
   overflow: hidden;
   position: relative;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.3), inset 0 0 20rpx rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 4rpx 20rpx rgba(0, 0, 0, 0.6),
+    0 0 30rpx rgba(139, 0, 0, 0.4),
+    inset 0 0 20rpx rgba(0, 0, 0, 0.8),
+    inset 0 0 40rpx rgba(139, 0, 0, 0.2);
+  border: 2rpx solid rgba(139, 0, 0, 0.5);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 
+    0 0 20rpx rgba(220, 20, 60, 0.8),
+    0 0 40rpx rgba(139, 0, 0, 0.6);
+  animation: iconDistort 8s ease-in-out infinite;
+}
+
+@keyframes iconDistort {
+  0%, 100% {
+    transform: perspective(500px) rotateY(0deg) rotateX(0deg);
+    filter: brightness(1) contrast(1);
+  }
+  25% {
+    transform: perspective(500px) rotateY(2deg) rotateX(-1deg);
+    filter: brightness(0.9) contrast(1.1);
+  }
+  50% {
+    transform: perspective(500px) rotateY(0deg) rotateX(1deg);
+    filter: brightness(1.1) contrast(0.9);
+  }
+  75% {
+    transform: perspective(500px) rotateY(-2deg) rotateX(0deg);
+    filter: brightness(0.95) contrast(1.05);
+  }
 }
 
 .achievement-item.unlocked .character-icon-bg {
-  background: linear-gradient(135deg, rgba(211, 47, 47, 0.3) 0%, rgba(255, 255, 255, 0.1) 100%);
-  box-shadow: 0 4rpx 20rpx rgba(211, 47, 47, 0.4), inset 0 0 30rpx rgba(211, 47, 47, 0.2);
+  background: 
+    linear-gradient(135deg, rgba(139, 0, 0, 0.6) 0%, rgba(220, 20, 60, 0.4) 100%),
+    radial-gradient(circle at center, rgba(255, 23, 68, 0.3) 0%, transparent 70%);
+  box-shadow: 
+    0 4rpx 20rpx rgba(139, 0, 0, 0.8),
+    0 0 40rpx rgba(220, 20, 60, 0.6),
+    inset 0 0 40rpx rgba(220, 20, 60, 0.3),
+    inset 0 0 60rpx rgba(139, 0, 0, 0.4);
+  border-color: rgba(220, 20, 60, 0.8);
+  color: rgba(255, 23, 68, 1);
+  text-shadow: 
+    0 0 30rpx rgba(255, 23, 68, 1),
+    0 0 60rpx rgba(220, 20, 60, 0.8);
+  animation: unlockedIconGlow 2s ease-in-out infinite, iconDistort 8s ease-in-out infinite;
+}
+
+@keyframes unlockedIconGlow {
+  0%, 100% {
+    box-shadow: 
+      0 4rpx 20rpx rgba(139, 0, 0, 0.8),
+      0 0 40rpx rgba(220, 20, 60, 0.6),
+      inset 0 0 40rpx rgba(220, 20, 60, 0.3);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 
+      0 6rpx 30rpx rgba(139, 0, 0, 1),
+      0 0 60rpx rgba(255, 23, 68, 0.8),
+      inset 0 0 60rpx rgba(255, 23, 68, 0.4);
+    filter: brightness(1.2);
+  }
 }
 
 .achievement-item:hover .character-icon-bg {
@@ -654,23 +1049,47 @@ function goHome() {
 .achievement-title {
   font-size: 44rpx;
   font-weight: 700;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.95);
   line-height: 1.4;
-  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.5);
-  letter-spacing: 0.5rpx;
+  text-shadow: 
+    0 0 10rpx rgba(139, 0, 0, 0.5),
+    0 2rpx 8rpx rgba(0, 0, 0, 0.8);
+  letter-spacing: 1rpx;
   transition: all 0.3s;
+  position: relative;
 }
 
 .achievement-item.unlocked .achievement-title {
-  color: #ffeb3b;
-  text-shadow: 0 0 20rpx rgba(255, 235, 59, 0.5);
+  color: #ff1744;
+  text-shadow: 
+    0 0 20rpx rgba(255, 23, 68, 0.8),
+    0 0 40rpx rgba(220, 20, 60, 0.6),
+    0 2rpx 8rpx rgba(0, 0, 0, 0.8);
+  animation: titleFlicker 3s ease-in-out infinite;
+}
+
+@keyframes titleFlicker {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 
+      0 0 20rpx rgba(255, 23, 68, 0.8),
+      0 0 40rpx rgba(220, 20, 60, 0.6);
+  }
+  50% {
+    opacity: 0.9;
+    text-shadow: 
+      0 0 30rpx rgba(255, 23, 68, 1),
+      0 0 60rpx rgba(220, 20, 60, 0.8);
+  }
 }
 
 .achievement-description {
   font-size: 30rpx;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(200, 200, 200, 0.8);
   line-height: 1.6;
   letter-spacing: 0.5rpx;
+  text-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.6);
+  position: relative;
 }
 
 /* 右侧完成状态 */
@@ -693,18 +1112,76 @@ function goHome() {
 }
 
 .status-circle.completed {
-  background: linear-gradient(135deg, rgba(211, 47, 47, 0.4) 0%, rgba(255, 82, 82, 0.3) 100%);
-  border-color: rgba(211, 47, 47, 0.6);
-  box-shadow: 0 4rpx 30rpx rgba(211, 47, 47, 0.5), inset 0 0 40rpx rgba(211, 47, 47, 0.2);
-  animation: pulse 2s ease-in-out infinite;
+  background: 
+    radial-gradient(circle at 30% 30%, rgba(220, 20, 60, 0.6) 0%, rgba(139, 0, 0, 0.4) 50%, rgba(75, 0, 0, 0.3) 100%);
+  border-color: rgba(220, 20, 60, 0.8);
+  border-width: 3rpx;
+  box-shadow: 
+    0 4rpx 30rpx rgba(139, 0, 0, 0.8),
+    0 0 50rpx rgba(220, 20, 60, 0.6),
+    inset 0 0 50rpx rgba(220, 20, 60, 0.3),
+    inset 0 0 80rpx rgba(139, 0, 0, 0.4);
+  animation: bloodPulse 2s ease-in-out infinite, circleDistort 6s ease-in-out infinite;
+  position: relative;
 }
 
-@keyframes pulse {
+.status-circle.completed::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 23, 68, 0.3) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  animation: innerGlow 2s ease-in-out infinite;
+}
+
+@keyframes bloodPulse {
   0%, 100% {
-    box-shadow: 0 4rpx 30rpx rgba(211, 47, 47, 0.5), inset 0 0 40rpx rgba(211, 47, 47, 0.2);
+    box-shadow: 
+      0 4rpx 30rpx rgba(139, 0, 0, 0.8),
+      0 0 50rpx rgba(220, 20, 60, 0.6),
+      inset 0 0 50rpx rgba(220, 20, 60, 0.3);
+    filter: brightness(1);
   }
   50% {
-    box-shadow: 0 6rpx 40rpx rgba(211, 47, 47, 0.7), inset 0 0 50rpx rgba(211, 47, 47, 0.3);
+    box-shadow: 
+      0 6rpx 40rpx rgba(139, 0, 0, 1),
+      0 0 70rpx rgba(255, 23, 68, 0.8),
+      inset 0 0 70rpx rgba(255, 23, 68, 0.4);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes circleDistort {
+  0%, 100% {
+    transform: scale(1);
+    border-radius: 50%;
+  }
+  25% {
+    transform: scale(1.02);
+    border-radius: 48% 52% 48% 52%;
+  }
+  50% {
+    transform: scale(1);
+    border-radius: 52% 48% 52% 48%;
+  }
+  75% {
+    transform: scale(1.01);
+    border-radius: 50%;
+  }
+}
+
+@keyframes innerGlow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.1);
   }
 }
 
@@ -749,7 +1226,19 @@ function goHome() {
   stroke-width: 4;
   transition: stroke-dasharray 0.8s cubic-bezier(0.4, 0, 0.2, 1);
   stroke-linecap: round;
-  filter: drop-shadow(0 0 8rpx rgba(211, 47, 47, 0.8));
+  filter: drop-shadow(0 0 8rpx rgba(220, 20, 60, 0.8)) drop-shadow(0 0 15rpx rgba(139, 0, 0, 0.6));
+  animation: progressGlow 2s ease-in-out infinite;
+}
+
+@keyframes progressGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8rpx rgba(220, 20, 60, 0.8)) drop-shadow(0 0 15rpx rgba(139, 0, 0, 0.6));
+    opacity: 1;
+  }
+  50% {
+    filter: drop-shadow(0 0 12rpx rgba(255, 23, 68, 1)) drop-shadow(0 0 25rpx rgba(220, 20, 60, 0.8));
+    opacity: 0.9;
+  }
 }
 
 .progress-percent {

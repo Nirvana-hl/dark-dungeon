@@ -32,14 +32,35 @@ public class CardCharacterService {
     private CardCharacterTraitMapper cardCharacterTraitMapper;
 
     /**
-     * 查询全部卡牌角色模板
+     * 查询全部卡牌角色模板（默认只返回玩家角色）
      */
     public List<CardCharacterDTO> getAllCardCharacters() {
+        LambdaQueryWrapper<CardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CardCharacter::getCardType, "player");
+        return toDTOList(cardCharacterMapper.selectList(wrapper));
+    }
+    
+    /**
+     * 根据卡牌类型查询（player或enemy）
+     */
+    public List<CardCharacterDTO> getByCardType(String cardType) {
+        if (cardType == null || cardType.trim().isEmpty()) {
+            return getAllCardCharacters(); // 默认返回玩家角色
+        }
+        LambdaQueryWrapper<CardCharacter> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CardCharacter::getCardType, cardType);
+        return toDTOList(cardCharacterMapper.selectList(wrapper));
+    }
+    
+    /**
+     * 查询全部卡牌角色模板（包括玩家和敌人，用于特殊场景）
+     */
+    public List<CardCharacterDTO> getAllCardCharactersIncludeEnemy() {
         return toDTOList(cardCharacterMapper.selectList(null));
     }
 
     /**
-     * 根据职业筛选
+     * 根据职业筛选（默认只返回玩家角色）
      */
     public List<CardCharacterDTO> getByClass(String classType) {
         if (classType == null || classType.trim().isEmpty()) {
@@ -47,11 +68,12 @@ public class CardCharacterService {
         }
         LambdaQueryWrapper<CardCharacter> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CardCharacter::getClassType, classType);
+        wrapper.eq(CardCharacter::getCardType, "player");
         return toDTOList(cardCharacterMapper.selectList(wrapper));
     }
 
     /**
-     * 根据阵营筛选
+     * 根据阵营筛选（默认只返回玩家角色）
      */
     public List<CardCharacterDTO> getByFaction(String faction) {
         if (faction == null || faction.trim().isEmpty()) {
@@ -59,6 +81,7 @@ public class CardCharacterService {
         }
         LambdaQueryWrapper<CardCharacter> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CardCharacter::getFaction, faction);
+        wrapper.eq(CardCharacter::getCardType, "player");
         return toDTOList(cardCharacterMapper.selectList(wrapper));
     }
 

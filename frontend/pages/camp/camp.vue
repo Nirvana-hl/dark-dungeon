@@ -51,28 +51,23 @@
 
     <!-- 主要内容区域 -->
     <view class="main-content">
-      <!-- 左侧导航 -->
-      <view class="nav-side nav-left">
-            <view 
-          class="nav-item"
-          @click="goToInventory"
-        >
-          <view class="nav-icon-wrapper">
-            <i class="fas fa-shopping-bag nav-icon"></i>
-              </view>
-          <text class="nav-label">背包</text>
-            </view>
-
-              <view 
-          class="nav-item"
-          @click="goToSkills"
-        >
-          <view class="nav-icon-wrapper">
-            <i class="fas fa-sitemap nav-icon"></i>
-                </view>
-          <text class="nav-label">技能</text>
-            </view>
-          </view>
+      <!-- 左侧导航：背包 + 技能 -->
+<view class="nav-side nav-left">
+  <!-- 背包：替换为本地图片 -->
+  <view class="nav-item" @click="goToInventory">
+    <view class="nav-icon-wrapper">
+      <image src="/static/icons/backpack.png" class="nav-icon-img" mode="aspectFit"></image>
+    </view>
+    <text class="nav-label">背包</text>
+  </view>
+  <!-- 技能：替换为本地图片 -->
+  <view class="nav-item" @click="goToSkills">
+    <view class="nav-icon-wrapper">
+      <image src="/static/icons/skill.png" class="nav-icon-img" mode="aspectFit"></image>
+    </view>
+    <text class="nav-label">技能</text>
+  </view>
+</view>
 
       <!-- 中间区域 - 开始闯关按钮 -->
       <view class="center-action-area">
@@ -86,28 +81,23 @@
         </button>
       </view>
 
-      <!-- 右侧导航 -->
-      <view class="nav-side nav-right">
-              <view 
-          class="nav-item"
-          @click="goToShop"
-        >
-          <view class="nav-icon-wrapper">
-            <i class="fas fa-store nav-icon"></i>
-                </view>
-          <text class="nav-label">商城</text>
-          </view>
-
-          <view 
-          class="nav-item"
-          @click="goToAchievements"
-        >
-          <view class="nav-icon-wrapper">
-            <i class="fas fa-trophy nav-icon"></i>
-              </view>
-          <text class="nav-label">成就</text>
-              </view>
-            </view>
+      <!-- 右侧导航：商城 + 成就 -->
+<view class="nav-side nav-right">
+  <!-- 商城：替换为本地图片 -->
+  <view class="nav-item" @click="goToShop">
+    <view class="nav-icon-wrapper">
+      <image src="/static/icons/shop.png" class="nav-icon-img" mode="aspectFit"></image>
+    </view>
+    <text class="nav-label">商城</text>
+  </view>
+  <!-- 成就：替换为本地图片 -->
+  <view class="nav-item" @click="goToAchievements">
+    <view class="nav-icon-wrapper">
+      <image src="/static/icons/achievement.png" class="nav-icon-img" mode="aspectFit"></image>
+    </view>
+    <text class="nav-label">成就</text>
+  </view>
+</view>
             </view>
 
     <!-- 底部压力显示区域 -->
@@ -180,6 +170,13 @@
       </view>
     </view>
 
+    <!-- 技能树模态框 -->
+    <view v-if="showSkillsModal" class="skills-modal-overlay" @click="showSkillsModal = false">
+      <view class="skills-modal-container" @click.stop>
+        <SkillsTreePanel @close="showSkillsModal = false" />
+      </view>
+    </view>
+
     <!-- 背包模态框 -->
     <view v-if="showInventoryModal" class="modal-overlay" @click="showInventoryModal = false">
       <view class="modal-container" @click.stop>
@@ -223,6 +220,7 @@ import { storeToRefs } from 'pinia'
 import { campApi, stressApi } from '@/api/request'
 import { useCampStore } from '@/stores/camp'
 import type { StressDebuffConfig } from '@/types'
+import SkillsTreePanel from '@/components/SkillsTreePanel.vue'
 
 // uni-app 类型声明
 declare const uni: {
@@ -238,6 +236,7 @@ const showInventoryModal = ref(false)
 const inventoryItems = ref<any[]>([])
 const loadingInventory = ref(false)
 const avatarImageSrc = ref('/static/tabbar/touxiang.jpg')
+const showSkillsModal = ref(false)
 
 // 压力系统状态
 const currentStress = ref(0)
@@ -311,7 +310,7 @@ function getItemIcon(itemType: string) {
 }
 
 function goToSkills() {
-  uni.navigateTo({ url: '/pages/skills/skills' })
+  showSkillsModal.value = true
 }
 
 function goToShop() {
@@ -661,59 +660,47 @@ onMounted(async () => {
 }
 
 .nav-icon-wrapper {
-  width: 100rpx;
-  height: 100rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-  border: 3rpx solid rgba(139, 69, 19, 0.8);
-  border-radius: 50%;
-  box-shadow: 
-    0 0 20rpx rgba(139, 69, 19, 0.5),
-    inset 0 0 30rpx rgba(0, 0, 0, 0.5);
+  background: transparent;
+  border: none;
+  box-shadow: none;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.3s ease;
+  padding: 0;
+  min-width: auto;
+  min-height: auto;
 }
 
 .nav-icon-wrapper::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  background: radial-gradient(circle, rgba(184, 134, 11, 0.3) 0%, transparent 70%);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: width 0.3s ease, height 0.3s ease;
-}
-
-.nav-item:active .nav-icon-wrapper::before {
-  width: 200rpx;
-  height: 200rpx;
+  display: none;
 }
 
 .nav-icon-wrapper::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent 30%,
-    rgba(255, 215, 0, 0.1) 50%,
-    transparent 70%
-  );
-  transform: rotate(45deg);
-  transition: left 0.6s ease;
+  display: none;
 }
 
-.nav-item:active .nav-icon-wrapper::after {
-  left: 100%;
+.nav-icon-img {
+  width: 150rpx;
+  height: 150rpx;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 0 10rpx rgba(218, 165, 32, 0.8));
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: high-quality;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.nav-item:active .nav-icon-img {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 15rpx rgba(255, 215, 0, 1));
 }
 
 .nav-icon {
@@ -1491,5 +1478,56 @@ onMounted(async () => {
   text-shadow: 
     0 0 6rpx rgba(220, 20, 60, 0.8),
     0 1rpx 2rpx rgba(0, 0, 0, 0.8);
+}
+
+/* 技能树模态框样式 */
+.skills-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.skills-modal-container {
+  width: 90%;
+  max-width: 700rpx;
+  height: 85vh;
+  max-height: 1400rpx;
+  background: transparent;
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 
+    0 0 60rpx rgba(139, 0, 0, 0.8),
+    0 0 120rpx rgba(139, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100rpx);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 </style>
