@@ -11,7 +11,6 @@
           @error="handleAvatarError"
         ></image>
         <view class="character-details">
-          <text class="character-name">{{ playerCharacter.playerCharacterName || '冒险者' }}</text>
           <text class="character-class">{{ getCharacterClassName(playerCharacter.playerCharacterCode) }}</text>
         </view>
       </view>
@@ -64,7 +63,15 @@
             <view class="skill-content">
               <!-- 技能图标 -->
               <view class="skill-icon-wrapper">
-                <view class="skill-icon" :class="getSkillIconClass(skill)"></view>
+                <view class="skill-icon" :class="getSkillIconClass(skill)">
+                  <image 
+                    v-if="getSkillImageUrl(skill)" 
+                    :src="getSkillImageUrl(skill)" 
+                    class="skill-icon-image"
+                    mode="aspectFit"
+                    @error="handleSkillImageError"
+                  ></image>
+                </view>
                 <view v-if="skill.isUnlocked" class="unlock-badge">✓</view>
               </view>
               
@@ -117,7 +124,15 @@
             <view class="skill-content">
               <!-- 技能图标 -->
               <view class="skill-icon-wrapper">
-                <view class="skill-icon" :class="getSkillIconClass(skill)"></view>
+                <view class="skill-icon" :class="getSkillIconClass(skill)">
+                  <image 
+                    v-if="getSkillImageUrl(skill)" 
+                    :src="getSkillImageUrl(skill)" 
+                    class="skill-icon-image"
+                    mode="aspectFit"
+                    @error="handleSkillImageError"
+                  ></image>
+                </view>
                 <view v-if="skill.isUnlocked" class="unlock-badge">✓</view>
               </view>
               
@@ -524,6 +539,36 @@ function getSkillIconClass(skill: Skill) {
   } else {
     return 'icon-locked'
   }
+}
+
+// 获取技能图片URL
+// 图片存储路径：/static/images/skills/{技能code}.png 或 /static/images/skills/{职业代码}/{技能code}.png
+// 优先匹配：直接放在 skills 目录下的图片
+// 备选：按职业分类存储的图片
+function getSkillImageUrl(skill: Skill): string | null {
+  if (!skill.code) {
+    return null
+  }
+  
+  const skillCode = skill.code
+  const classCode = playerCharacter.value?.playerCharacterCode
+  
+  // 尝试多种可能的图片路径（按优先级排序）
+  const possiblePaths: string[] = [
+    // 优先：直接放在 skills 目录下的图片
+    `/static/images/skills/${skillCode}.png`,
+    `/static/images/skills/${skillCode}.jpg`,
+  ]
+  
+  // 返回第一个可能的路径（实际加载时如果不存在会触发error事件）
+  return possiblePaths[0] || null
+}
+
+// 处理技能图片加载错误
+function handleSkillImageError() {
+  // 图片加载失败时，使用默认的CSS样式图标
+  // 不需要额外处理，因为CSS样式会作为背景显示
+  console.log('技能图片加载失败，使用默认样式')
 }
 
 // 获取前置技能名称
@@ -1059,7 +1104,18 @@ onMounted(() => {
     bottom: 0;
     border-radius: 12rpx;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+    z-index: 1;
   }
+}
+
+// 技能图标图片
+.skill-icon-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 12rpx;
+  object-fit: cover;
+  position: relative;
+  z-index: 0;
 }
 
 // 已解锁技能 - 金色魔法光效
