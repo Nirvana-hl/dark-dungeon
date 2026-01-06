@@ -339,6 +339,26 @@ public class CardEffectService {
             }
         }
         
+        // 攻击力百分比减少（对敌人）
+        if (effect.containsKey("attack_reduction")) {
+            double reduction = effect.getDoubleValue("attack_reduction");
+            if ("enemy".equalsIgnoreCase(actualTarget)) {
+                int currentAttack = context.getEnemyAttack();
+                int newAttack = (int)(currentAttack * (1 - reduction));
+                context.setEnemyAttack(Math.max(0, newAttack));
+                context.addLog("技能：" + cardName + "，敌人攻击力减少 " + String.format("%.0f", reduction * 100) + "%（当前攻击：" + context.getEnemyAttack() + "）");
+            }
+        }
+        
+        // 降低敌人攻击力（全局效果，不需要指定target）
+        if (effect.containsKey("enemy_attack_reduction")) {
+            double reduction = effect.getDoubleValue("enemy_attack_reduction");
+            int currentAttack = context.getEnemyAttack();
+            int newAttack = (int)(currentAttack * (1 - reduction));
+            context.setEnemyAttack(Math.max(0, newAttack));
+            context.addLog("技能：" + cardName + "，敌人攻击力减少 " + String.format("%.0f", reduction * 100) + "%（当前攻击：" + context.getEnemyAttack() + "）");
+        }
+        
         // 防御力加成
         if (effect.containsKey("defense_bonus") || effect.containsKey("defense")) {
             int defenseBonus = effect.containsKey("defense_bonus") ? 

@@ -73,6 +73,9 @@ public class DungeonService {
     @Autowired
     private UserCardCharacterService userCardCharacterService;
 
+    @Autowired
+    private SkillService skillService;
+
     private static final Random RANDOM = new Random();
 
     public List<DungeonDTO> getAllDungeons() {
@@ -483,6 +486,16 @@ public class DungeonService {
         
         // 加载角色特性（用于每回合触发特性效果）
         List<com.dungeon.dto.CardCharacterTraitDTO> characterTraits = loadCharacterTraitsForBattle(hero.getUserId());
+        
+        // 加载被动技能（用于战斗开始时自动应用）
+        List<com.dungeon.dto.SkillDTO> passiveSkills = new ArrayList<>();
+        if (hero.getPlayerCharacterCode() != null) {
+            passiveSkills = skillService.getPassiveSkillsForBattle(hero.getUserId(), hero.getPlayerCharacterCode());
+            // 战斗开始时应用被动技能
+            if (!passiveSkills.isEmpty()) {
+                skillService.applyPassiveSkills(passiveSkills, context);
+            }
+        }
 
         int round = 1;
         int heroMana = 3; // 每回合初始法力值
@@ -493,6 +506,11 @@ public class DungeonService {
             
             // 玩家回合开始：触发角色特性效果
             applyCharacterTraitsAtTurnStart(characterTraits, context, round);
+            
+            // 玩家回合开始：触发条件被动技能
+            if (!passiveSkills.isEmpty()) {
+                skillService.triggerPassiveSkills(passiveSkills, context, round);
+            }
             
             // 玩家回合：恢复法力值并抽牌
             heroMana = Math.min(heroMana + 1, maxMana);

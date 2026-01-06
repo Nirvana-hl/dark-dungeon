@@ -11,7 +11,7 @@
  Target Server Version : 80040 (8.0.40)
  File Encoding         : 65001
 
- Date: 31/12/2025 16:55:06
+ Date: 06/01/2026 08:59:13
 */
 
 SET NAMES utf8mb4;
@@ -535,7 +535,7 @@ CREATE TABLE `skills`  (
   `position_in_tree` json NOT NULL,
   `unlock_path` json NOT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 67 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 83 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of skills
@@ -572,6 +572,22 @@ INSERT INTO `skills` VALUES (63, 'warrior_taunt', 'warrior', '嘲讽', '战士�
 INSERT INTO `skills` VALUES (64, 'warrior_berserker_rage', 'warrior', '狂暴', '战士进入狂暴状态，在接下来的4回合内大幅提高攻击力和攻击速度，但防御力会降低。狂暴状态下，战士会不顾一切地攻击敌人，直到战斗结束。这是战士最强大的输出技能。', '{\"type\": \"buff\", \"target\": \"self\", \"duration\": 4, \"action_cost\": 3, \"attack_bonus\": 0.4, \"defense_penalty\": 0.2, \"attack_speed_bonus\": 0.35}', 3, '{\"row\": 2, \"column\": 3}', '[\"warrior_robust_body\"]');
 INSERT INTO `skills` VALUES (65, 'warrior_ultimate_strike', 'warrior', '终极打击', '战士凝聚所有力量进行终极打击，对单个敌人造成巨额物理伤害。如果敌人生命值低于40%，伤害会进一步提高。终极打击是战士最强大的单体攻击技能，往往能够一击必杀。', '{\"type\": \"attack\", \"damage\": 70, \"target\": \"enemy\", \"action_cost\": 4, \"damage_type\": \"physical\", \"execute_bonus\": 0.5, \"execute_threshold\": 0.4}', 5, '{\"row\": 3, \"column\": 1}', '[\"warrior_whirlwind\"]');
 INSERT INTO `skills` VALUES (66, 'warrior_unyielding_will', 'warrior', '不屈意志', '战士激活不屈意志，在生命值低于30%时自动触发，大幅提高防御力、生命恢复速度和所有负面状态抗性，持续5回合。这个技能让战士在绝境中能够继续战斗，体现了他们永不放弃的精神。', '{\"type\": \"passive_trigger\", \"duration\": 5, \"action_cost\": 0, \"defense_bonus\": 0.5, \"debuff_resistance\": 0.4, \"hp_regen_per_turn\": 15, \"trigger_hp_threshold\": 0.3}', 5, '{\"row\": 3, \"column\": 2}', '[\"warrior_taunt\", \"warrior_berserker_rage\"]');
+INSERT INTO `skills` VALUES (67, 'warden_sacred_power', 'warden', '神圣力量', '守望者通过神圣力量的加持，永久提升自己的攻击力。神圣力量让守望者的每一次攻击都带有神圣属性，对邪恶敌人造成额外伤害。', '{\"type\": \"passive\", \"attack_bonus\": 0.15, \"holy_damage_bonus\": 0.1}', 3, '{\"row\": 2, \"column\": 4}', '[\"warden_sacred_shield\"]');
+INSERT INTO `skills` VALUES (68, 'warden_mana_spring', 'warden', '法力源泉', '守望者与神圣能量建立深层连接，永久提升自己的法力值上限。法力源泉让守望者能够更频繁地使用技能，在战斗中持续提供支援。', '{\"type\": \"passive\", \"max_mana_bonus\": 0.2}', 3, '{\"row\": 2, \"column\": 5}', '[\"warden_healing_light\"]');
+INSERT INTO `skills` VALUES (69, 'warden_divine_judgment', 'warden', '神圣审判', '守望者召唤神圣审判之光，对单个敌人造成大量神圣伤害。对邪恶和亡灵类敌人造成双倍伤害。神圣审判是守望者最强大的攻击技能，体现了正义的力量。', '{\"type\": \"attack\", \"damage\": 40, \"target\": \"enemy\", \"action_cost\": 3, \"damage_type\": \"holy\", \"evil_damage_multiplier\": 2.0}', 5, '{\"row\": 3, \"column\": 3}', '[\"warden_sacred_purification\"]');
+INSERT INTO `skills` VALUES (70, 'warden_guardian_will', 'warden', '守护者意志', '守望者通过坚定的守护意志，永久提升自己的生命值上限和物理防御力。守护者意志让守望者能够承受更多伤害，更好地保护队友。', '{\"type\": \"passive\", \"hp_bonus\": 0.25, \"physical_defense_bonus\": 0.3}', 5, '{\"row\": 3, \"column\": 4}', '[\"warden_absolute_defense\"]');
+INSERT INTO `skills` VALUES (71, 'occultist_shadow_power', 'occultist', '暗影之力', '秘术师通过掌握暗影力量，永久提升自己的魔法攻击力。暗影之力让秘术师的魔法攻击更加致命，能够穿透敌人的魔法抗性。', '{\"type\": \"passive\", \"attack_bonus\": 0.2, \"magic_penetration\": 0.15}', 3, '{\"row\": 2, \"column\": 4}', '[\"occultist_shadow_bolt\"]');
+INSERT INTO `skills` VALUES (72, 'occultist_shadow_well', 'occultist', '暗影源泉', '秘术师与暗影维度建立连接，永久提升自己的法力值上限。暗影源泉让秘术师能够更频繁地施放强大的暗影魔法，持续输出伤害。', '{\"type\": \"passive\", \"max_mana_bonus\": 0.25}', 3, '{\"row\": 2, \"column\": 5}', '[\"occultist_weakness_curse\"]');
+INSERT INTO `skills` VALUES (73, 'occultist_shadow_storm', 'occultist', '暗影风暴', '秘术师召唤暗影风暴，对所有敌人造成持续3回合的暗影伤害。暗影风暴会降低敌人的魔法抗性，让后续的魔法攻击更加有效。', '{\"type\": \"attack\", \"damage\": 18, \"target\": \"all_enemies\", \"dot_damage\": 8, \"action_cost\": 4, \"damage_type\": \"shadow\", \"dot_duration\": 3, \"magic_resistance_reduction\": 0.2}', 5, '{\"row\": 3, \"column\": 3}', '[\"occultist_shadow_burst\"]');
+INSERT INTO `skills` VALUES (74, 'occultist_shadow_constitution', 'occultist', '暗影体质', '秘术师通过暗影能量的改造，永久提升自己的生命值上限，并在战斗中持续恢复法力值。暗影体质让脆弱的秘术师有了更强的生存能力。', '{\"type\": \"passive\", \"hp_bonus\": 0.15, \"mana_regen_per_turn\": 5}', 5, '{\"row\": 3, \"column\": 4}', '[\"occultist_dark_pact\"]');
+INSERT INTO `skills` VALUES (75, 'ranger_precision_power', 'ranger', '精准之力', '游侠通过长期的训练，永久提升自己的攻击力和暴击率。精准之力让游侠的每一箭都更加致命，能够精准命中敌人的弱点。', '{\"type\": \"passive\", \"attack_bonus\": 0.18, \"crit_chance_bonus\": 0.1}', 3, '{\"row\": 2, \"column\": 4}', '[\"ranger_precise_shot\"]');
+INSERT INTO `skills` VALUES (76, 'ranger_nature_well', 'ranger', '自然源泉', '游侠与自然力量建立连接，永久提升自己的法力值上限。自然源泉让游侠能够更频繁地使用追踪和陷阱技能，更好地控制战场。', '{\"type\": \"passive\", \"max_mana_bonus\": 0.2}', 3, '{\"row\": 2, \"column\": 5}', '[\"ranger_tracking_mark\"]');
+INSERT INTO `skills` VALUES (77, 'ranger_arrow_storm', 'ranger', '箭雨风暴', '游侠向天空射出大量箭矢，形成箭雨覆盖整个战场，对所有敌人造成物理伤害。箭雨风暴是游侠最强大的群体攻击技能，箭矢如暴雨般倾泻而下。', '{\"hits\": 3, \"type\": \"attack\", \"damage\": 25, \"target\": \"all_enemies\", \"action_cost\": 4, \"damage_type\": \"physical\"}', 5, '{\"row\": 3, \"column\": 3}', '[\"ranger_multi_shot\"]');
+INSERT INTO `skills` VALUES (78, 'ranger_hunter_physique', 'ranger', '猎手体魄', '游侠通过长期的野外生存训练，永久提升自己的生命值上限和攻击速度。猎手体魄让游侠在战斗中更加灵活，能够快速输出伤害。', '{\"type\": \"passive\", \"hp_bonus\": 0.2, \"attack_speed_bonus\": 0.15}', 5, '{\"row\": 3, \"column\": 4}', '[\"ranger_hunter_instinct\"]');
+INSERT INTO `skills` VALUES (79, 'warrior_berserker_power', 'warrior', '狂暴之力', '战士通过激发内在的狂暴力量，永久提升自己的攻击力。狂暴之力让战士的每一次攻击都更加凶猛，能够轻易撕裂敌人的防御。', '{\"type\": \"passive\", \"attack_bonus\": 0.25, \"armor_penetration\": 0.2}', 3, '{\"row\": 2, \"column\": 4}', '[\"warrior_heavy_strike\"]');
+INSERT INTO `skills` VALUES (80, 'warrior_battle_will', 'warrior', '战斗意志', '战士通过坚定的战斗意志，永久提升自己的法力值上限。战斗意志让战士能够更频繁地使用战吼和嘲讽等技能，更好地保护队友。', '{\"type\": \"passive\", \"max_mana_bonus\": 0.15}', 3, '{\"row\": 2, \"column\": 5}', '[\"warrior_battle_cry\"]');
+INSERT INTO `skills` VALUES (81, 'warrior_earthquake', 'warrior', '大地震击', '战士用尽全力重击地面，引发地震冲击波，对所有敌人造成物理伤害并造成短暂眩晕。大地震击是战士最强大的群体控制技能，能够瞬间改变战场局势。', '{\"type\": \"attack\", \"damage\": 30, \"target\": \"all_enemies\", \"action_cost\": 4, \"damage_type\": \"physical\", \"stun_duration\": 1}', 5, '{\"row\": 3, \"column\": 3}', '[\"warrior_whirlwind\"]');
+INSERT INTO `skills` VALUES (82, 'warrior_iron_will', 'warrior', '钢铁意志', '战士通过钢铁般的意志，永久提升自己的生命值上限和攻击力。钢铁意志让战士在战斗中更加坚韧，能够承受更多伤害并输出更高伤害。', '{\"type\": \"passive\", \"hp_bonus\": 0.3, \"attack_bonus\": 0.15}', 5, '{\"row\": 3, \"column\": 4}', '[\"warrior_ultimate_strike\"]');
 
 -- ----------------------------
 -- Table structure for stages
@@ -765,11 +781,12 @@ CREATE TABLE `user_player_character_skills`  (
   CONSTRAINT `fk_ups_character` FOREIGN KEY (`player_character_id`) REFERENCES `player_characters` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `fk_ups_skill` FOREIGN KEY (`skill_id`) REFERENCES `skills` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `fk_ups_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户职业技能解锁记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户职业技能解锁记录表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of user_player_character_skills
 -- ----------------------------
+INSERT INTO `user_player_character_skills` VALUES (6, 7, 1, 35, '2026-01-04 09:15:13');
 
 -- ----------------------------
 -- Table structure for user_player_characters
