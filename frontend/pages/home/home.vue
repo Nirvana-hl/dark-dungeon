@@ -19,6 +19,7 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAuthStore } from '@/stores/auth'
 import { useCampStore } from '@/stores/camp'
 import apiClient, { API_ENDPOINTS, type ApiResponse } from '@/api/request'
@@ -106,6 +107,16 @@ async function handleLogout() {
     uni.reLaunch({ url: '/pages/login/login' })
   }
 }
+
+// 页面加载时初始化
+onLoad(() => {
+  console.log('[Home] 页面加载 - 简化版本')
+})
+
+// 页面显示时
+onShow(() => {
+  console.log('[Home] 页面显示')
+})
 
 // 页面加载时初始化营地数据（如果有的话）
 onMounted(async () => {
@@ -198,3 +209,4 @@ onMounted(async () => {
   letter-spacing: 2rpx;
 }
 </style>
+

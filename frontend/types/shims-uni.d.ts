@@ -6,6 +6,7 @@ declare const uni: {
   setStorageSync: (key: string, value: any) => void
   clearStorageSync: () => void
   showToast: (options: { title: string; icon?: 'success' | 'error' | 'loading' | 'none'; duration?: number }) => void
+  onHide?: (callback: () => void) => void
 }
 
 declare module '@dcloudio/uni-app' {

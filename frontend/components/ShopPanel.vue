@@ -16,8 +16,8 @@
     <!-- 商店头部 -->
     <view class="shop-header">
       <view class="header-left">
-        <h3>
-          <i :class="currentShopTab.icon"></i>
+        <h3 class="header-title">
+          <i :class="currentShopTab.icon" class="tab-icon"></i>
           {{ currentShopTab.name }}
         </h3>
         <p class="shop-description">{{ currentShopTab.description }}</p>
@@ -81,7 +81,7 @@
         
         <!-- 空位置 -->
         <view v-else class="empty-slot">
-          <i class="fas fa-box-open"></i>
+          <i class="fas fa-box-open empty-icon"></i>
           <text>空位</text>
         </view>
       </view>
@@ -466,7 +466,7 @@ watch(selectedShopType, () => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.header-left h3 {
+.header-left .header-title {
   font-size: 1.3rem;
   font-weight: bold;
   color: #ffffff;
@@ -644,7 +644,7 @@ watch(selectedShopType, () => {
   gap: 0.5rem;
 }
 
-.empty-slot i {
+.empty-slot .empty-icon {
   font-size: 2rem;
   opacity: 0.5;
 }

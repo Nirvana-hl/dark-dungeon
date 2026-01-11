@@ -469,26 +469,10 @@ function getClassDescription(code: string): string {
 
 // 加载玩家职业信息
 function loadPlayerClassInfo() {
-  const mockData = localStorage.getItem('mockPlayerCharacter')
-  if (mockData) {
-    try {
-      const data = JSON.parse(mockData)
-      const mockClasses: Record<string, any> = {
-        '1': { id: '1', code: 'warrior', name: '战士', baseHp: 120, hpPerLevel: 15 },
-        '2': { id: '2', code: 'occultist', name: '神秘学者', baseHp: 80, hpPerLevel: 10 },
-        '3': { id: '3', code: 'ranger', name: '游侠', baseHp: 90, hpPerLevel: 12 },
-        '4': { id: '4', code: 'priest', name: '牧师', baseHp: 85, hpPerLevel: 11 },
-        '5': { id: '5', code: 'mage', name: '法师', baseHp: 75, hpPerLevel: 9 },
-        '6': { id: '6', code: 'rogue', name: '盗贼', baseHp: 95, hpPerLevel: 13 }
-      }
-      
-      const classId = data.playerCharacterId
-      playerClassInfo.value = mockClasses[classId] || mockClasses['1']
-      playerLevel.value = data.level || 1
-    } catch (e) {
-      console.error('Failed to parse player class info:', e)
-    }
-  }
+  // TODO: 从数据库加载玩家职业信息
+  console.log('TODO: 从数据库加载玩家职业信息')
+  playerClassInfo.value = null
+  playerLevel.value = 1
 }
 
 // 卡牌数据
@@ -499,14 +483,15 @@ const cardsSpells = computed(() => userCards.value.filter(c => c.type === 'spell
 const cardsEquipment = computed(() => userCards.value.filter(c => c.type === 'equipment'))
 
 async function loadUserCards() {
-  // 使用模拟数据
-  userCards.value = [
-    { name: '新兵', type: 'character' as const, attack: 1, health: 1, stars: 1, quantity: 2 },
-    { name: '盾卫', type: 'character' as const, attack: 2, health: 3, stars: 1, quantity: 1 },
-    { name: '祭司', type: 'character' as const, attack: 2, health: 4, stars: 1, quantity: 1 },
-    { name: '火球术', type: 'spell' as const, effect: 'fireball3', quantity: 2 },
-    { name: '战旗', type: 'equipment' as const, effect: 'teamBuffAtk1', quantity: 1 }
-  ]
+  // 从数据库加载用户卡牌数据
+  try {
+    // TODO: 实现从数据库加载卡牌数据的逻辑
+    console.log('TODO: 从数据库加载用户卡牌数据')
+    userCards.value = []
+  } catch (error) {
+    console.error('加载用户卡牌失败:', error)
+    userCards.value = []
+  }
 }
 
 function syncToBattle() {
@@ -524,19 +509,15 @@ function syncToBattle() {
 }
 
 function calcCharStats(name: string, stars: number): { attack: number; health: number; trait: string } {
-  const base: Record<string, { attack: number; health: number; trait: string }> = {
-    '游侠·莉雅': { attack: 3, health: 4, trait: '敏捷射术' },
-    '法师·应龙': { attack: 4, health: 3, trait: '元素亲和' },
-    '战士·江陵': { attack: 3, health: 6, trait: '钢铁意志' },
-    '新兵': { attack: 1, health: 1, trait: '基础训练' },
-    '盾卫': { attack: 2, health: 3, trait: '重盾防御' },
-    '祭司': { attack: 2, health: 4, trait: '祈福治疗' }
-  }
-  const b = base[name] ?? { attack: 2, health: 3, trait: '通用适应' }
-  const atk = Math.round(b.attack * (1 + (stars - 1) * 0.25))
-  const hp = Math.round(b.health * (1 + (stars - 1) * 0.3))
+  // TODO: 从数据库获取角色基础属性和特性信息
+  console.log('TODO: 从数据库获取角色属性:', name, 'stars:', stars)
+
+  // 临时返回默认值，实际应该从API获取
+  const defaultStats = { attack: 2, health: 3, trait: '通用适应' }
+  const atk = Math.round(defaultStats.attack * (1 + (stars - 1) * 0.25))
+  const hp = Math.round(defaultStats.health * (1 + (stars - 1) * 0.3))
   const traitTier = stars >= 5 ? 'MAX' : stars >= 4 ? 'IV' : stars >= 3 ? 'III' : stars >= 2 ? 'II' : 'I'
-  const trait = `${b.trait}·${traitTier}`
+  const trait = `${defaultStats.trait}·${traitTier}`
   return { attack: atk, health: hp, trait }
 }
 

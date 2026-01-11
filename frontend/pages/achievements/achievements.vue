@@ -1,23 +1,43 @@
 <template>
   <view class="achievements-page">
-    <!-- 进度条 -->
-    <view class="progress-section">
-      <view class="progress-bar-container">
-        <view class="progress-bar" :style="{ width: progressPercentage + '%' }"></view>
+    
+    <!-- 页面头部 -->
+    <header class="page-header">
+      <view class="header-content">
+        <view class="title-section">
+          <h1 class="page-title">
+            <i class="fas fa-trophy"></i>
+            成就系统
+          </h1>
+          <p class="page-subtitle">追踪你的游戏成就和里程碑</p>
+        </view>
+        <view class="stats-summary">
+          <view class="summary-item">
+            <text class="summary-number">{{ unlockedCount }}</text>
+            <text class="summary-label">已解锁</text>
+          </view>
+          <view class="summary-item">
+            <text class="summary-number">{{ totalAchievements }}</text>
+            <text class="summary-label">总成就</text>
+          </view>
+          <view class="summary-item">
+            <text class="summary-number">{{ completionPercentage }}%</text>
+            <text class="summary-label">完成度</text>
+          </view>
+        </view>
       </view>
-      <text class="progress-text">{{ unlockedCount }}/{{ totalAchievements }}</text>
-    </view>
+    </header>
 
-    <!-- 分类标签页 -->
-    <nav class="tabs-nav">
-      <view 
+    <!-- 成就分类筛选 -->
+    <nav class="achievement-categories">
+      <button 
         v-for="category in categories" 
         :key="category.id"
         :class="['tab-item', { active: selectedCategory === category.id }]"
         @click="selectedCategory = category.id"
       >
         <text>{{ category.name }}</text>
-      </view>
+      </button>
     </nav>
 
     <!-- 成就列表 -->
@@ -206,6 +226,11 @@ const unlockedCount = computed(() => {
 
 const totalAchievements = computed(() => {
   return achievements.value.length
+})
+
+const completionPercentage = computed(() => {
+  if (totalAchievements.value === 0) return 0
+  return Math.round((unlockedCount.value / totalAchievements.value) * 100)
 })
 
 // 方法

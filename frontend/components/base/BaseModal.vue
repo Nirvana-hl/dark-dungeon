@@ -96,12 +96,19 @@ function handleKeydown(event: KeyboardEvent) {
 
 // 监听键盘事件
 watch(() => props.show, (show) => {
-  if (show) {
-    document.addEventListener('keydown', handleKeydown)
-    document.body.style.overflow = 'hidden'
-  } else {
-    document.removeEventListener('keydown', handleKeydown)
-    document.body.style.overflow = ''
+  // 仅在浏览器环境中处理DOM事件
+  if (typeof document !== 'undefined') {
+    if (show) {
+      document.addEventListener('keydown', handleKeydown)
+      if (document.body) {
+        document.body.style.overflow = 'hidden'
+      }
+    } else {
+      document.removeEventListener('keydown', handleKeydown)
+      if (document.body) {
+        document.body.style.overflow = ''
+      }
+    }
   }
 })
 

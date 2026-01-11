@@ -1,4 +1,5 @@
 {
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
@@ -15,8 +16,8 @@
     "paths": {
       "@/*": ["./*"]
     },
-    "types": ["node"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["@types/node"]
   },
   "include": [
     "pages/**/*",

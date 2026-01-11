@@ -46,6 +46,24 @@
       }
     },
     {
+      "path": "pages/cards/cards",
+      "style": {
+        "navigationBarTitleText": "卡牌",
+        "navigationBarBackgroundColor": "#0f172a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f172a"
+      }
+    },
+    {
+      "path": "pages/inventory/inventory",
+      "style": {
+        "navigationBarTitleText": "背包",
+        "navigationBarBackgroundColor": "#0f172a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f172a"
+      }
+    },
+    {
       "path": "pages/shop/shop",
       "style": {
         "navigationBarTitleText": "商城",

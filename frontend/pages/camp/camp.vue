@@ -231,12 +231,20 @@ declare const uni: {
 const campStore = useCampStore()
 const { playerCharacter } = storeToRefs(campStore)
 
+// 类型定义
+interface InventoryItem {
+  id: number
+  itemType: string
+  name: string
+  quantity: number
+}
+
 // 状态
-const showInventoryModal = ref(false)
-const inventoryItems = ref<any[]>([])
-const loadingInventory = ref(false)
 const avatarImageSrc = ref('/static/tabbar/touxiang.jpg')
 const showSkillsModal = ref(false)
+const showInventoryModal = ref(false)
+const inventoryItems = ref<InventoryItem[]>([])
+const loadingInventory = ref(false)
 
 // 压力系统状态
 const currentStress = ref(0)
@@ -280,34 +288,10 @@ function handleAvatarError() {
 
 // 导航函数
 async function goToInventory() {
-  showInventoryModal.value = true
-  await loadInventory()
+  uni.navigateTo({ url: '/pages/inventory/inventory' })
 }
 
-async function loadInventory() {
-  try {
-    loadingInventory.value = true
-    const response = await campApi.getInventory()
-    if (response.data.code === 200) {
-      inventoryItems.value = response.data.data || []
-    }
-  } catch (error) {
-    console.error('加载背包失败:', error)
-    inventoryItems.value = []
-  } finally {
-    loadingInventory.value = false
-  }
-}
 
-function getItemIcon(itemType: string) {
-  const icons: { [key: string]: string } = {
-    consumable: 'fas fa-flask',
-    material: 'fas fa-gem',
-    equipment: 'fas fa-shield-alt',
-    special: 'fas fa-star'
-  }
-  return icons[itemType] || 'fas fa-box'
-}
 
 function goToSkills() {
   showSkillsModal.value = true
@@ -426,6 +410,16 @@ function getDebuffIcon(type: string): string {
     case 'combat': return 'fas fa-sword'
     case 'behavioral': return 'fas fa-walking'
     default: return 'fas fa-exclamation-triangle'
+  }
+}
+
+function getItemIcon(itemType: string): string {
+  switch (itemType) {
+    case 'weapon': return 'fas fa-sword'
+    case 'armor': return 'fas fa-shield-alt'
+    case 'consumable': return 'fas fa-flask'
+    case 'material': return 'fas fa-gem'
+    default: return 'fas fa-box'
   }
 }
 
@@ -880,148 +874,6 @@ onMounted(async () => {
   transform: scale(1.1);
 }
 
-/* 模态框样式 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.8);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-container {
-  width: 80%;
-  max-width: 600rpx;
-  max-height: 80vh;
-  background: linear-gradient(135deg, rgba(30, 30, 30, 0.95) 0%, rgba(15, 15, 15, 0.98) 100%);
-  border: 3rpx solid rgba(139, 69, 19, 0.8);
-  border-radius: 20rpx;
-  box-shadow: 
-    0 0 40rpx rgba(139, 69, 19, 0.6),
-    inset 0 0 30rpx rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
-  padding: 30rpx 40rpx;
-  border-bottom: 2rpx solid rgba(139, 69, 19, 0.5);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title {
-  font-size: 36rpx;
-  font-weight: 700;
-  color: #daa520;
-  text-shadow: 0 0 10rpx rgba(218, 165, 32, 0.6);
-  letter-spacing: 2rpx;
-}
-
-.modal-close {
-  width: 60rpx;
-  height: 60rpx;
-  border: none;
-  background: rgba(139, 69, 19, 0.3);
-  border: 2rpx solid rgba(139, 69, 19, 0.6);
-  border-radius: 50%;
-  color: #daa520;
-  font-size: 32rpx;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-}
-
-.modal-close:active {
-  background: rgba(139, 69, 19, 0.5);
-  transform: scale(0.95);
-}
-
-.modal-body {
-  flex: 1;
-  padding: 30rpx;
-  overflow-y: auto;
-}
-
-.loading-text,
-.empty-text {
-  text-align: center;
-  padding: 80rpx 0;
-  color: rgba(218, 165, 32, 0.7);
-  font-size: 28rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20rpx;
-}
-
-.empty-text i {
-  font-size: 80rpx;
-  opacity: 0.5;
-}
-
-.inventory-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.inventory-item {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 24rpx;
-  background: rgba(0, 0, 0, 0.4);
-  border: 2rpx solid rgba(139, 69, 19, 0.4);
-  border-radius: 12rpx;
-  transition: all 0.3s ease;
-}
-
-.inventory-item:active {
-  background: rgba(139, 69, 19, 0.2);
-  border-color: rgba(139, 69, 19, 0.6);
-}
-
-.item-icon {
-  width: 80rpx;
-  height: 80rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(139, 69, 19, 0.3);
-  border: 2rpx solid rgba(139, 69, 19, 0.5);
-  border-radius: 12rpx;
-  font-size: 40rpx;
-  color: #daa520;
-}
-
-.item-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.item-name {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #daa520;
-  text-shadow: 0 0 8rpx rgba(218, 165, 32, 0.5);
-}
-
-.item-quantity {
-  font-size: 24rpx;
-  color: rgba(218, 165, 32, 0.7);
-}
 
 /* 压力显示区域 - 暗黑地牢风格 */
 .stress-section {

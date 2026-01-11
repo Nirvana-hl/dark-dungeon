@@ -93,10 +93,11 @@ const emit = defineEmits<{
 // uni-app 全局对象类型声明
 declare const uni: {
   navigateTo: (options: { url: string }) => void
+  switchTab: (options: { url: string }) => void
 }
 
 function goSkills() {
-  uni.navigateTo({ url: '/pages/skills/skills' })
+  uni.switchTab({ url: '/pages/skills/skills' })
 }
 
 // 计算属性

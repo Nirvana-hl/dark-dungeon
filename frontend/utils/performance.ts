@@ -5,7 +5,9 @@ declare const uni: {
   getStorageSync: (key: string) => any
   setStorageSync: (key: string, value: any) => void
   removeStorageSync: (key: string) => void
+  clearStorageSync?: () => void
   getNetworkType: (options?: { success?: (res: { networkType: string }) => void }) => void
+  onHide?: (callback: () => void) => void
 }
 
 // 防抖函数
@@ -145,28 +147,28 @@ export const storage = {
       console.warn('Failed to save to storage:', error)
     }
   },
-  
+
   get: (key: string): any => {
     try {
       const item = uni.getStorageSync(key)
       if (!item) return null
-      
+
       // 如果是字符串，尝试解析
       const parsed = typeof item === 'string' ? JSON.parse(item) : item
-      
+
       // 检查是否过期
       if (parsed.ttl && Date.now() > parsed.ttl) {
         uni.removeStorageSync(key)
         return null
       }
-      
+
       return parsed.value
     } catch (error) {
       console.warn('Failed to read from storage:', error)
       return null
     }
   },
-  
+
   remove: (key: string) => {
     try {
       uni.removeStorageSync(key)
@@ -174,7 +176,7 @@ export const storage = {
       console.warn('Failed to remove from storage:', error)
     }
   },
-  
+
   clear: (pattern?: string) => {
     try {
       if (pattern) {
@@ -182,8 +184,12 @@ export const storage = {
         // 这里提供一个简化实现，实际使用时需要维护 key 列表
         console.warn('[Storage] 按模式清除存储在小程序中需要维护 key 列表')
       } else {
-        // uni-app 中清空所有存储
-        uni.clearStorageSync()
+        // uni-app 中清空所有存储 - 检查方法是否存在
+        if (typeof uni.clearStorageSync === 'function') {
+          uni.clearStorageSync()
+        } else {
+          console.warn('[Storage] uni.clearStorageSync 方法不可用')
+        }
       }
     } catch (error) {
       console.warn('Failed to clear storage:', error)
@@ -292,11 +298,15 @@ export function batch<T>(items: T[], batchSize: number, processor: (batch: T[]) 
 
 // 内存使用监控（小程序中无法直接获取，提供占位实现）
 export function createMemoryMonitor() {
-  const checkMemory = () => {
-    // 小程序中无法直接获取内存信息
-    return null
+  const checkMemory = (): { usage: number; used: number; total: number } | null => {
+    // 小程序中无法直接获取内存信息，返回模拟数据
+    return {
+      usage: 0, // 无法获取时返回 0
+      used: 0,
+      total: 0
+    }
   }
-  
+
   return {
     check: checkMemory,
     isHighUsage: () => {

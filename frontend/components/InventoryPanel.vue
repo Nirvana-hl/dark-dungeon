@@ -195,8 +195,11 @@ watch(selectedCategory, (newCategory: string) => {
 
 .items-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  width: 100%;
+  justify-items: stretch;
+  align-items: start;
 }
 
 .item-card {
@@ -211,6 +214,9 @@ watch(selectedCategory, (newCategory: string) => {
   transition: all 0.3s;
   animation: fadeInUp 0.6s ease;
   animation-delay: var(--delay);
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .item-card:hover {
@@ -382,7 +388,8 @@ watch(selectedCategory, (newCategory: string) => {
   }
   
   .items-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
   }
   
   .item-card {

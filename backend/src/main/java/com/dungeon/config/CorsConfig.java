@@ -23,7 +23,14 @@ public class CorsConfig {
         
         // 允许的源（使用 addAllowedOriginPattern 以支持 Spring Boot 2.4+）
         if (allowedOrigins != null && !allowedOrigins.isEmpty()) {
-            config.addAllowedOriginPattern(allowedOrigins);
+            // 支持逗号分隔的多个origin
+            String[] origins = allowedOrigins.split(",");
+            for (String origin : origins) {
+                origin = origin.trim();
+                if (!origin.isEmpty()) {
+                    config.addAllowedOriginPattern(origin);
+                }
+            }
         } else {
             // 如果没有配置，允许所有源（仅开发环境）
             config.addAllowedOriginPattern("*");

@@ -12,6 +12,8 @@ declare const uni: {
 }
 
 export const useAuthStore = defineStore('auth', () => {
+  // 是否允许在开发环境下自动降级为本地演示登录（仅开发时设为 true）
+  const ALLOW_DEMO_AUTH = false
   const user = ref<User | null>(null)
   const token = ref<string | null>(null)
   const loading = ref(false)

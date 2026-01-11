@@ -173,7 +173,7 @@ async function loadClasses() {
 
     if (response.data && response.data.code === 200 && response.data.data) {
       classes.value = response.data.data
-      if (classes.value.length > 0 && !selectedClassId.value) {
+      if (classes.value.length > 0 && !selectedClassId.value && classes.value[0]) {
         // 默认选择第一个职业
         selectedClassId.value = classes.value[0].id
       }

@@ -14,7 +14,7 @@ import type {
 // 已废弃：所有模拟数据已删除，请使用 API 获取真实数据
 // 如需测试数据，请使用后端提供的测试接口或数据库中的测试数据
 
-export const mockUserWallets: UserWallet[] = [] // 已删除，使用 API
+export const mockUserWallets: UserWallet[] = [ // 已删除，使用 API
   {
     id: 'wallet-001',
     userId: 'user-001',

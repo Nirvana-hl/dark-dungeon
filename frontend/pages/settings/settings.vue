@@ -9,6 +9,8 @@ declare const uni: {
   navigateBack: (options?: { delta?: number }) => void
   reLaunch: (options: { url: string }) => void
   showToast: (options: { title: string; icon?: string; duration?: number }) => void
+  getStorageSync: (key: string) => any
+  setStorageSync: (key: string, value: any) => void
 }
 
 const auth = useAuthStore()
@@ -77,6 +79,14 @@ async function handleLogout() {
   }
 }
 
+function handleSoundChange(e: any) {
+  soundOn.value = e.detail?.value ?? e
+}
+
+function handleFxChange(e: any) {
+  fxOn.value = e.detail?.value ?? e
+}
+
 function goToHome() {
   uni.navigateTo({ url: '/pages/home/home' })
 }
@@ -84,11 +94,6 @@ function goToHome() {
 
 <template>
   <view class="settings-container">
-    <!-- 返回首页按钮 -->
-    <view class="back-to-home" @click="goToHome">
-      <text class="back-icon">🏠</text>
-      <text class="back-text">返回首页</text>
-    </view>
     
     <view class="content-wrapper">
       <view class="settings-card">
@@ -97,11 +102,11 @@ function goToHome() {
         <view class="settings-list">
           <view class="setting-item">
             <text class="setting-label">声音</text>
-            <switch :checked="soundOn" @change="(e) => soundOn = e.detail.value" />
+            <switch :checked="soundOn" @change="handleSoundChange" />
           </view>
           <view class="setting-item">
             <text class="setting-label">特效</text>
-            <switch :checked="fxOn" @change="(e) => fxOn = e.detail.value" />
+            <switch :checked="fxOn" @change="handleFxChange" />
           </view>
         </view>
 

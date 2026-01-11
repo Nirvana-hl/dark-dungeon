@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, nextTick } from 'vue'
 import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import BattleField from '@/components/BattleField.vue'
 import CardItem from '@/components/CardItem.vue'
@@ -8,16 +8,25 @@ import type { Card } from '@/stores/game'
 import { storeToRefs } from 'pinia'
 import { useWalletStore } from '@/stores/wallet'
 import { useCampStore } from '@/stores/camp'
+import { useAuthStore } from '@/stores/auth'
 import apiClient from '@/api/request'
 import { CurrencyType } from '@/types'
-import { stageProgressApi, stageApi } from '@/api/request'
+import { stageProgressApi, stageApi, skillApi } from '@/api/request'
 import { soundManager } from '@/utils/soundManager'
 
-// uni-app 全局对象类型声明
+// uni-app 类型声明（覆盖全局声明以确保识别）
 declare const uni: {
   navigateTo: (options: { url: string }) => void
   redirectTo: (options: { url: string }) => void
+  reLaunch: (options: { url: string }) => void
   navigateBack: (options?: { delta?: number }) => void
+  switchTab: (options: { url: string }) => void
+  showToast: (options: { title: string; icon?: 'success' | 'error' | 'loading' | 'none'; duration?: number }) => void
+  getStorageSync: (key: string) => any
+  setStorageSync: (key: string, value: any) => void
+  removeStorageSync: (key: string) => void
+  clearStorageSync: () => void
+  [key: string]: any
 }
 
 // 页面加载
@@ -27,12 +36,21 @@ onLoad((options) => {
 
 // 页面显示时可按需刷新
 onShow(() => {
+  // 检查登录状态
+  if (!auth.isAuthenticated) {
+    console.warn('[BattlePage] 用户未登录，跳转到登录页')
+    uni.reLaunch({
+      url: '/pages/login/login'
+    })
+    return
+  }
+
   // 可根据需要刷新数据
 })
 
 // 页面卸载
 onUnload(() => {
-  stopBattleLog()
+  // 清理代码（如果需要）
 })
 
 // 页面参数（替代 useRoute）
@@ -42,18 +60,96 @@ const level = computed(() => Number(routeQuery.level ?? 0))
 const chapter = computed(() => (level.value ? Math.floor((level.value - 1) / 5) + 1 : 0))
 
 const game = useGameStore()
-const { hand, canPlay, winner, mana, manaMax, deckExhausted, deck } = storeToRefs(game)
-const enemyDifficulty = computed(() => game.enemyDifficulty)
+const auth = useAuthStore()
+const gameStore = game as any
+// Access store properties directly to avoid TypeScript issues
+const hand = computed(() => gameStore.hand)
+const canPlay = computed(() => gameStore.canPlay)
+const winner = computed(() => gameStore.winner)
+const mana = computed(() => gameStore.mana)
+const manaMax = computed(() => gameStore.manaMax)
+const deckExhausted = computed(() => gameStore.deckExhausted)
+const deck = computed(() => gameStore.deck)
+const enemyDifficulty = computed(() => gameStore.enemyDifficulty)
+// Remove handLength computed property - will cast directly in template
 
 const isEndingTurn = ref(false)
 const showExitConfirm = ref(false)
 const draggingEquipCard = ref<Card | null>(null)
 const draggingSpellCard = ref<Card | null>(null)
-const selectedEquipCard = ref<Card | null>(null)
-const selectedCharacterCard = ref<Card | null>(null)
-const selectedSpellCard = ref<Card | null>(null)
 const draggingCharacterCard = ref<Card | null>(null)
 const remainingDeck = computed(() => deck.value.length)
+
+// 技能使用相关状态
+const showSkillModal = ref(false)
+const skillsLoading = ref(false)
+const battleSkills = ref<any[]>([])
+const usingSkill = ref(false)
+
+// ref to BattleField component (used to resolve touch drops inside component)
+const battleFieldRef = ref<any>(null)
+
+// BattleField 实例引用监控（用于小程序环境）
+watch(battleFieldRef, (newRef, oldRef) => {
+  console.log('[Battle] BattleField 实例变化:', { newRef: !!newRef, oldRef: !!oldRef })
+}, { immediate: true })
+
+// drag clone state for miniapp fallback
+const cloneVisible = ref(false)
+const cloneCard = ref<Card | null>(null)
+const cloneX = ref(0)
+const cloneY = ref(0)
+let localTouchStartX = 0
+let localTouchStartY = 0
+let localTouchMoved = false
+
+function onHandTouchStart(e: any, card: Card) {
+  try { battleFieldRef?.value?.onCardTouchStart && battleFieldRef.value.onCardTouchStart(card.id, card.type, e, e.currentTarget) } catch (err) {}
+  if (!e.touches || e.touches.length === 0) return
+  localTouchStartX = e.touches[0].clientX
+  localTouchStartY = e.touches[0].clientY
+  localTouchMoved = false
+  cloneVisible.value = false
+  cloneCard.value = null
+}
+
+function onHandTouchMove(e: any, card: Card) {
+  try { battleFieldRef?.value?.onCardTouchMove && battleFieldRef.value.onCardTouchMove(card.id, e) } catch (err) {}
+  if (!e.touches || e.touches.length === 0) return
+  const dx = Math.abs(e.touches[0].clientX - localTouchStartX)
+  const dy = Math.abs(e.touches[0].clientY - localTouchStartY)
+  if (dx > 8 || dy > 8) localTouchMoved = true
+  if (localTouchMoved) {
+    cloneVisible.value = true
+    cloneCard.value = card
+    cloneX.value = e.touches[0].clientX
+    cloneY.value = e.touches[0].clientY
+  }
+}
+
+function onHandTouchEnd(e: any, card: Card) {
+  try { battleFieldRef?.value?.onCardTouchEnd && battleFieldRef.value.onCardTouchEnd(card.id, card.type, e) } catch (err) {}
+  cloneVisible.value = false
+  cloneCard.value = null
+  localTouchMoved = false
+}
+
+function handleTouchDragEnd(payload: { cardId: string; cardType: string; x: number; y: number; canAfford: boolean }) {
+  console.log('[Battle] handleTouchDragEnd called with payload:', payload)
+  if (battleFieldRef?.value && typeof battleFieldRef.value.resolveTouchDrop === 'function') {
+    console.log('[Battle] Calling resolveTouchDrop on battleFieldRef.value')
+    battleFieldRef.value.resolveTouchDrop(payload)
+  } else {
+    // fallback: try calling directly if ref is function-style
+    try {
+      // @ts-ignore
+      battleFieldRef?.resolveTouchDrop && battleFieldRef.resolveTouchDrop(payload)
+    } catch (e) {
+      console.warn('[Battle] resolveTouchDrop not available on battleFieldRef', e)
+    }
+  }
+}
+
 
 // 结算画面相关
 const showVictoryModal = ref(false)
@@ -72,59 +168,46 @@ const playerCharacter = computed(() => useCampStore().playerCharacter)
 const wallet = useWalletStore()
 
 function onPlay(id: string) {
-  game.playCard(id)
+  gameStore.playCard(id)
 }
 
 function startEquipDrag(card: Card) {
   // 仅记录装备卡的拖拽状态
   if (card.type !== 'equipment') return
+  console.log('[Battle] startEquipDrag called with card:', card.id, card.name)
   draggingEquipCard.value = card
-  // 开始拖拽时关闭详情面板，避免遮挡
-  selectedEquipCard.value = null
+  console.log('[Battle] draggingEquipCard.value set to:', draggingEquipCard.value)
 }
 
 function endEquipDrag() {
   draggingEquipCard.value = null
 }
 
-function handleEquipToMinion(payload: { minionId: string }) {
-  if (!draggingEquipCard.value) return
-  game.equipCardToMinion(draggingEquipCard.value.id, payload.minionId)
+function handleEquipToMinion(payload: { minionId: string; cardId?: string }) {
+  console.log('[Battle] handleEquipToMinion called with payload:', payload)
+
+  let equipCardId = payload.cardId
+
+  // 如果payload中没有cardId，尝试使用draggingEquipCard
+  if (!equipCardId && draggingEquipCard.value) {
+    equipCardId = draggingEquipCard.value.id
+  }
+
+  if (!equipCardId) {
+    console.log('[Battle] No equipment card ID found, cannot equip')
+    return
+  }
+
+  console.log('[Battle] Equipping card', equipCardId, 'to minion', payload.minionId)
+  gameStore.equipCardToMinion(equipCardId, payload.minionId)
   draggingEquipCard.value = null
 }
 
-function showEquipDetails(card: Card) {
-  if (card.type !== 'equipment') return
-  selectedEquipCard.value = card
-}
-
-function closeEquipDetails() {
-  selectedEquipCard.value = null
-}
-
-function showCharacterDetails(card: Card) {
-  if (card.type !== 'character') return
-  selectedCharacterCard.value = card
-}
-
-function closeCharacterDetails() {
-  selectedCharacterCard.value = null
-}
-
-function showSpellDetails(card: Card) {
-  if (card.type !== 'spell') return
-  selectedSpellCard.value = card
-}
-
-function closeSpellDetails() {
-  selectedSpellCard.value = null
-}
+/* Removed legacy detail panel handlers — CardItem now shows modal internally */
 
 function startCharacterDrag(card: Card) {
   if (card.type !== 'character') return
   draggingCharacterCard.value = card
-  // 开始拖拽时关闭详情面板，避免遮挡
-  selectedCharacterCard.value = null
 }
 
 function endCharacterDrag() {
@@ -134,8 +217,6 @@ function endCharacterDrag() {
 function startSpellDrag(card: Card) {
   if (card.type !== 'spell') return
   draggingSpellCard.value = card
-  // 开始拖拽时关闭详情面板，避免遮挡
-  selectedSpellCard.value = null
 }
 
 function endSpellDrag(event?: DragEvent) {
@@ -145,7 +226,7 @@ function endSpellDrag(event?: DragEvent) {
     
     // 检查拖拽结束时鼠标位置是否在手牌区域外
     if (event) {
-      const handCardsElement = event.currentTarget?.closest('.hand-cards') as HTMLElement | null
+      const handCardsElement = (event.currentTarget as Element)?.closest('.hand-cards') as HTMLElement | null
       if (handCardsElement) {
         const rect = handCardsElement.getBoundingClientRect()
         const x = event.clientX
@@ -155,7 +236,7 @@ function endSpellDrag(event?: DragEvent) {
         if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
           // 检查是否有足够的法力值
           if (mana.value >= card.cost) {
-            game.playCard(card.id)
+            gameStore.playCard(card.id)
             draggingSpellCard.value = null
             return
           }
@@ -166,6 +247,50 @@ function endSpellDrag(event?: DragEvent) {
     // 如果拖拽结束但还在手牌区域内，清除状态
     draggingSpellCard.value = null
   }
+}
+
+// 计算扇形手牌每张卡片的绝对样式
+function fanCardStyle(index: number, total: unknown) {
+  const totalNum = Number(total) || 0
+  // 最大展开角度（度数）
+  const maxSpread = Math.min(70, totalNum * 10)
+  const start = -maxSpread / 2
+  const step = totalNum > 1 ? maxSpread / (totalNum - 1) : 0
+  const deg = start + step * index
+
+  // 横向偏移（像素），让卡片在水平方向分散
+  const spacing = 38 // 每张卡的基础间距
+  const centerOffset = (index - (totalNum - 1) / 2) * spacing
+
+  // 手牌容器底部定位（距离容器底部的偏移）
+  const bottomOffset = 24
+
+  return {
+    position: 'absolute',
+    left: '50vw', // 以视口居中，避免 footer 内部侧边占位导致偏移
+    bottom: `${bottomOffset}px`,
+    transform: `translateX(calc(-50% + ${centerOffset}px)) rotate(${deg}deg)`,
+    zIndex: 100 + index
+  } as any
+}
+
+// 获取HP颜色类（页面级别副本，用于底部显示）
+function getHPColorClass(percent: number) {
+  if (percent > 60) return 'hp-healthy'
+  if (percent > 30) return 'hp-warning'
+  return 'hp-danger'
+}
+
+// 确保返回数字类型的包装函数
+function safeHandLength(): number {
+  const h = hand.value
+  return Array.isArray(h) ? h.length : 0
+}
+
+// 包装函数确保正确的类型转换
+function getHandLength(): number {
+  const arr = hand.value as any[]
+  return arr.length
 }
 
 // 处理手牌区域拖拽离开事件（作为备用检测）
@@ -180,7 +305,7 @@ function handleHandDragLeave(event: DragEvent) {
       const card = draggingSpellCard.value
       // 检查是否有足够的法力值
       if (mana.value >= card.cost) {
-        game.playCard(card.id)
+        gameStore.playCard(card.id)
         draggingSpellCard.value = null
       }
     }
@@ -189,8 +314,9 @@ function handleHandDragLeave(event: DragEvent) {
 
 function handleDeployCard(payload: { cardId: string; position: number }) {
   // 调用 playCard 并传入位置参数
-  game.playCard(payload.cardId, payload.position)
+  gameStore.playCard(payload.cardId, payload.position)
 }
+
 
 // 退出战斗
 function exitBattle() {
@@ -199,8 +325,7 @@ function exitBattle() {
 
 function confirmExit() {
   showExitConfirm.value = false
-  const lv = level.value || 1
-  uni.navigateTo({ url: `/pages/explore/explore?level=${String(lv)}` })
+  uni.switchTab({ url: '/pages/explore/explore' })
 }
 
 function cancelExit() {
@@ -211,10 +336,118 @@ function cancelExit() {
 async function endTurn() {
   if (!canPlay.value || isEndingTurn.value) return
   isEndingTurn.value = true
-  game.endTurn()
+  gameStore.endTurn()
   // 添加延迟以提供视觉反馈
   await new Promise(resolve => setTimeout(resolve, 500))
   isEndingTurn.value = false
+}
+
+// 打开技能选择弹窗（异步加载技能）
+async function openUseSkillModal() {
+  try {
+    if (!canPlay.value || usingSkill.value) return
+    skillsLoading.value = true
+    // 从营地store获取当前职业code
+    const camp = useCampStore()
+    const pcCode = camp.playerCharacter?.playerCharacterCode || camp.playerCharacter?.code || ''
+    let resp: any = null
+    try {
+      resp = await skillApi.getBattleSkills(pcCode)
+    } catch (e) {
+      // 回退到已解锁列表
+      resp = await skillApi.getUnlockedSkills()
+    }
+    console.log('[Battle] skill API response:', resp)
+    if (resp && resp.data && resp.data.code === 200) {
+      battleSkills.value = Array.isArray(resp.data.data) ? resp.data.data : []
+    } else {
+      battleSkills.value = []
+    }
+    showSkillModal.value = true
+  } catch (e: any) {
+    try { uni.showToast({ title: e?.message || '加载技能失败', icon: 'none' }) } catch (e) {}
+  } finally {
+    skillsLoading.value = false
+  }
+}
+
+function closeSkillModal() {
+  showSkillModal.value = false
+}
+
+// only active skills for the use-skill modal
+const activeBattleSkills = computed(() => {
+  return (battleSkills.value || []).filter((s: any) => {
+    return Boolean(s.isActive || s.active || s.type === 'active' || s.category === 'active')
+  })
+})
+
+function getFirstSentence(text?: string) {
+  if (!text) return ''
+  // match until first sentence-ending punctuation (Chinese/Japanese/English)
+  const m = String(text).trim().match(/.*?[。！？.!?](?=\s|$)/)
+  if (m && m[0]) return m[0]
+  // fallback to first line
+  return String(text).split(/\r?\n/)[0]
+}
+
+// displayed skills: prefer active list but fall back to all skills if none found
+const displayedSkills = computed(() => {
+  const act = activeBattleSkills.value || []
+  return act.length > 0 ? act : (battleSkills.value || [])
+})
+
+// 使用技能：调用后端验证并解析效果，前端尝试应用简单效果（伤害/治疗）
+async function useSkill(skill: any) {
+  if (!canPlay.value || usingSkill.value) return
+  usingSkill.value = true
+  try {
+    const resp = await skillApi.useSkill(String(skill.id), { currentMana: gameStore.mana })
+    if (!resp || !resp.data) {
+      throw new Error('技能使用失败')
+    }
+    if (resp.data.code !== 200) {
+      throw new Error(resp.data.message || '技能无法使用')
+    }
+    const result = resp.data.data || {}
+    const manaCost = Number(result.manaCost ?? result.mana_cost ?? skill.manaCost ?? skill.mana_cost ?? 1)
+    // 扣除法力
+    try { gameStore.mana = Math.max(0, Number(gameStore.mana) - manaCost) } catch (e) {}
+
+    // 解析效果
+    let effect: any = result.effectPayload ?? result.effect_payload ?? skill.effectPayload ?? skill.effect_payload
+    if (typeof effect === 'string') {
+      try { effect = JSON.parse(effect) } catch (e) {}
+    }
+    // 简单效果处理：damage / heal
+    if (effect) {
+      const dmg = Number(effect.damage ?? effect.damage_amount ?? effect.damage_to_enemy ?? 0)
+      const heal = Number(effect.heal ?? effect.heal_amount ?? effect.heal_self ?? 0)
+      if (dmg > 0) {
+        try {
+          gameStore.enemyHP = Math.max(0, Number(gameStore.enemyHP) - dmg)
+          gameStore.log(`技能 ${skill.name} 对敌方造成 ${dmg} 点伤害（剩余 ${gameStore.enemyHP}）`)
+        } catch (e) {}
+      }
+      if (heal > 0) {
+        try {
+          const camp = useCampStore()
+          const maxHp = camp.playerCharacter?.maxHp || 100
+          gameStore.heroHP = Math.min(maxHp, Number(gameStore.heroHP) + heal)
+          gameStore.log(`技能 ${skill.name} 为我方回复 ${heal} 点生命（当前 ${gameStore.heroHP}/${maxHp}）`)
+        } catch (e) {}
+      }
+    } else {
+      gameStore.log(`技能 ${skill.name} 使用成功（效果需前端扩展）`)
+    }
+
+    try { uni.showToast({ title: '技能已使用', icon: 'success' }) } catch (e) {}
+    showSkillModal.value = false
+  } catch (e: any) {
+    try { uni.showToast({ title: e?.message || '技能使用失败', icon: 'none' }) } catch (e) {}
+  } finally {
+    usingSkill.value = false
+  }
 }
 
 // 根据关卡参数配置敌方难度并开局（从数据库加载玩家/敌方手牌）
@@ -226,7 +459,7 @@ onMounted(async () => {
 
   const lv = level.value || 1
   const diff = lv <= 10 ? '普通' : lv <= 20 ? '困难' : '噩梦'
-  game.configureEncounter(diff as any)
+  gameStore.configureEncounter(diff as any)
 
   // 确保营地数据已加载（用于获取玩家血量）
   const campStore = useCampStore()
@@ -234,25 +467,42 @@ onMounted(async () => {
     await campStore.fetchCampData()
   }
 
-  // 从 Spring Boot API 加载用户数据
-  await game.loadUserDeckFromDB()
-  game.reset() // 先重置状态
-  await game.loadEnemyDeck(lv) // 再加载敌人数据（包括敌人面板）
+  gameStore.reset() // 先重置状态
+  // 从上阵区加载卡牌作为战斗牌库（reset 已清空内存，故在 reset 之后加载）
+  console.log('[Battle] 从上阵区加载战斗牌库（reset 之后）')
+  await gameStore.loadEquippedCardsAsDeck()
+  await gameStore.loadEnemyDeck(lv) // 再加载敌人数据（包括敌人面板）
+  // 开始玩家回合并抽牌（从已上阵的牌库中抽取）
+  try {
+    gameStore.startPlayerTurn()
+    console.log('[Battle] 已启动玩家回合并抽牌（首抽）')
+  } catch (e) {
+    console.warn('[Battle] 启动玩家回合失败:', e)
+  }
 })
 
 // 若关卡参数变化，重新配置并重新加载敌方手牌
 watch(level, async (lv) => {
   const diff = lv && lv <= 10 ? '普通' : lv && lv <= 20 ? '困难' : '噩梦'
-  game.configureEncounter(diff as any)
-  
+  gameStore.configureEncounter(diff as any)
+
   // 确保营地数据已加载（用于获取玩家血量）
   const campStore = useCampStore()
   if (!campStore.playerCharacter) {
     await campStore.fetchCampData()
   }
-  
-  game.reset() // 先重置状态
-  await game.loadEnemyDeck(lv || 1) // 再加载敌人数据（包括敌人面板）
+
+  gameStore.reset() // 先重置状态
+  // 重新从上阵区加载牌库（如果有）
+  await gameStore.loadEquippedCardsAsDeck()
+  await gameStore.loadEnemyDeck(lv || 1) // 再加载敌人数据（包括敌人面板）
+  // 开始玩家回合并抽牌（从已上阵的牌库中抽取）
+  try {
+    gameStore.startPlayerTurn()
+    console.log('[Battle] 已启动玩家回合并抽牌（首抽）')
+  } catch (e) {
+    console.warn('[Battle] 启动玩家回合失败:', e)
+  }
 })
 
 // 计算奖励（从后端数据库获取）
@@ -336,7 +586,7 @@ async function applyRewards() {
     // 2. 更新角色血量、行动点和压力值
     // 重要：使用战斗中的 heroHP，而不是营地中的 currentHp，确保战斗扣除的血量不返回
     if (playerCharacter.value?.id) {
-      const battleHp = game.heroHP // 使用战斗中的血量
+      const battleHp = gameStore.heroHP // 使用战斗中的血量
       const currentActionPoints = playerCharacter.value.currentActionPoints
       const currentStress = Math.min(100, (playerCharacter.value.currentStress || 0) + reward.stress)
       
@@ -369,7 +619,7 @@ async function confirmVictory() {
   await applyRewards()
   
   // 保存关卡进度
-  const lv = Number(route.query.level ?? 1)
+  const lv = Number(routeQuery.level ?? 1)
   try {
     await stageProgressApi.passStage(lv)
     console.log(`[Game] 关卡 ${lv} 已标记为通过`)
@@ -378,14 +628,13 @@ async function confirmVictory() {
   }
   
   showVictoryModal.value = false
-  uni.navigateTo({ url: `/pages/explore/explore?level=${String(lv)}&victory=1` })
+  uni.switchTab({ url: '/pages/explore/explore' })
 }
 
 // 确认失败结算，返回探索界面
 function confirmDefeat() {
   showDefeatModal.value = false
-  const lv = String(routeQuery.level ?? '1')
-  uni.navigateTo({ url: `/pages/explore/explore?level=${lv}` })
+  uni.switchTab({ url: '/pages/explore/explore' })
 }
 
 // 监听胜负，显示结算画面
@@ -422,69 +671,74 @@ watch(winner, async (w) => {
 <template>
   <view class="battle-container">
     
-    <!-- 顶部信息栏 -->
-    <view v-if="level" class="battle-header">
-      <view class="header-left">
-        <view class="level-badge">
-          <text class="level-icon">⚔️</text>
-          <view class="level-info">
-            <text class="level-text">第 {{ level }} 关</text>
-            <text class="chapter-text">第 {{ chapter }} 章</text>
-          </view>
-        </view>
-      </view>
-      
-      <view class="header-center">
-        <view class="info-chip">
-          <text class="chip-label">法力</text>
-          <text class="chip-value">{{ mana }}/{{ manaMax }}</text>
-        </view>
-        <view class="info-chip">
-          <text class="chip-label">手牌</text>
-          <text class="chip-value">{{ hand.length }}/10</text>
-        </view>
-        <view class="info-chip">
-          <text class="chip-label">牌库</text>
-          <text class="chip-value">{{ remainingDeck }}</text>
-        </view>
-      </view>
-      
-      <view class="header-right">
-        <button 
-          class="exit-battle-btn"
-          @click="exitBattle"
-          title="退出战斗"
-        >
-          <text class="btn-icon">←</text>
-          <text class="btn-text">退出</text>
-        </button>
-      </view>
-    </view>
+    <!-- 顶部信息栏（已移除，仅保留系统/设备状态区域） -->
 
     <!-- 战斗场地 -->
     <view class="battle-main">
-        <BattleField 
+        <BattleField
+          ref="battleFieldRef"
           :dragging-equip-card="draggingEquipCard"
           @equip-to-minion="handleEquipToMinion"
           @deploy-card="handleDeployCard"
+          @play-card="onPlay"
         />
     </view>
 
+    <!-- 暂时隐藏战斗日志 -->
+    <!-- <view class="battle-log">
+      <view class="log-header">
+        <text class="log-icon">📜</text>
+        <text class="log-title">战斗日志</text>
+        <text class="log-count">({{ logs.length }})</text>
+      </view>
+      <view class="log-content">
+        <view
+          v-for="(l, i) in logs"
+          :key="i"
+          class="log-entry"
+          :style="{ animationDelay: `${i * 0.05}s` }"
+        >
+          {{ l }}
+        </view>
+        <view v-if="logs.length === 0" class="log-empty">
+          <text class="empty-icon">📝</text>
+          <text class="empty-text">尚无消息</text>
+        </view>
+      </view>
+    </view> -->
+
     <!-- 底部操作区 -->
     <view class="battle-footer">
-      <!-- 手牌区域 -->
+      <!-- 中间：手牌区域（保留唯一底部区域） -->
       <view class="hand-section">
-        <view class="hand-header">
-          <view class="hand-title">
-            <text class="hand-icon">🃏</text>
-            <text>手牌 ({{ hand.length }}/10)</text>
-            <view class="mana-display">
-              <text class="mana-icon">💎</text>
-              <text class="mana-value">{{ mana }}/{{ manaMax }}</text>
+        <!-- 左侧玩家信息：名字 + 血条 -->
+        <view class="hand-player-info" aria-hidden="false">
+          <view class="player-name-small">
+            <text class="name-text-small">{{ playerCharacter?.playerCharacterName || '冒险者' }}</text>
+          </view>
+          <view class="hp-display small">
+            <view class="hp-bar-container horizontal small">
+              <view class="hp-bar-bg horizontal small">
+                <view
+                  class="hp-bar-fill"
+                  :class="getHPColorClass((gameStore.heroHP / (playerCharacter?.maxHp || 100)) * 100)"
+                  :style="{ width: ((gameStore.heroHP / (playerCharacter?.maxHp || 100)) * 100) + '%' }"
+                ></view>
+              </view>
+            </view>
+            <view class="hp-text horizontal small">
+              <text class="hp-value">{{ gameStore.heroHP }}</text>
+              <text class="hp-separator">/</text>
+              <text class="hp-max">{{ playerCharacter?.maxHp || 100 }}</text>
             </view>
           </view>
+        </view>
+        <view class="hand-header">
+          <view class="hand-title">
+            <!-- 手牌图标与数量已移除 -->
+          </view>
+          <!-- (法力与操作按钮已移至右侧侧栏以保持一致布局) -->
           <view class="hand-helpers">
-          <view class="hand-hint">点击查看详情，拖拽部署角色</view>
             <view v-if="deckExhausted" class="deck-empty-badge" title="本场战斗无法再抽牌">
               <text class="badge-icon">⚠️</text>
               <text class="badge-text">牌库已耗尽</text>
@@ -495,130 +749,89 @@ watch(winner, async (w) => {
           class="hand-cards"
           @dragleave="handleHandDragLeave"
         >
-          <CardItem 
-            v-for="c in hand" 
-            :key="c.id" 
-            :card="c" 
-            @play="onPlay"
-            @start-equip-drag="startEquipDrag"
-            @end-equip-drag="endEquipDrag"
-            @start-character-drag="startCharacterDrag"
-            @end-character-drag="endCharacterDrag"
-            @start-spell-drag="startSpellDrag"
-            @end-spell-drag="(e) => endSpellDrag(e)"
-            @show-equipment="showEquipDetails"
-            @show-character="showCharacterDetails"
-            @show-spell="showSpellDetails"
-            :can-afford="mana >= c.cost"
-          />
+          <!-- 扇形手牌布局：每张牌包裹在 .fan-card，中点为容器中心 -->
+          <view
+            v-for="(c, idx) in hand"
+            :key="c.id"
+            class="fan-card"
+            :data-card-id="c.id"
+            :style="(fanCardStyle as any)(idx, safeHandLength())"
+            @touchstart.passive="(e) => onHandTouchStart(e, c)"
+            @touchmove.passive="(e) => onHandTouchMove(e, c)"
+            @touchend.passive="(e) => onHandTouchEnd(e, c)"
+            @touch-drag-end="handleTouchDragEnd"
+          >
+            <CardItem
+              :card="c"
+              @play="onPlay"
+              @start-equip-drag="startEquipDrag"
+              @end-equip-drag="endEquipDrag"
+              @start-character-drag="startCharacterDrag"
+              @end-character-drag="endCharacterDrag"
+              @start-spell-drag="startSpellDrag"
+              @end-spell-drag="(e) => endSpellDrag(e)"
+              @deploy-card="handleDeployCard"
+              @equip-to-minion="handleEquipToMinion"
+              :can-afford="mana >= c.cost"
+            />
+          </view>
           <view v-if="hand.length === 0" class="empty-hand">
             <text class="empty-icon">📭</text>
             <text class="empty-text">手牌为空</text>
           </view>
         </view>
-
-        <!-- 装备详情面板（点击装备卡时展示） -->
-        <view v-if="selectedEquipCard" class="equip-details">
-          <view class="equip-header">
-            <text class="equip-title">装备详情</text>
-            <button class="equip-close" @click="closeEquipDetails">✕</button>
-          </view>
-          <view class="equip-body">
-            <view class="equip-name">{{ selectedEquipCard.name }}</view>
-            <view class="equip-type">类型：装备 · 费用 {{ selectedEquipCard.cost }}</view>
-            <view class="equip-effects">
-              <text v-if="(selectedEquipCard as any).bonusAttack">
-                攻击 +{{ (selectedEquipCard as any).bonusAttack }}
-              </text>
-              <text v-if="(selectedEquipCard as any).bonusHp">
-                生命 +{{ (selectedEquipCard as any).bonusHp }}
-              </text>
-              <text v-if="(selectedEquipCard as any).bonusDefense">
-                防御 +{{ (selectedEquipCard as any).bonusDefense }}
-              </text>
-              <text 
-                v-if="!(selectedEquipCard as any).bonusAttack 
-                      && !(selectedEquipCard as any).bonusHp 
-                      && !(selectedEquipCard as any).bonusDefense"
-              >
-                暂无数值加成，可能为特殊效果装备
-              </text>
-            </view>
-            <view class="equip-hint">
-              提示：按住此装备拖到己方角色卡牌上，即可为该角色穿戴装备。
-            </view>
-          </view>
-        </view>
-
-        <!-- 角色卡详情面板（点击角色卡时展示） -->
-        <view v-if="selectedCharacterCard" class="equip-details character-details">
-          <view class="equip-header">
-            <text class="equip-title">角色详情</text>
-            <button class="equip-close" @click="closeCharacterDetails">✕</button>
-          </view>
-          <view class="equip-body">
-            <view class="equip-name">{{ selectedCharacterCard.name }}</view>
-            <view class="equip-type">类型：角色 · 费用 {{ selectedCharacterCard.cost }}</view>
-            <view class="equip-effects">
-              <text>攻击力：{{ selectedCharacterCard.attack ?? 0 }}</text>
-              <text>生命值：{{ selectedCharacterCard.health ?? 0 }}</text>
-            </view>
-            <view class="equip-hint">
-              提示：按住此角色卡拖到战场位置槽上，即可部署该角色。
-            </view>
-          </view>
-        </view>
-
-        <!-- 法术卡详情面板（点击法术卡时展示） -->
-        <view v-if="selectedSpellCard" class="equip-details spell-details">
-          <view class="equip-header">
-            <text class="equip-title">法术详情</text>
-            <button class="equip-close" @click="closeSpellDetails">✕</button>
-          </view>
-          <view class="equip-body">
-            <view class="equip-name">{{ selectedSpellCard.name }}</view>
-            <view class="equip-type">类型：法术 · 费用 {{ selectedSpellCard.cost }}</view>
-            <view class="equip-effects">
-              <text v-if="selectedSpellCard.effect === 'fireball3'">效果：造成3点伤害</text>
-              <text v-else-if="selectedSpellCard.effect">效果：{{ selectedSpellCard.effect }}</text>
-              <text v-else>效果：法术效果</text>
-            </view>
-            <view class="equip-hint">
-              提示：点击"使用"按钮或直接点击卡牌即可使用此法术。
-            </view>
-            <view class="spell-actions">
-              <button 
-                class="use-spell-btn" 
-                @click="onPlay(selectedSpellCard.id); closeSpellDetails()"
-                :disabled="mana < selectedSpellCard.cost"
-              >
-                使用法术
-              </button>
-            </view>
-          </view>
-        </view>
+      <!-- Clone preview for touch drag fallback (miniapp) -->
+      <view v-if="cloneVisible && cloneCard" class="drag-clone" :style="{
+        position: 'fixed',
+        left: cloneX + 'px',
+        top: cloneY + 'px',
+        transform: 'translate(-50%,-50%)',
+        zIndex: 9999
+      }">
+        <CardItem :card="cloneCard" :can-afford="mana >= (cloneCard.cost)" />
       </view>
 
-      <!-- 操作按钮组 -->
-      <view class="action-buttons">
-        <button 
-          class="end-turn-btn"
-          :class="{ 
-            'disabled': !canPlay || isEndingTurn,
-            'processing': isEndingTurn
-          }"
-          :disabled="!canPlay || isEndingTurn"
-          @click="endTurn"
+      <!-- 右侧操作侧栏：法力（顶部）、使用技能（中间）、结束回合（底部） - 放入手牌区内，顶部不超出对战区 -->
+      <view class="right-action-column">
+        <view class="mana-display right-mana" pointer-events="none">
+          <text class="mana-icon">💎</text>
+          <text class="mana-value">{{ mana }}/{{ manaMax }}</text>
+        </view>
+
+        <button
+          class="use-skill-btn"
+          :class="{ 'disabled': !canPlay || isEndingTurn || usingSkill }"
+          :disabled="!canPlay || isEndingTurn || usingSkill"
+          @click="openUseSkillModal"
         >
           <text class="btn-content">
-            <text class="btn-icon-large">⏭️</text>
-            <text class="btn-label">{{ isEndingTurn ? '处理中...' : '结束回合' }}</text>
+            <text class="btn-icon-large">✨</text>
+            <text class="btn-label">{{ usingSkill ? '使用中...' : '使用技能' }}</text>
           </text>
-          <view v-if="isEndingTurn" class="btn-loading"></view>
         </button>
+
+        <view class="action-buttons right-action" pointer-events="none">
+          <button 
+            class="end-turn-btn"
+            :class="{ 
+              'disabled': !canPlay || isEndingTurn,
+              'processing': isEndingTurn
+            }"
+            :disabled="!canPlay || isEndingTurn"
+            @click="endTurn"
+          >
+            <text class="btn-content">
+              <text class="btn-icon-large">⏭️</text>
+              <text class="btn-label">{{ isEndingTurn ? '处理中...' : '结束回合' }}</text>
+            </text>
+            <view v-if="isEndingTurn" class="btn-loading"></view>
+          </button>
+        </view>
       </view>
+        </view>
     </view>
 
+    
     <!-- 退出确认弹窗 -->
     <view v-if="showExitConfirm" class="modal-overlay" @click="cancelExit">
       <view class="exit-modal" @click.stop>
@@ -635,6 +848,38 @@ watch(winner, async (w) => {
         </view>
       </view>
     </view>
+
+  <!-- 技能选择弹窗 -->
+  <view v-if="showSkillModal" class="modal-overlay" @click="closeSkillModal">
+    <view class="skill-modal" @click.stop>
+      <view class="modal-header">
+        <h3>选择技能</h3>
+      </view>
+      <view class="modal-content">
+        <view v-if="skillsLoading" class="loading-text">正在加载技能...</view>
+        <view v-else>
+          <view v-if="battleSkills.length === 0" class="empty-text">
+            <text>暂无可用技能</text>
+          </view>
+          <view v-else class="skill-list">
+            <view v-for="s in displayedSkills" :key="s.id" class="skill-item">
+              <view class="skill-left">
+                <text class="skill-name">{{ s.name }}</text>
+                <text class="skill-desc">{{ getFirstSentence(s.description || '') }}</text>
+              </view>
+              <view class="skill-right">
+                <text class="skill-cost">消耗: {{ s.manaCost ?? s.mana_cost ?? 1 }}</text>
+                <button class="confirm-btn" @click="useSkill(s)" :disabled="usingSkill || (s.manaCost ?? s.mana_cost ?? 1) > mana">使用</button>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="modal-actions">
+        <button class="modal-btn cancel-btn" @click="closeSkillModal">取消</button>
+      </view>
+    </view>
+  </view>
 
     <!-- 战斗胜利结算弹窗 -->
     <view v-if="showVictoryModal" class="modal-overlay victory-overlay">
@@ -742,12 +987,13 @@ watch(winner, async (w) => {
 
 <style scoped>
 .battle-container {
-  height: 100vh;
+  min-height: 100vh;
+  padding-top: 0; /* reduce reserved top space so content can sit closer to native title */
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   position: relative;
-  overflow-y: auto;
+  overflow: hidden; /* lock to single screen - prevent vertical scroll */
 }
 
 .battle-container::before {
@@ -769,12 +1015,18 @@ watch(winner, async (w) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+  border-bottom: none;
   position: relative;
   z-index: 10;
+}
+
+.battle-header .header-center {
+  display: none; /* 已将法力/手牌统计移动到底部，顶部统计隐藏 */
 }
 
 .header-left, .header-center, .header-right {
@@ -881,7 +1133,8 @@ watch(winner, async (w) => {
 .battle-main {
   flex: 1;
   min-height: 0;
-  padding: 12px 24px;
+  padding: 0 12px; /* 缩减左右与上内边距，让对战区更靠近顶部 */
+  margin-top: -6px; /* 上移主内容以贴近原生导航栏 */
   position: relative;
   z-index: 1;
   overflow-y: auto;
@@ -892,28 +1145,99 @@ watch(winner, async (w) => {
   box-sizing: border-box;
 }
 
+/* 完全隐藏战斗日志（不占位） */
+.battle-log {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
 /* 底部操作区 */
 .battle-footer {
-  padding: 8px 24px 12px;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 8px 16px 12px;
+  background: transparent;
+  backdrop-filter: none;
+  border-top: none;
   position: relative;
   z-index: 10;
   display: flex;
-  gap: 24px;
-  align-items: flex-start;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
 }
 
 .hand-section {
-  flex: 1;
+  flex: 1 1 auto;
+  background: transparent;
+  padding: 0 12px;
+  position: relative;
+}
+
+/* 左侧手牌区的玩家名字与血条（紧凑小版） */
+.hand-player-info {
+  position: absolute;
+  left: 12px;
+  top: 88px; /* 再向下移动 40px */
+  width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 25;
+}
+.player-name-small .name-text-small {
+  font-size: 18px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.player-name-small {
+  padding-left: 30px; /* 向右移动名字 30px */
+}
+.hp-display.small .hp-bar-container.horizontal.small {
+  width: 100px; /* 缩短血条长度为 100px */
+}
+.hp-bar-bg.horizontal.small {
+  height: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+.hp-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+.hp-bar-fill.hp-healthy {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+.hp-bar-fill.hp-warning {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+.hp-bar-fill.hp-danger {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+.hp-text.horizontal.small {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .hand-header {
+  /* 手牌统计信息放在手牌区上方，适配底部横向布局 */
+  position: relative;
+  left: auto;
+  bottom: auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16rpx;
+  gap: 12rpx;
+  margin-bottom: 0;
+  background: transparent;
+  z-index: 20;
 }
 
 .hand-title {
@@ -938,6 +1262,15 @@ watch(winner, async (w) => {
   border: 1rpx solid rgba(59, 130, 246, 0.3);
   border-radius: 16rpx;
   margin-left: 24rpx;
+}
+
+/* 手牌区右侧的法力显示（固定到手牌区右下边） */
+.hand-section .hand-mana-right {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  margin-left: 0;
+  padding: 8px 14px;
 }
 
 .mana-icon {
@@ -979,10 +1312,13 @@ watch(winner, async (w) => {
 }
 
 .hand-cards {
-  display: flex;
-  gap: 24rpx;
-  overflow-x: auto;
-  padding: 12rpx 0;
+  position: relative;
+  width: 100vw;
+  margin: 0 auto;
+  height: 160px; /* 缩短手牌高度，避免超出屏幕 */
+  overflow: visible;
+  padding: 8rpx 0;
+  background: transparent !important;
 }
 
 .hand-cards::-webkit-scrollbar {
@@ -1118,13 +1454,111 @@ watch(winner, async (w) => {
   font-size: 28rpx;
 }
 
-/* 操作按钮 */
-.action-buttons {
+/* 扇形手牌卡片包装器 */
+.fan-card {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform-origin: bottom center;
+  transition: transform 0.12s ease, z-index 0.12s;
+}
+.fan-card:hover {
+  transform: translateX(-50%) scale(1.06);
+  z-index: 10000 !important;
+}
+/* 确保扇形在容器中水平居中 */
+.hand-cards {
+  display: block;
+  text-align: center;
+}
+
+.hand-header {
+  position: relative; /* 允许在头部定位技能按钮 */
+}
+
+.header-use-skill-wrapper {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  pointer-events: none; /* wrapper 不拦截事件，按钮本身可交互 */
+}
+.header-use-skill-wrapper .use-skill-btn {
+  pointer-events: auto;
+}
+
+/* 右侧操作侧栏（覆盖：法力、使用技能、结束回合） */
+.right-action-column {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  z-index: 60;
+  pointer-events: none;
+  width: auto;
+  max-width: 220px;
+}
+.right-action-column > .use-skill-btn,
+.right-action-column > .action-buttons,
+.right-action-column > .mana-display {
+  pointer-events: auto;
+}
+.right-action-column .right-mana {
+  background: rgba(59,130,246,0.12);
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(59,130,246,0.18);
+}
+.action-buttons.right-action {
+  position: static;
+  right: auto;
+  bottom: auto;
+  width: 100%;
   display: flex;
   justify-content: center;
-  gap: 24rpx;
+}
+
+/* Enlarge the use-skill button when placed in the right action column */
+.right-action-column .use-skill-btn {
+  min-width: 200rpx;
+  padding: 22rpx 28rpx; /* increase vertical padding */
+  min-height: 92rpx;
+  font-size: 24rpx;
+  border-radius: 24rpx;
+  box-shadow: 0 14rpx 36rpx rgba(124, 58, 237, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.right-action-column .use-skill-btn .btn-icon-large {
+  font-size: 32rpx;
+  line-height: 1;
+}
+
+/* 操作按钮 */
+  .action-buttons {
+  position: absolute;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); /* 向下 30px（之前为70px -> 40px） */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12rpx;
   flex-shrink: 0;
-  width: 440rpx;
+  width: auto;
+  z-index: 30;
+}
+
+@media (max-width: 480px) {
+  .action-buttons {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  }
 }
 
 .end-turn-btn {
@@ -1132,13 +1566,13 @@ watch(winner, async (w) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 320rpx;
-  padding: 28rpx 56rpx;
+  min-width: 180rpx; /* 进一步缩小宽度 */
+  padding: 14rpx 28rpx; /* 进一步缩小内边距 */
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   border: none;
   border-radius: 24rpx;
   color: white;
-  font-size: 32rpx;
+  font-size: 22rpx; /* 进一步缩小文字尺寸 */
   font-weight: 700;
   overflow: hidden;
   box-shadow: 0 8rpx 24rpx rgba(59, 130, 246, 0.3);
@@ -1155,6 +1589,83 @@ watch(winner, async (w) => {
   pointer-events: none;
 }
 
+/* 使用技能按钮，样式与结束回合相似但更紧凑 */
+.use-skill-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140rpx;
+  padding: 10rpx 20rpx;
+  background: linear-gradient(135deg, #9f7aea 0%, #7c3aed 100%);
+  border: none;
+  border-radius: 20rpx;
+  color: white;
+  font-size: 18rpx;
+  font-weight: 700;
+  overflow: hidden;
+  box-shadow: 0 8rpx 20rpx rgba(124, 58, 237, 0.25);
+}
+.use-skill-btn.disabled {
+  background: rgba(71, 85, 105, 0.5);
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+/* 技能弹窗样式复用已有 modal 类 */
+.skill-modal {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 520px;
+  width: 90%;
+}
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skill-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 8px;
+}
+.skill-left {
+  flex: 1;
+  padding-right: 12px;
+}
+.skill-name {
+  font-weight: 700;
+  color: #e2e8f0;
+  display: block;
+  margin-bottom: 6px;
+}
+.skill-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skill-right {
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.skill-cost {
+  color: #fbbf24;
+  margin-bottom: 6px;
+}
+
 .btn-content {
   display: flex;
   align-items: center;
@@ -1164,11 +1675,11 @@ watch(winner, async (w) => {
 }
 
 .btn-icon-large {
-  font-size: 40rpx;
+  font-size: 24rpx;
 }
 
 .btn-label {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .btn-loading {
@@ -1327,8 +1838,9 @@ watch(winner, async (w) => {
   }
 
   .end-turn-btn {
-    min-width: 140px;
-    padding: 12px 24px;
+    min-width: 110px;
+    padding: 8px 16px;
+    font-size: 18px;
   }
 }
 
@@ -1358,8 +1870,9 @@ watch(winner, async (w) => {
   }
 
   .end-turn-btn {
-    min-width: 120px;
-    padding: 10px 20px;
+    min-width: 100px;
+    padding: 8px 16px;
+    font-size: 18px;
   }
 
   .btn-label {

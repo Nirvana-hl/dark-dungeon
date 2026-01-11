@@ -88,6 +88,11 @@
         },
         "requiredPrivateInfos" : [],
         "lazyCodeLoading" : "requiredComponents",
+        "networkTimeout" : {
+            "request" : 60000,
+            "downloadFile" : 60000
+        },
+        "debug" : true,
         "optimization" : {
             "subPackages" : true
         },

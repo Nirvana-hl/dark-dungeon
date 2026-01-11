@@ -772,8 +772,13 @@ function formatGold(balance: bigint): string {
 
 function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
+  if (!img) {
+    console.warn('[Shop] 图片加载失败：event.target 为空')
+    return
+  }
+
   console.warn('[Shop] 图片加载失败:', img.src)
-  
+
   // 如果是角色图片，尝试使用角色名称或ID的其他格式
   if (img.src && img.src.includes('/characters/')) {
     // 尝试使用默认图片
@@ -782,13 +787,15 @@ function handleImageError(event: Event) {
       return
     }
   }
-  
+
   // 如果还是失败，使用占位图
   if (img.src && !img.src.includes('touxiang')) {
     img.src = '/static/tabbar/touxiang.jpg'
   } else {
     // 最后隐藏图片
-    img.style.display = 'none'
+    if (img.style) {
+      img.style.display = 'none'
+    }
   }
 }
 

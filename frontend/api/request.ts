@@ -19,7 +19,6 @@ declare const uni: {
 
 // 微信小程序本地调试：不要用 localhost，改用 127.0.0.1（或你后端所在局域网 IP）
 // 提供可切换的地址，便于本机调试（127）和局域网联调（LAN_IP）
-const LOCAL_BASE = 'http://127.0.0.1:8080'          // 仅本机
 const LAN_BASE = 'http://26.83.153.194:8080'        // 你的局域网 IP（队友用这个）
 
 // 允许在本地存储里手动覆盖（如在调试面板执行 uni.setStorageSync('apiBaseUrl', LAN_BASE)）
@@ -32,7 +31,7 @@ const storedBase = (() => {
 })()
 
 // 默认优先使用存储值，其次用 127，本机/微信开发者工具最稳；队友改成 LAN_BASE 即可
-const API_BASE_URL = storedBase || LOCAL_BASE
+const API_BASE_URL = storedBase || LAN_BASE
 
 // 请求配置接口
 interface RequestConfig {
@@ -45,7 +44,7 @@ interface RequestConfig {
 }
 
 // 响应接口（模拟 axios 响应格式）
-interface UniResponse<T = any> {
+export interface UniResponse<T = any> {
   data: T
   statusCode: number
   header: Record<string, string>
@@ -240,12 +239,17 @@ function request<T = any>(config: RequestConfig): Promise<UniResponse<T>> {
     const url = buildUrl(finalConfig.url, finalConfig.params)
     
     // 发送请求
+    try {
+      // 记录完整请求 URL 与 headers，便于网络层排查
+      // eslint-disable-next-line no-console
+      console.debug('[API] Sending request', { url, method: finalConfig.method || 'GET', header: finalConfig.header })
+    } catch (e) {}
     uni.request({
       url,
       method: finalConfig.method || 'GET',
       data: finalConfig.data,
       header: finalConfig.header || {},
-      timeout: finalConfig.timeout || 10000,
+      timeout: finalConfig.timeout || 30000,
       success: (res) => {
         // 构造响应对象（模拟 axios 格式）
         const response: UniResponse<T> = {
@@ -272,6 +276,11 @@ function request<T = any>(config: RequestConfig): Promise<UniResponse<T>> {
         }
       },
       fail: (err) => {
+        try {
+          // 额外打印完整错误以便调试网络/超时问题
+          // eslint-disable-next-line no-console
+          console.error('[API] uni.request fail:', { url, config: finalConfig, err })
+        } catch (e) {}
         // 构造错误对象
         const error: UniError = {
           errMsg: err.errMsg || '请求失败',
@@ -436,7 +445,7 @@ export const campApi = {
   
   // 获取可用的卡牌角色
   async getAvailableCardCharacters() {
-    return await apiClient.get('/camp/card-characters')
+    return await apiClient.get('/user-card-characters')
   },
   
   // 部署/撤下卡牌角色
@@ -564,6 +573,21 @@ export const skillApi = {
   // 解锁技能
   async unlockSkill(skillId: string) {
     return await apiClient.post('/user-skills/unlock', { skillId })
+  },
+
+  // 获取战斗可用技能（包含被动/主动筛选）
+  async getBattleSkills(playerCharacterCode: string) {
+    return await apiClient.get(`/user-skills/battle/${playerCharacterCode}`)
+  },
+
+  // 获取战斗可用主动技能（只返回 active）
+  async getActiveBattleSkills(playerCharacterCode: string) {
+    return await apiClient.get(`/user-skills/battle/${playerCharacterCode}/active`)
+  },
+
+  // 验证并获取技能使用信息（后端会返回 manaCost 和 effectPayload 等）
+  async useSkill(skillId: string | number, payload?: { currentMana?: number }) {
+    return await apiClient.post(`/user-skills/${skillId}/use`, payload || {})
   }
 }
 
