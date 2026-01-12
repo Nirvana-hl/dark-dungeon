@@ -254,10 +254,11 @@ export const useShopStore = defineStore('shop', () => {
   const updateOffer = (offerId: string, updates: Partial<ShopOffer>) => {
     const index = offers.value.findIndex(offer => offer.id === offerId)
     if (index >= 0) {
+      // 合并更新并断言为完整的 ShopOffer，确保必需字段（如 id）保持为 string 类型
       offers.value[index] = {
         ...offers.value[index],
         ...updates
-      }
+      } as ShopOffer
     }
   }
 

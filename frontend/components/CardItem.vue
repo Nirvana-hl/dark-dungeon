@@ -16,13 +16,36 @@ const showTypeText = (props as any).showTypeText === false ? false : true
 const artUrl = computed(() => {
   try {
     const nameKey = String((props.card as any).name || '').trim()
-    if (nameKey && (cardImageMap as any)[nameKey]) return (cardImageMap as any)[nameKey]
+    console.log('[CardItem] Card name:', nameKey, 'id:', (props.card as any).id, 'type:', (props.card as any).type)
+
+    if (nameKey && (cardImageMap as any)[nameKey]) {
+      const url = (cardImageMap as any)[nameKey]
+      console.log('[CardItem] Found by name:', nameKey, '->', url)
+      return url
+    }
     const normalized = nameKey.toString().trim().toLowerCase().replace(/\s+/g, '_')
-    if (normalized && (cardImageMap as any)[normalized]) return (cardImageMap as any)[normalized]
+    if (normalized && (cardImageMap as any)[normalized]) {
+      const url = (cardImageMap as any)[normalized]
+      console.log('[CardItem] Found by normalized name:', normalized, '->', url)
+      return url
+    }
     const idKey = String((props.card as any).id || '')
-    if (idKey) return `static/images/shop/cards/${idKey}.png`
+    if (idKey) {
+      // 根据卡牌类型选择正确的图片路径
+      const cardType = (props.card as any).type
+      let url
+      if (cardType === 'character') {
+        url = `/static/images/shop/characters/${idKey}.png`
+      } else {
+        url = `/static/images/shop/cards/${idKey}.png`
+      }
+      console.log('[CardItem] Using fallback by ID:', idKey, 'type:', cardType, '->', url)
+      return url
+    }
+    console.log('[CardItem] No image found for card')
     return null
   } catch (e) {
+    console.error('[CardItem] Error getting art URL:', e)
     return null
   }
 })
@@ -542,17 +565,21 @@ function handleDragEnd(e: DragEvent) {
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 6px;
+  /* move name a bit above the bottom stats to avoid overlap when wrapping */
+  bottom: 36px;
   font-size: 0.9375rem;
   font-weight: 700;
   color: #e2e8f0;
-  line-height: 1.1;
-  display: block;
+  line-height: 1.2;
   z-index: 12;
   text-align: center;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+  /* allow wrapping and do not use ellipsis */
+  white-space: normal;
+  word-break: break-word;
+  text-overflow: clip;
+  overflow: visible;
+  /* allow multiple lines (visual limit) while avoiding forced ellipsis */
+  max-height: 4.2em;
 }
 
 /* 卡牌效果 */
@@ -666,7 +693,11 @@ function handleDragEnd(e: DragEvent) {
 
   .card-name {
     font-size: 0.875rem;
-    min-height: 2.4em;
+    /* allow wrapping on smaller screens as well */
+    min-height: auto;
+    max-height: 4.2em;
+    white-space: normal;
+    word-break: break-word;
   }
 
   .card-effect {

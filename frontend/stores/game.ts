@@ -9,6 +9,23 @@ import type { ApiResponse, UniResponse } from '@/api/request'
 import apiClient from '@/api/request'
 import { soundManager, SoundType } from '@/utils/soundManager'
 
+// uni-app全局函数声明
+declare const getApp: () => any
+
+// 全局动画触发器
+let battleFieldTrigger: ((attackerId: string, targetId: string | null, isBoss: boolean) => void) | null = null
+
+// 设置动画触发器
+function setBattleFieldTrigger(trigger: (attackerId: string, targetId: string | null, isBoss: boolean) => void) {
+  battleFieldTrigger = trigger
+  console.log('[Game] BattleField触发器已设置')
+}
+
+// 获取动画触发器
+export function getBattleFieldTrigger() {
+  return battleFieldTrigger
+}
+
 export type CardType = 'character' | 'spell' | 'equipment'
 
 export interface Card {
@@ -338,10 +355,22 @@ export const useGameStore = defineStore('game', () => {
         case 'shield_guard':
           // 盾卫：为一个队友提供护盾（选取当前生命最低的友方）
           let idx = 0
+          // defensive: guard against undefined entries in board.value
           for (let i = 1; i < board.value.length; i++) {
-            if (board.value[i].health < board.value[idx].health) idx = i
+            const current = board.value[i]
+            const best = board.value[idx]
+            if (!current) continue
+            if (!best) {
+              idx = i
+              continue
+            }
+            if (current.health < best.health) idx = i
           }
           const target = board.value[idx]
+          if (!target) {
+            // unexpected, but avoid runtime error
+            break
+          }
           target.shield = (target.shield ?? 0) + power
           log(`特性：盾卫守护，为 ${target.name} 提供 ${power} 点护盾`)
           break
@@ -504,7 +533,8 @@ export const useGameStore = defineStore('game', () => {
 
       if (combined.length === 0) {
         log('提示：当前未配置上阵卡牌，请返回营地在卡组管理中选择卡牌后再开始战斗')
-      } else {
+      }
+      if (board.value.length === 0) {
         log(`已从营地上阵卡组加载 ${combined.length} 张卡牌（角色 ${characterCards.length}，技能 ${deckCards.length}）`)
       }
 
@@ -564,11 +594,18 @@ export const useGameStore = defineStore('game', () => {
           }
           
           if (enemies.length > 0) {
-            // 随机选择一个敌人
+            // 随机选择一个敌人（防御性检查，避免访问 undefined）
             const randomIndex = Math.floor(Math.random() * enemies.length)
-            selectedEnemyId = enemies[randomIndex].id
-            currentEnemyId.value = selectedEnemyId
-            log(`已选择敌人：${enemies[randomIndex].name} (ID: ${selectedEnemyId})`)
+            const chosen = enemies[randomIndex]
+            if (!chosen) {
+              console.warn('[Game] 随机选择的敌人未定义，取消选择')
+              selectedEnemyId = null
+              currentEnemyId.value = selectedEnemyId
+            } else {
+              selectedEnemyId = chosen.id
+              currentEnemyId.value = selectedEnemyId
+              log(`已选择敌人：${chosen.name ?? 'unknown'} (ID: ${selectedEnemyId})`)
+            }
           } else {
             console.warn('[Game] 敌人列表为空（可能所有敌人都是首领且当前不是Boss关卡）')
           }
@@ -596,9 +633,16 @@ export const useGameStore = defineStore('game', () => {
               const enemies = retryEnemiesResponse.data.data as Array<{ id: number; name: string; difficulty: string }>
               if (enemies.length > 0) {
                 // 选择第一个敌人（因为后端可能已经选择了）
-                selectedEnemyId = enemies[0].id
-                currentEnemyId.value = selectedEnemyId
-                console.log('[Game] 重试后获取到敌人ID:', selectedEnemyId)
+                const first = enemies[0]
+                if (!first) {
+                  console.warn('[Game] 重试后第一个敌人未定义，取消选择')
+                  selectedEnemyId = null
+                  currentEnemyId.value = selectedEnemyId
+                } else {
+                  selectedEnemyId = first.id
+                  currentEnemyId.value = selectedEnemyId
+                  console.log('[Game] 重试后获取到敌人ID:', selectedEnemyId)
+                }
               }
             }
           } catch (e) {
@@ -728,7 +772,14 @@ export const useGameStore = defineStore('game', () => {
   function shuffle<T>(arr: T[]) {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
-      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+      const ai = arr[i]
+      const aj = arr[j]
+      // With noUncheckedIndexedAccess enabled, arr[index] may be T | undefined.
+      // Narrow to defined values before swapping to satisfy the type checker.
+      if (ai !== undefined && aj !== undefined) {
+        arr[i] = aj
+        arr[j] = ai
+      }
     }
   }
 
@@ -866,6 +917,10 @@ export const useGameStore = defineStore('game', () => {
     const idx = hand.value.findIndex(c => c.id === id)
     if (idx < 0) return
     const card = hand.value[idx]
+    if (!card) {
+      console.warn('[Game] 选择的手牌不存在，取消出牌 (idx=' + idx + ')')
+      return
+    }
     if (card.cost > mana.value) return
     // 扣蓝
     mana.value -= card.cost
@@ -937,12 +992,24 @@ export const useGameStore = defineStore('game', () => {
             if (t.trait_key === 'shield_guard') {
               // 盾卫：召唤时可以为队友提供护盾
               let idx = 0
+              // defensive: guard against undefined entries in board.value
               for (let i = 1; i < board.value.length; i++) {
-                if (board.value[i].health < board.value[idx].health) idx = i
+                const current = board.value[i]
+                const best = board.value[idx]
+                if (!current) continue
+                if (!best) {
+                  idx = i
+                  continue
+                }
+                if (current.health < best.health) idx = i
               }
               const target = board.value[idx]
-              target.shield = (target.shield ?? 0) + power
-              log(`特性：${card.name} 盾卫守护，为 ${target.name} 提供 ${power} 点护盾`)
+              if (target) {
+                target.shield = (target.shield ?? 0) + power
+                log(`特性：${card.name} 盾卫守护，为 ${target.name} 提供 ${power} 点护盾`)
+              } else {
+                console.warn('[Game] 盾卫目标未定义，跳过护盾赋予')
+              }
           }
             // 注意：priest_bless（祭司祝福）只在回合开始时触发，不在召唤时触发
         }
@@ -1060,10 +1127,16 @@ export const useGameStore = defineStore('game', () => {
       return
     }
     const card = hand.value[idx]
+    if (!card) {
+      console.warn('[GameStore] 选择的卡牌不存在，取消操作')
+      return
+    }
     if (card.type !== 'equipment') {
       console.log('[GameStore] 卡牌不是装备类型:', card.type)
       return
     }
+
+    const raw = (card as any).raw
 
     console.log('[GameStore] 装备卡数据:', {
       id: card.id,
@@ -1072,10 +1145,12 @@ export const useGameStore = defineStore('game', () => {
       bonusAttack: card.bonusAttack,
       bonusHp: card.bonusHp,
       bonusDefense: card.bonusDefense,
-      hasRaw: !!card.raw,
-      rawType: typeof card.raw,
-      rawKeys: card.raw ? Object.keys(card.raw) : null,
-      statModifiers: (card.raw as any)?.statModifiers,
+      // `card.raw` is not declared on the Card type in some codepaths.
+      // Access it via a safe `any` cast to avoid TS error while remaining defensive.
+      hasRaw: !!(card as any).raw,
+      rawType: typeof (card as any).raw,
+      rawKeys: (card as any).raw ? Object.keys((card as any).raw) : null,
+      statModifiers: raw?.statModifiers,
       effect: card.effect,
       allKeys: Object.keys(card)
     })
@@ -1087,6 +1162,10 @@ export const useGameStore = defineStore('game', () => {
     }
 
     const target = board.value[mIdx]
+    if (!target) {
+      console.warn('[GameStore] 目标随从未定义，取消装备 (mIdx=' + mIdx + ')')
+      return
+    }
 
     // 根据装备的 stat_modifiers 计算属性加成
     // 优先使用装备卡的bonus属性，如果没有则从raw数据重新解析
@@ -1095,8 +1174,8 @@ export const useGameStore = defineStore('game', () => {
     let shieldBonus = Number(card.bonusDefense ?? 0) || 0
 
     // 如果bonus属性都没有设置，尝试从raw数据重新解析
-    if (atkBonus === 0 && hpBonus === 0 && shieldBonus === 0 && card.raw) {
-      const rawStats = parseStatModifiers((card.raw as any)?.statModifiers)
+    if (atkBonus === 0 && hpBonus === 0 && shieldBonus === 0 && raw) {
+      const rawStats = parseStatModifiers(raw?.statModifiers)
       atkBonus = rawStats.atk
       hpBonus = rawStats.hp
       shieldBonus = rawStats.def
@@ -1108,7 +1187,7 @@ export const useGameStore = defineStore('game', () => {
       bonusAttack: card.bonusAttack,
       bonusHp: card.bonusHp,
       bonusDefense: card.bonusDefense,
-      rawStatModifiers: (card.raw as any)?.statModifiers,
+      rawStatModifiers: raw?.statModifiers,
       finalBonuses: { atkBonus, hpBonus, shieldBonus }
     })
 
@@ -1181,20 +1260,26 @@ export const useGameStore = defineStore('game', () => {
       
       for (const minion of frontRow) {
         if (minion.position !== undefined && minion.position < 3) {
-          byColumn[minion.position].push(minion)
+          const pos = minion.position
+          const column = byColumn[pos]
+          if (column) {
+            column.push(minion)
+          }
         }
       }
       
       // 找到第一个有卡牌的列
       for (let col = 0; col < 3; col++) {
-        if (byColumn[col].length > 0) {
+        const column = byColumn[col]
+        if (column && column.length > 0) {
           // 如果该列有多张卡牌，选择最早打出的（createdAt 最小）
-          byColumn[col].sort((a, b) => {
+          column.sort((a, b) => {
             const timeA = a.createdAt ?? 0
             const timeB = b.createdAt ?? 0
             return timeA - timeB
           })
-          return byColumn[col][0]
+          const firstInColumn = column[0]
+          if (firstInColumn) return firstInColumn
         }
       }
     }
@@ -1209,26 +1294,32 @@ export const useGameStore = defineStore('game', () => {
       
       for (const minion of backRow) {
         if (minion.position !== undefined && minion.position >= 3) {
-          byColumn[minion.position - 3].push(minion)
+          const pos = minion.position - 3
+          const column = byColumn[pos]
+          if (column) {
+            column.push(minion)
+          }
         }
       }
       
       // 找到第一个有卡牌的列
       for (let col = 0; col < 3; col++) {
-        if (byColumn[col].length > 0) {
+        const column = byColumn[col]
+        if (column && column.length > 0) {
           // 如果该列有多张卡牌，选择最早打出的（createdAt 最小）
-          byColumn[col].sort((a, b) => {
+          column.sort((a, b) => {
             const timeA = a.createdAt ?? 0
             const timeB = b.createdAt ?? 0
             return timeA - timeB
           })
-          return byColumn[col][0]
+          const firstInColumn = column[0]
+          if (firstInColumn) return firstInColumn
         }
       }
     }
     
     // 如果都没有，返回第一个（降级方案）
-    return targetBoard[0]
+    return targetBoard[0] ?? null
   }
 
   async function executeAttack(attacker: Minion, target: Minion | null, isBoss: boolean): Promise<void> {
@@ -1239,11 +1330,42 @@ export const useGameStore = defineStore('game', () => {
         attacker.attackTargetId = target.id
       }
       
-      // 触发攻击开始事件
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('attack-start', {
-          detail: { attackerId: attacker.id, targetId: target?.id, isBoss }
-        }))
+      // 在uni-app环境中使用合适的全局对象
+      const globalObj = typeof uni !== 'undefined' ? uni :
+                       (typeof globalThis !== 'undefined' ? globalThis :
+                       (typeof window !== 'undefined' ? window : null))
+
+      if (globalObj) {
+        console.log(`[Game] 触发攻击开始事件: attacker=${attacker.id}, target=${target?.id}, isBoss=${isBoss}`)
+
+        // 尝试触发DOM事件（如果支持）
+        try {
+          const maybeDispatch = (globalObj as any).dispatchEvent
+          if (typeof maybeDispatch === 'function') {
+            // call with correct this
+            const evt = (globalObj as any).CustomEvent
+              ? new (globalObj as any).CustomEvent('attack-start', { detail: { attackerId: attacker.id, targetId: target?.id, isBoss } })
+              : new CustomEvent('attack-start', { detail: { attackerId: attacker.id, targetId: target?.id, isBoss } })
+            maybeDispatch.call(globalObj, evt)
+            console.log(`[Game] 攻击开始事件已发送`)
+          }
+        } catch (e) {
+          console.warn('[Game] DOM事件发送失败:', e)
+        }
+
+        // 通过store触发器调用动画
+        if (battleFieldTrigger) {
+          console.log(`[Game] 通过Store触发器触发攻击动画`)
+            try {
+            battleFieldTrigger(attacker.id, target?.id ?? null, isBoss)
+          } catch (e) {
+            console.warn('[Game] Store触发器调用失败:', e)
+          }
+        } else {
+          console.log(`[Game] Store触发器不可用`)
+        }
+      } else {
+        console.warn('[Game] 全局对象不可用，无法触发动画事件')
       }
       
       // 2. 等待角色移动到目标位置（350ms）
@@ -1474,6 +1596,11 @@ export const useGameStore = defineStore('game', () => {
         if (enemyBoard.value.length > 0) {
           const targetIndex = Math.floor(Math.random() * enemyBoard.value.length)
           const target = enemyBoard.value[targetIndex]
+          if (!target) {
+            // Defensive check: if target is unexpectedly undefined, refund mana and skip
+            enemyMana.value += card.cost // 返还法力值
+            continue
+          }
           if (!target.equipmentNames) {
             target.equipmentNames = []
           }
@@ -1536,15 +1663,22 @@ export const useGameStore = defineStore('game', () => {
             if (board.value.length > 0) {
           const targetIndex = Math.floor(Math.random() * board.value.length)
           const target = board.value[targetIndex]
+          if (!target) {
+            // defensive fallback: hit hero if no valid target
+            heroHP.value = Math.max(0, heroHP.value - 3)
+            log(`敌方法术：${card.name} 未命中随从，改为对我方英雄造成 3 伤害（我方HP ${heroHP.value}）`)
+            checkVictory()
+            return
+          }
           const absorb = Math.min(target.shield ?? 0, 3)
           target.shield = Math.max(0, (target.shield ?? 0) - absorb)
-              const dmg = 3 - absorb
+          const dmg = 3 - absorb
           target.health = Math.max(0, target.health - dmg)
           log(`敌方法术：${card.name} 击中 ${target.name}，造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
           if (target.health <= 0) {
             board.value.splice(targetIndex, 1)
             log(`我方随从 ${target.name} 倒下。`)
-              }
+          }
             } else {
               heroHP.value = Math.max(0, heroHP.value - 3)
           log(`敌方法术：${card.name} 对我方英雄造成 3 伤害（我方HP ${heroHP.value}）`)
@@ -1555,6 +1689,12 @@ export const useGameStore = defineStore('game', () => {
         if (board.value.length > 0) {
           const targetIndex = Math.floor(Math.random() * board.value.length)
           const target = board.value[targetIndex]
+          if (!target) {
+            heroHP.value = Math.max(0, heroHP.value - 3)
+            log(`敌方法术：${card.name} 未命中随从，改为对我方英雄造成 3 伤害（我方HP ${heroHP.value}）`)
+            checkVictory()
+            return
+          }
           const absorb = Math.min(target.shield ?? 0, 3)
           target.shield = Math.max(0, (target.shield ?? 0) - absorb)
           const dmg = 3 - absorb
@@ -1605,6 +1745,10 @@ export const useGameStore = defineStore('game', () => {
       for (let i = 0; i < sortedEnemyBoard.length; i++) {
         const enemyMinion = sortedEnemyBoard[i]
         if (battleOver.value) break
+        if (!enemyMinion) {
+          // defensive: skip undefined entries
+          continue
+        }
         if (enemyMinion.canAttack === false) continue
         
         // 优先攻击位置 0, 1, 2（前排），如果同一列有多张卡牌，攻击最早打出的
@@ -1651,49 +1795,52 @@ export const useGameStore = defineStore('game', () => {
     // 2. 敌人本体攻击（如果敌人面板有攻击力）- 在所有卡牌攻击完成后执行
     if (!battleOver.value && enemyPanel.value && enemyPanel.value.attack && enemyPanel.value.attack > 0) {
       const enemyBaseAttack = enemyPanel.value.attack
-      
-      // 优先攻击我方随从
+
+      // 优先攻击我方随从（存在则随机选择）
       if (board.value.length > 0) {
         const targetIndex = Math.floor(Math.random() * board.value.length)
         const target = board.value[targetIndex]
-        
-        // 敌人本体攻击不需要动画，直接执行伤害
-        // 先消耗护盾
-        const absorb = Math.min(target.shield ?? 0, enemyBaseAttack)
-        target.shield = Math.max(0, (target.shield ?? 0) - absorb)
-        const dmg = enemyBaseAttack - absorb
-        
-        target.health = Math.max(0, target.health - dmg)
-        
-        soundManager.playSound(SoundType.ATTACK, { volume: 0.6 })
-        setTimeout(() => {
-          soundManager.playSound(SoundType.HIT, { volume: 0.7 })
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('ally-hit', { 
-              detail: { minionId: target.id, damage: dmg } 
-            }))
+
+        if (!target) {
+          // 防御性：若未选中有效随从，则改为攻击英雄
+          heroHP.value = Math.max(0, heroHP.value - enemyBaseAttack)
+          log(`敌人本体攻击未命中随从，改为对英雄造成 ${enemyBaseAttack} 伤害（我方HP ${heroHP.value}）`)
+          checkVictory()
+        } else {
+          // 敌人本体攻击不需要动画，直接执行伤害（先消耗护盾）
+          const absorb = Math.min(target.shield ?? 0, enemyBaseAttack)
+          target.shield = Math.max(0, (target.shield ?? 0) - absorb)
+          const dmg = enemyBaseAttack - absorb
+          target.health = Math.max(0, target.health - dmg)
+
+          soundManager.playSound(SoundType.ATTACK, { volume: 0.6 })
+          setTimeout(() => {
+            soundManager.playSound(SoundType.HIT, { volume: 0.7 })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('ally-hit', {
+                detail: { minionId: target.id, damage: dmg }
+              }))
+            }
+          }, 120)
+
+          log(`敌人本体发动攻击，对我方 ${target.name} 造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
+          if (target.health <= 0) {
+            board.value.splice(targetIndex, 1)
+            log(`我方随从 ${target.name} 倒下。`)
           }
-        }, 120)
-        
-        log(`敌人本体发动攻击，对我方 ${target.name} 造成 ${dmg} 伤害，护盾吸收 ${absorb}（剩余HP ${target.health}）`)
-        
-        if (target.health <= 0) {
-          board.value.splice(targetIndex, 1)
-          log(`我方随从 ${target.name} 倒下。`)
         }
       } else {
         // 没有随从，直接攻击英雄
         soundManager.playSound(SoundType.ATTACK, { volume: 0.6 })
         setTimeout(() => {
           soundManager.playSound(SoundType.HIT, { volume: 0.7 })
-          // 触发玩家受击反馈
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('player-hit', { 
-              detail: { damage: enemyBaseAttack } 
+            window.dispatchEvent(new CustomEvent('player-hit', {
+              detail: { damage: enemyBaseAttack }
             }))
           }
         }, 120)
-        
+
         heroHP.value = Math.max(0, heroHP.value - enemyBaseAttack)
         log(`敌人本体发动攻击，对我方英雄造成 ${enemyBaseAttack} 伤害（我方HP ${heroHP.value}）`)
         checkVictory()
@@ -1719,11 +1866,41 @@ export const useGameStore = defineStore('game', () => {
       const attackStartTime = Date.now()
       console.log(`[EnemyAttack] 开始攻击: ${enemyMinion.name} (ID: ${enemyMinion.id}) 在 ${attackStartTime}`)
       
-      // 触发攻击开始事件
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('attack-start', {
-          detail: { attackerId: enemyMinion.id, targetId: target?.id, isBoss: false }
-        }))
+      // 在uni-app环境中使用合适的全局对象
+      const globalObj = typeof uni !== 'undefined' ? uni :
+                       (typeof globalThis !== 'undefined' ? globalThis :
+                       (typeof window !== 'undefined' ? window : null))
+
+      if (globalObj) {
+        console.log(`[EnemyAttack] 触发攻击开始事件: attacker=${enemyMinion.id}, target=${target?.id}, isBoss=false`)
+
+        // 尝试触发DOM事件（如果支持）
+        try {
+          const maybeDispatch = (globalObj as any).dispatchEvent
+          if (typeof maybeDispatch === 'function') {
+            const evt = (globalObj as any).CustomEvent
+              ? new (globalObj as any).CustomEvent('attack-start', { detail: { attackerId: enemyMinion.id, targetId: target?.id, isBoss: false } })
+              : new CustomEvent('attack-start', { detail: { attackerId: enemyMinion.id, targetId: target?.id, isBoss: false } })
+            maybeDispatch.call(globalObj, evt)
+            console.log(`[EnemyAttack] 攻击开始事件已发送`)
+          }
+        } catch (e) {
+          console.warn('[EnemyAttack] DOM事件发送失败:', e)
+        }
+
+        // 通过store触发器调用动画
+        if (battleFieldTrigger) {
+          console.log(`[EnemyAttack] 通过Store触发器触发攻击动画`)
+          try {
+            battleFieldTrigger(enemyMinion.id, target?.id ?? null, false)
+          } catch (e) {
+            console.warn('[EnemyAttack] Store触发器调用失败:', e)
+          }
+        } else {
+          console.log(`[EnemyAttack] Store触发器不可用`)
+        }
+      } else {
+        console.warn('[EnemyAttack] 全局对象不可用，无法触发动画事件')
       }
       
       // 使用和我方攻击相同的时间间隔，但需要等待完整的 CSS 动画（900ms）
@@ -1904,7 +2081,7 @@ export const useGameStore = defineStore('game', () => {
     // actions
     reset, draw, startPlayerTurn, playCard, endTurn, log, configureEncounter, loadUserDeckFromDB, loadEnemyDeck, equipCardToMinion,
     loadPlayerHealthFromCamp, // 导出加载血量函数，供外部调用
-    deckExhausted, loadEquippedCardsAsDeck,
+    deckExhausted, loadEquippedCardsAsDeck, setBattleFieldTrigger,
 
     // 营地衔接：将营地的角色与道具转换为战斗牌库
     setDeckFromCamp(campChars: Array<{ name: string; attack: number; health: number }>, campItems: Array<{ name?: string; effect: 'fireball3' | 'teamBuffAtk1'; cost?: number }>) {

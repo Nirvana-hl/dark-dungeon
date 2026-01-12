@@ -200,9 +200,11 @@ function handleImageError(event: Event) {
   font-weight: bold;
   color: var(--text-primary);
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* allow full names to wrap instead of truncating with ellipsis */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
 }
 
 .card-cost {

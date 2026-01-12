@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, nextTick } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import BattleField from '@/components/BattleField.vue'
 import CardItem from '@/components/CardItem.vue'
@@ -28,6 +28,7 @@ declare const uni: {
   clearStorageSync: () => void
   [key: string]: any
 }
+declare const getApp: () => any
 
 // 页面加载
 onLoad((options) => {
@@ -45,12 +46,70 @@ onShow(() => {
     return
   }
 
+  // 确保攻击事件监听器已添加
+  const globalObj = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : null)
+
+  if (globalObj) {
+    console.log('[Battle] onShow - 重新添加攻击事件监听器')
+    try {
+      // 先移除可能已存在的监听器
+      if (typeof globalObj.removeEventListener === 'function') {
+        globalObj.removeEventListener('attack-start', handleAttackStart)
+        globalObj.removeEventListener('attack-end', handleAttackEnd)
+      }
+      // 重新添加监听器
+      if (typeof globalObj.addEventListener === 'function') {
+        globalObj.addEventListener('attack-start', handleAttackStart)
+        globalObj.addEventListener('attack-end', handleAttackEnd)
+        console.log('[Battle] onShow - 攻击事件监听器已重新添加')
+      }
+    } catch (e) {
+      console.warn('[Battle] onShow - 事件监听器操作失败:', e)
+    }
+  }
+
   // 可根据需要刷新数据
 })
 
+// 攻击事件处理器 - 现在通过ref直接调用BattleField方法
+function handleAttackStart(event: any) {
+  const { attackerId, targetId, isBoss } = event.detail || event
+  console.log('[Battle] 收到攻击开始事件:', { attackerId, targetId, isBoss })
+
+  // 通过ref直接调用BattleField的方法
+  if (battleFieldRef.value && typeof battleFieldRef.value.triggerAttackAnimation === 'function') {
+    try {
+      battleFieldRef.value.triggerAttackAnimation(attackerId, targetId, isBoss)
+      console.log('[Battle] 已触发BattleField的攻击动画')
+    } catch (error: any) {
+      console.warn('[Battle] 调用BattleField.triggerAttackAnimation失败:', error)
+    }
+  } else {
+    console.warn('[Battle] BattleField ref或triggerAttackAnimation方法不可用')
+  }
+}
+
+function handleAttackEnd(event: any) {
+  console.log('[Battle] 收到攻击结束事件:', event.detail || event)
+  // 攻击结束时的处理逻辑（如果需要）
+}
+
 // 页面卸载
-onUnload(() => {
-  // 清理代码（如果需要）
+onUnmounted(() => {
+  // 清理事件监听器
+  const globalObj = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : null)
+
+  if (globalObj) {
+    try {
+      if (typeof globalObj.removeEventListener === 'function') {
+        globalObj.removeEventListener('attack-start', handleAttackStart)
+        globalObj.removeEventListener('attack-end', handleAttackEnd)
+      }
+    } catch (e) {
+      console.warn('[Battle] 事件监听器清理失败:', e)
+    }
+  }
+  console.log('[Battle] 页面卸载，事件监听器已清理')
 })
 
 // 页面参数（替代 useRoute）
@@ -88,10 +147,19 @@ const usingSkill = ref(false)
 
 // ref to BattleField component (used to resolve touch drops inside component)
 const battleFieldRef = ref<any>(null)
+// watch battleSkills for debugging
+watch(battleSkills, (val) => {
+  try { console.log('[Battle] watcher battleSkills updated:', JSON.stringify(val)) } catch (e) { console.log('[Battle] watcher battleSkills updated (object):', val) }
+}, { deep: true })
 
 // BattleField 实例引用监控（用于小程序环境）
 watch(battleFieldRef, (newRef, oldRef) => {
   console.log('[Battle] BattleField 实例变化:', { newRef: !!newRef, oldRef: !!oldRef })
+  if (newRef && typeof newRef.triggerAttackAnimation === 'function') {
+    console.log('[Battle] BattleField triggerAttackAnimation方法已可用')
+  } else {
+    console.log('[Battle] BattleField triggerAttackAnimation方法不可用')
+  }
 }, { immediate: true })
 
 // drag clone state for miniapp fallback
@@ -359,7 +427,37 @@ async function openUseSkillModal() {
     }
     console.log('[Battle] skill API response:', resp)
     if (resp && resp.data && resp.data.code === 200) {
-      battleSkills.value = Array.isArray(resp.data.data) ? resp.data.data : []
+      const rawSkills = Array.isArray(resp.data.data) ? resp.data.data : []
+      console.log('[Battle] rawSkills from API (object):', rawSkills)
+      try { console.log('[Battle] rawSkills from API (json):', JSON.stringify(rawSkills)) } catch (e) {}
+      // 规范化技能数据：确保法力消耗至少为2，并且只保留主动技能
+      const normalized = rawSkills.map((s: any) => {
+        const mana = Math.max(2, Number(s.manaCost ?? s.mana_cost ?? s.cost ?? 2))
+        // consider different possible type fields returned by backend
+        const rawType = String(s.type ?? s.category ?? s.skillType ?? s.skill_type ?? '').toLowerCase()
+        let isActiveFlag: boolean
+        if (rawType && rawType.length > 0) {
+          // explicit type from backend: use it
+          isActiveFlag = rawType.includes('active') && !rawType.includes('passive')
+        } else {
+          // fallback: if backend didn't provide type, assume active unless explicitly marked passive
+          isActiveFlag = Boolean(s.isActive ?? s.active ?? true)
+        }
+        return {
+          ...s,
+          manaCost: mana,
+          mana_cost: mana,
+          isActive: isActiveFlag,
+          active: isActiveFlag,
+          __isActive: isActiveFlag
+        }
+      })
+      // 只保留被判定为主动的技能
+      battleSkills.value = normalized.filter((s: any) => s.__isActive)
+      console.log('[Battle] normalized skills (object):', normalized)
+      try { console.log('[Battle] normalized skills (json):', JSON.stringify(normalized)) } catch (e) {}
+      console.log('[Battle] filtered battleSkills.value (object):', battleSkills.value)
+      try { console.log('[Battle] filtered battleSkills.value (json):', JSON.stringify(battleSkills.value)) } catch (e) {}
     } else {
       battleSkills.value = []
     }
@@ -391,10 +489,9 @@ function getFirstSentence(text?: string) {
   return String(text).split(/\r?\n/)[0]
 }
 
-// displayed skills: prefer active list but fall back to all skills if none found
+// displayed skills: strictly only active skills (do not fall back to passive skills)
 const displayedSkills = computed(() => {
-  const act = activeBattleSkills.value || []
-  return act.length > 0 ? act : (battleSkills.value || [])
+  return activeBattleSkills.value || []
 })
 
 // 使用技能：调用后端验证并解析效果，前端尝试应用简单效果（伤害/治疗）
@@ -410,7 +507,7 @@ async function useSkill(skill: any) {
       throw new Error(resp.data.message || '技能无法使用')
     }
     const result = resp.data.data || {}
-    const manaCost = Number(result.manaCost ?? result.mana_cost ?? skill.manaCost ?? skill.mana_cost ?? 1)
+    const manaCost = Math.max(2, Number(result.manaCost ?? result.mana_cost ?? skill.manaCost ?? skill.mana_cost ?? 2))
     // 扣除法力
     try { gameStore.mana = Math.max(0, Number(gameStore.mana) - manaCost) } catch (e) {}
 
@@ -478,6 +575,46 @@ onMounted(async () => {
     console.log('[Battle] 已启动玩家回合并抽牌（首抽）')
   } catch (e) {
     console.warn('[Battle] 启动玩家回合失败:', e)
+  }
+
+  // 在uni-app环境中使用合适的全局对象
+  const globalObj = typeof uni !== 'undefined' ? uni :
+                   (typeof globalThis !== 'undefined' ? globalThis :
+                   (typeof window !== 'undefined' ? window : null))
+
+  if (globalObj) {
+    console.log('[Battle] 添加攻击事件监听器')
+
+    // 尝试添加事件监听器（如果支持）
+    try {
+      if (typeof globalObj.addEventListener === 'function') {
+        globalObj.addEventListener('attack-start', handleAttackStart)
+        globalObj.addEventListener('attack-end', handleAttackEnd)
+        console.log('[Battle] 攻击事件监听器已添加')
+      }
+    } catch (e) {
+      console.warn('[Battle] 事件监听器添加失败:', e)
+    }
+
+    // 设置全局触发器供game store调用（使用安全检测以兼容不同 store 类型）
+    try {
+      const maybeSetter = (game as any).setBattleFieldTrigger
+      if (typeof maybeSetter === 'function') {
+        maybeSetter.call(game, (attackerId: string, targetId: string | null, isBoss: boolean) => {
+          console.log('[Battle] Store触发器被调用:', { attackerId, targetId, isBoss })
+          handleAttackStart({ detail: { attackerId, targetId, isBoss } })
+        })
+        console.log('[Battle] Store触发器已设置')
+      } else {
+        console.warn('[Battle] game store 不包含 setBattleFieldTrigger，跳过设置')
+      }
+    } catch (e) {
+      console.warn('[Battle] 尝试设置 Store 触发器失败:', e)
+    }
+    console.log('[Battle] Store触发器已设置')
+    console.log('[Battle] 全局方法battleFieldTriggerAttack已设置')
+  } else {
+    console.warn('[Battle] 全局对象不可用，无法设置事件监听器')
   }
 })
 
@@ -868,8 +1005,8 @@ watch(winner, async (w) => {
                 <text class="skill-desc">{{ getFirstSentence(s.description || '') }}</text>
               </view>
               <view class="skill-right">
-                <text class="skill-cost">消耗: {{ s.manaCost ?? s.mana_cost ?? 1 }}</text>
-                <button class="confirm-btn" @click="useSkill(s)" :disabled="usingSkill || (s.manaCost ?? s.mana_cost ?? 1) > mana">使用</button>
+                <text class="skill-cost">消耗: {{ s.manaCost ?? s.mana_cost ?? 2 }}</text>
+                <button class="confirm-btn" @click="useSkill(s)" :disabled="usingSkill || (Number(s.manaCost ?? s.mana_cost ?? 2) > mana)">使用</button>
               </view>
             </view>
           </view>

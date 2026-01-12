@@ -1013,7 +1013,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch, getCurrentInstance, nextTick } from 'vue'
+import { computed, onMounted, ref, watch, getCurrentInstance, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGameStore, type Minion } from '@/stores/game'
 import { useCampStore } from '@/stores/camp'
@@ -1101,74 +1101,105 @@ function calculateAttackOffset(attackerId: string, targetId: string | null, isBo
               console.log(`[BattleField] 使用fallback坐标 - attackerId: ${attackerId}, targetId: ${targetId}, isBoss: ${isBoss}, isEnemyAttacker: ${isEnemyAttacker}`)
               console.log(`[BattleField] aRect:`, aRect, `tRect:`, tRect)
 
-              // fallback positions - 上下布局：敌方在上(y小)，玩家在下(y大)
-              // 基于典型手机屏幕(400px宽)和卡牌位置(120x120px槽位)
-              // 为不同位置的卡牌提供不同的fallback坐标
-              let fallbackX = 200, fallbackY = 150, targetFallbackX = 200, targetFallbackY = 400
+              // 使用改进的位置计算获取更精确的fallback坐标
+              console.log(`[BattleField] 小程序使用精确fallback坐标计算 - attackerId: ${attackerId}, targetId: ${targetId}`)
+
+              let fallbackX = 200, fallbackY = 200, targetFallbackX = 200, targetFallbackY = 350
 
               if (isBoss) {
+                // Boss攻击：使用中心位置
                 if (isEnemyAttacker) {
-                  fallbackX = 200; fallbackY = 150; targetFallbackX = 200; targetFallbackY = 450
+                  // 敌方攻击玩家Boss
+                  const attackerPos = getAttackerPosition(attackerId)
+                  if (attackerPos) {
+                    fallbackX = attackerPos.x
+                    fallbackY = attackerPos.y
+                  } else {
+                    fallbackX = 200; fallbackY = 130  // 敌方Boss默认位置
+                  }
+                  targetFallbackX = 200; targetFallbackY = 430  // 玩家Boss位置
                 } else {
-                  fallbackX = 200; fallbackY = 450; targetFallbackX = 200; targetFallbackY = 150
+                  // 玩家攻击敌方Boss
+                  const attackerPos = getAttackerPosition(attackerId)
+                  if (attackerPos) {
+                    fallbackX = attackerPos.x
+                    fallbackY = attackerPos.y
+                  } else {
+                    fallbackX = 200; fallbackY = 350  // 玩家Boss默认位置
+                  }
+                  targetFallbackX = 200; targetFallbackY = 130  // 敌方Boss位置
                 }
               } else {
-                // 根据卡牌ID尝试推断位置
-                if (attackerId && typeof attackerId === 'string') {
-                  if (attackerId.includes('enemy')) {
-                    fallbackX = 200; fallbackY = 150 // 敌方在上
-                  } else {
-                    fallbackX = 200; fallbackY = 400 // 玩家在下
-                  }
+                // 随从攻击：使用getAttackerPosition获取精确位置
+                const attackerPos = getAttackerPosition(attackerId)
+                const targetPos = targetId ? getAttackerPosition(targetId) : null
+
+                if (attackerPos) {
+                  fallbackX = attackerPos.x
+                  fallbackY = attackerPos.y
+                } else {
+                  // 如果找不到，使用估算位置
+                  fallbackX = isEnemyAttacker ? 200 : 200
+                  fallbackY = isEnemyAttacker ? 130 : 350
                 }
-                if (targetId && typeof targetId === 'string') {
-                  if (targetId.includes('enemy')) {
-                    targetFallbackX = 200; targetFallbackY = 150 // 敌方在上
-                  } else {
-                    targetFallbackX = 200; targetFallbackY = 400 // 玩家在下
-                  }
+
+                if (targetPos) {
+                  targetFallbackX = targetPos.x
+                  targetFallbackY = targetPos.y
+                } else {
+                  // 如果找不到目标，使用估算位置
+                  targetFallbackX = isEnemyAttacker ? 200 : 200
+                  targetFallbackY = isEnemyAttacker ? 350 : 130
                 }
               }
 
-              // 根据卡牌位置动态计算更准确的fallback坐标
-              console.log(`[BattleField] 小程序使用智能fallback - attackerId: ${attackerId}, targetId: ${targetId}`)
-              const attackerPosition = getAttackerPosition(attackerId)
-              const targetPosition = targetId ? getAttackerPosition(targetId) : null
-
-              if (attackerPosition !== null) {
-                fallbackX = attackerPosition.x
-                fallbackY = attackerPosition.y
-              }
-              if (targetPosition !== null) {
-                targetFallbackX = targetPosition.x
-                targetFallbackY = targetPosition.y
-              }
-
-              console.log(`[BattleField] 小程序智能fallback坐标: (${fallbackX}, ${fallbackY}) -> (${targetFallbackX}, ${targetFallbackY})`)
+              console.log(`[BattleField] 精确fallback坐标: (${fallbackX.toFixed(1)}, ${fallbackY.toFixed(1)}) -> (${targetFallbackX.toFixed(1)}, ${targetFallbackY.toFixed(1)})`)
             console.log(`[BattleField] 小程序位置详情 - 攻击者ID: ${attackerId}, 目标ID: ${targetId}, isBoss: ${isBoss}, isEnemyAttacker: ${isEnemyAttacker}`)
               resolve({ x: fallbackX, y: fallbackY, targetX: targetFallbackX, targetY: targetFallbackY })
             }
           } catch (e) {
-            // fallback positions - 上下布局：敌方在上(y小)，玩家在下(y大)
-            // 基于典型手机屏幕(400px宽)和卡牌位置(120x120px槽位)
+            console.warn('[BattleField] DOM查询失败，使用精确估算坐标', e)
+            // 使用改进的估算坐标，基于实际CSS布局
             if (isBoss) {
-              if (isEnemyAttacker) resolve({ x: 200, y: 150, targetX: 200, targetY: 450 }) // 敌方从上飞向下攻击玩家
-              else resolve({ x: 200, y: 450, targetX: 200, targetY: 150 }) // 玩家从下飞向上攻击敌方
+              if (isEnemyAttacker) {
+                resolve({ x: 200, y: 130, targetX: 200, targetY: 430 }) // 敌方Boss攻击玩家Boss
+              } else {
+                resolve({ x: 200, y: 350, targetX: 200, targetY: 130 }) // 玩家Boss攻击敌方Boss
+              }
             } else {
-              if (isEnemyAttacker) resolve({ x: 200, y: 150, targetX: 200, targetY: 400 }) // 敌方从上飞向下攻击玩家随从
-              else resolve({ x: 200, y: 400, targetX: 200, targetY: 150 }) // 玩家从下飞向上攻击敌方随从
+              // 尝试使用getAttackerPosition获取更精确的位置
+              const attackerPos = getAttackerPosition(attackerId)
+              const targetPos = targetId ? getAttackerPosition(targetId) : null
+
+              const fallbackX = attackerPos ? attackerPos.x : (isEnemyAttacker ? 200 : 200)
+              const fallbackY = attackerPos ? attackerPos.y : (isEnemyAttacker ? 130 : 350)
+              const targetFallbackX = targetPos ? targetPos.x : (isEnemyAttacker ? 200 : 200)
+              const targetFallbackY = targetPos ? targetPos.y : (isEnemyAttacker ? 350 : 130)
+
+              resolve({ x: fallbackX, y: fallbackY, targetX: targetFallbackX, targetY: targetFallbackY })
             }
           }
         }, 50)
       } catch (e) {
-        // fallback positions - 上下布局：敌方在上(y小)，玩家在下(y大)
-        // 基于典型手机屏幕(400px宽)和卡牌位置(120x120px槽位)
+        console.warn('[BattleField] uni selectorQuery失败，使用精确估算坐标', e)
+        // 使用改进的估算坐标
         if (isBoss) {
-          if (isEnemyAttacker) resolve({ x: 200, y: 150, targetX: 200, targetY: 450 }) // 敌方从上飞向下攻击玩家
-          else resolve({ x: 200, y: 450, targetX: 200, targetY: 150 }) // 玩家从下飞向上攻击敌方
+          if (isEnemyAttacker) {
+            resolve({ x: 200, y: 130, targetX: 200, targetY: 430 })
+          } else {
+            resolve({ x: 200, y: 350, targetX: 200, targetY: 130 })
+          }
         } else {
-          if (isEnemyAttacker) resolve({ x: 200, y: 150, targetX: 200, targetY: 400 }) // 敌方从上飞向下攻击玩家随从
-          else resolve({ x: 200, y: 400, targetX: 200, targetY: 150 }) // 玩家从下飞向上攻击敌方随从
+          // 使用getAttackerPosition获取更精确的位置
+          const attackerPos = getAttackerPosition(attackerId)
+          const targetPos = targetId ? getAttackerPosition(targetId) : null
+
+          const fallbackX = attackerPos ? attackerPos.x : (isEnemyAttacker ? 200 : 200)
+          const fallbackY = attackerPos ? attackerPos.y : (isEnemyAttacker ? 130 : 350)
+          const targetFallbackX = targetPos ? targetPos.x : (isEnemyAttacker ? 200 : 200)
+          const targetFallbackY = targetPos ? targetPos.y : (isEnemyAttacker ? 350 : 130)
+
+          resolve({ x: fallbackX, y: fallbackY, targetX: targetFallbackX, targetY: targetFallbackY })
         }
       }
     } else {
@@ -1304,7 +1335,7 @@ async function executeAttackAnimation(attackerId: string, targetId: string | nul
 
 // 监听攻击事件
 async function handleAttackStart(event: any) {
-  console.log(`[BattleField] 收到攻击开始事件:`, event.detail)
+  console.log(`[BattleField] 收到攻击开始事件:`, event.detail || event)
   const { attackerId, targetId, isBoss } = event.detail || event
   if (attackerId && (targetId || isBoss)) {
     // 跳过敌人本体攻击（不需要动画）
@@ -1475,15 +1506,18 @@ function getHitEffect(minionId: string): { timestamp: number; damage: number } |
   return hitEffects.value.get(minionId)
 }
 
-// 在小程序环境中完全不使用全局事件系统，所有通信通过直接方法调用
-// onMounted(() => {
-//   // 不再需要事件监听器，所有逻辑通过 emitEvent 和直接方法调用处理
-// })
+onMounted(() => {
+  console.log('[BattleField] ============ BattleField组件已挂载 ============')
+  console.log('[BattleField] triggerAttackAnimation方法已准备就绪')
 
-// 在小程序环境中完全不使用全局事件系统
-// onUnmounted(() => {
-//   // 不再需要移除事件监听器
-// })
+  // 重新验证位置坐标
+  validateAllPositions()
+
+  // 获取battle-area的实际位置用于调试
+  setTimeout(() => {
+    getBattleAreaOffset()
+  }, 500)
+})
 
 // 获取用于克隆体渲染的名字（优先 board/enemyBoard/敌方面板）
 function nameForClone(attackerId: string) {
@@ -1533,34 +1567,79 @@ function validateAllPositions() {
   for (let pos = 0; pos < 6; pos++) {
     const enemyPos = getPositionBySlot(pos, true)
     const playerPos = getPositionBySlot(pos, false)
-    console.log(`位置 ${pos}: 敌方(${enemyPos.x}, ${enemyPos.y}) 玩家(${playerPos.x}, ${playerPos.y})`)
+    console.log(`位置 ${pos}: 敌方(${enemyPos.x.toFixed(1)}, ${enemyPos.y.toFixed(1)}) 玩家(${playerPos.x.toFixed(1)}, ${playerPos.y.toFixed(1)})`)
   }
   console.log('[BattleField] === 验证完成 ===')
 }
 
+// 获取battle-area的实际偏移量（用于精确校准）
+function getBattleAreaOffset() {
+  if (typeof uni !== 'undefined' && typeof uni.createSelectorQuery === 'function') {
+    try {
+      const query = uni.createSelectorQuery()
+      query.select('.battle-area').boundingClientRect((rect: any) => {
+        if (rect) {
+          console.log('[BattleField] battle-area实际位置:', {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height
+          })
+          // 可以在这里动态调整baseY值
+          const actualTop = rect.top
+          console.log('[BattleField] 建议调整baseY值: 敌方区域顶部应为', actualTop + 20)
+        }
+      }).exec()
+    } catch (e) {
+      console.warn('[BattleField] 获取battle-area位置失败:', e)
+    }
+  }
+}
+
 // 根据slot位置估算卡牌中心坐标
 function getPositionBySlot(position: number, isEnemy: boolean): { x: number; y: number } {
-  // 简化坐标计算，使用更合理的估算值
-  // 基于实际观察到的卡牌位置进行估算
+  // 基于实际CSS布局计算精确坐标
+  // battle-slots: grid 3列, gap 10px, padding 10px
+  // battle-slot: 120x120px
 
-  const col = position % 3
-  const row = Math.floor(position / 3)
+  const col = position % 3  // 列索引 0-2
+  const logicalRow = Math.floor(position / 3)  // 逻辑行 0-1
 
-  // X坐标：3列布局，列宽约130px
-  const colWidth = 130
-  const x = col * colWidth + 65 // 列中心
+  // 计算X坐标：列间距130px (120px + 10px gap)，左padding 10px
+  const x = col * 130 + 70  // 70 = 10px padding + 60px (120px/2)
 
-  // Y坐标：敌方和玩家区域分离
+  // 计算Y坐标：基于实际布局调整
   let y = 0
   if (isEnemy) {
-    // 敌方：上方区域
-    y = row === 0 ? 140 : 200 // 前排/后排
+    // 敌方区域：考虑battle-area的实际位置
+    // 从页面调试发现，敌方卡牌的实际Y坐标范围大约是 120-240px
+    const baseY = 100  // 敌方区域实际顶部位置
+    const rowHeight = 120  // 卡牌高度
+    const gap = 10      // 行间距
+
+    if (logicalRow === 0) {
+      // 前排（显示在第2行，Y坐标更大）
+      y = baseY + rowHeight + gap + rowHeight / 2  // 约230px
+    } else {
+      // 后排（显示在第1行，Y坐标更小）
+      y = baseY + rowHeight / 2  // 约160px
+    }
   } else {
-    // 玩家：下方区域
-    y = row === 0 ? 350 : 410 // 前排/后排
+    // 玩家区域：实际Y坐标范围大约是 320-440px
+    const baseY = 320  // 玩家区域实际顶部位置
+    const rowHeight = 120  // 卡牌高度
+    const gap = 10       // 行间距
+
+    if (logicalRow === 0) {
+      // 前排（显示在上方）
+      y = baseY + rowHeight / 2  // 约380px
+    } else {
+      // 后排（显示在下方）
+      y = baseY + rowHeight + gap + rowHeight / 2  // 约450px
+    }
   }
 
-  console.log(`[BattleField] 位置 ${position} (${isEnemy ? '敌方' : '玩家'}) 坐标: (${x}, ${y})`)
+  console.log(`[BattleField] 精确位置计算 - 位置 ${position} (${isEnemy ? '敌方' : '玩家'}) [col:${col}, logicalRow:${logicalRow}] 坐标: (${x.toFixed(1)}, ${y.toFixed(1)})`)
   return { x, y }
 }
 
@@ -1643,9 +1722,15 @@ function animateAttackClones() {
 
 // watch attackingClones to trigger JS animation fallback
 watch(attackingClones, (newVal, oldVal) => {
+  console.log(`[BattleField] attackingClones 变化: ${oldVal.length} -> ${newVal.length}`)
   if (newVal.length > 0) {
+    console.log(`[BattleField] 检测到攻击动画开始，准备执行动画`)
     // trigger after DOM updates
-    setTimeout(() => animateAttackClones(), 30)
+    setTimeout(() => {
+      console.log(`[BattleField] 开始调用 animateAttackClones`)
+      animateAttackClones()
+      console.log(`[BattleField] animateAttackClones 调用完成`)
+    }, 30)
   }
 })
 
@@ -2696,6 +2781,15 @@ function handleSlotDrop(event: DragEvent, position: number) {
   border-color: rgba(139, 92, 246, 0.4);
 }
 
+.character-card .header-badges .shield-badge {
+  /* 将原本位于头部的防御徽章视觉上移动到底部，与攻击/血量并列显示 */
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+}
+
 .status-badge.summoning-sickness {
   background: rgba(55, 65, 81, 0.35);
   border-color: rgba(55, 65, 81, 0.55);
@@ -2717,14 +2811,16 @@ function handleSlotDrop(event: DragEvent, position: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  /* 缩小头像高度，给底部面板留出空间 */
+  height: 28px;
   margin: 4px 0;
   flex-shrink: 0;
 }
 
 .avatar-icon {
-  font-size: 1.8rem;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  /* 缩小中间图标，使下方属性面板能完整显示 */
+  font-size: 1.2rem;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25));
   animation: float 3s ease-in-out infinite;
 }
 
@@ -2739,6 +2835,11 @@ function handleSlotDrop(event: DragEvent, position: number) {
   gap: 6px;
   flex-shrink: 0;
   margin-top: 4px; /* small spacing from avatar/name to stats */
+  /* 固定放到底部，保证始终可见，与头像分开 */
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
 }
 
 .stat-item {

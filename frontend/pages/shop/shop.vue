@@ -391,17 +391,21 @@ async function loadOffers() {
     // 方法1：尝试按类型获取（推荐）
     // 设置超时，避免长时间等待
     try {
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('请求超时')), 5000) // 5秒超时
+      // 改为在超时后 resolve 一个标记对象（而不是 reject），避免抛出错误触发 DevTools 的“Pause on exceptions”
+      const timeoutPromise = new Promise(resolve => {
+        setTimeout(() => resolve({ _timeout: true }), 60000) // 60秒超时（返回超时标记）
       })
-      
+
       // 直接按当前标签类型从后端获取对应商店商品
       const response = await Promise.race([
         shopApi.getOffersByType(activeTab.value),
         timeoutPromise
       ]) as any
-      
-      if (response && response.data && response.data.code === 200) {
+
+      // 如果是超时标记，走备用方案（不抛错）
+      if (response && response._timeout) {
+        console.warn('[Shop] 按类型获取请求超时，使用后备数据源')
+      } else if (response && response.data && response.data.code === 200) {
         rawOffers = response.data.data || []
         console.log('[Shop] 按类型获取成功:', {
           shopType: activeTab.value,

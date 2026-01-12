@@ -1,12 +1,45 @@
 {
   "火球术": "/static/paimian/huoqiushu.png",
   "龙骑士": "/static/paimian/longqishi.png",
-  "重甲盾卫": "/static/paimian/zhongjiadunwei.png"
+  "重甲盾卫": "/static/paimian/zhongjiadunwei.png",
+
+  "圣光术": "/static/images/shop/cards/1.png",
+  "铁壁护甲": "/static/images/shop/cards/3.png",
+  "血刃": "/static/images/shop/cards/4.png",
+  "治疗术": "/static/images/shop/cards/33.png",
+  "护盾术": "/static/images/shop/cards/33.png",
+  "陨石术": "/static/images/shop/cards/35.png",
+  "群体治疗": "/static/images/shop/cards/36.png",
+  "寒冰护盾": "/static/images/shop/cards/37.png",
+  "龙息术": "/static/images/shop/cards/38.png",
+  "复活术": "/static/images/shop/cards/39.png",
+  "末日审判": "/static/images/shop/cards/40.png",
+  "铁剑": "/static/images/shop/cards/41.png",
+  "钢剑": "/static/images/shop/cards/42.png",
+  "龙刃": "/static/images/shop/cards/43.png",
+  "王者之剑": "/static/images/shop/cards/44.png",
+  "皮甲": "/static/images/shop/cards/46.png",
+  "板甲": "/static/images/shop/cards/46.png",
+
+  "星辉祭司": "/static/images/shop/characters/1.png",
+  "火焰法师": "/static/images/shop/characters/3.png",
+  "暗影刺客": "/static/images/shop/characters/4.png",
+  "新兵战士": "/static/images/shop/characters/6.png",
+  "见习游侠": "/static/images/shop/characters/9.png",
+  "初级祭司": "/static/images/shop/characters/14.png",
+  "精英战士": "/static/images/shop/characters/9.png",
+  "神秘学者": "/static/images/shop/characters/10.png",
+  "资深游侠": "/static/images/shop/characters/11.png",
+  "传奇战士": "/static/images/shop/characters/12.png",
+  "大祭司": "/static/images/shop/characters/13.png",
+
+  "骷髅战士": "/static/images/shop/characters/1.png",
+  "骷髅弓箭手": "/static/images/shop/characters/3.png",
+  "食尸鬼": "/static/images/shop/characters/4.png",
+  "尸妖": "/static/images/shop/characters/6.png",
+  "小恶魔": "/static/images/shop/characters/9.png",
+  "恶魔战士": "/static/images/shop/characters/10.png"
 }
-
-
-
-
 
 
 
